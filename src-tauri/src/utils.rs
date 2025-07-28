@@ -6,14 +6,14 @@ use enigo::Keyboard;
 use enigo::Settings;
 
 use cpal::traits::{DeviceTrait, HostTrait};
+use log::debug;
 use rodio::OutputStreamBuilder;
 use std::fs::File;
 use std::io::BufReader;
 use std::thread;
 use tauri::image::Image;
 use tauri::tray::TrayIcon;
-use tauri::AppHandle;
-use tauri::Manager;
+use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 fn send_paste() -> Result<(), String> {
@@ -193,4 +193,84 @@ fn play_audio_file(
     sink.sleep_until_end();
 
     Ok(())
+}
+
+/* ──────────────────────────────────────────────────────────────── */
+/*                           OVERLAY MANAGEMENT                      */
+/* ──────────────────────────────────────────────────────────────── */
+
+/// Creates the recording overlay window and keeps it hidden by default
+pub fn create_recording_overlay(app_handle: &AppHandle) {
+    // Get screen dimensions for positioning
+    if let Ok(monitors) = app_handle.primary_monitor() {
+        if let Some(monitor) = monitors {
+            let size = monitor.size();
+            let scale = monitor.scale_factor();
+            let screen_width = (size.width as f64 / scale) as i32;
+            let screen_height = (size.height as f64 / scale) as i32;
+
+            // Position at bottom center, 30px from bottom
+            let x = (screen_width - 150) / 2;
+            let y = screen_height - 30 - 30;
+
+            match WebviewWindowBuilder::new(
+                app_handle,
+                "recording_overlay",
+                tauri::WebviewUrl::App("src/overlay/index.html".into()),
+            )
+            .title("Recording")
+            .position(x as f64, y as f64)
+            .resizable(false)
+            .maximizable(false)
+            .minimizable(false)
+            .closable(false)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .transparent(true)
+            .focused(false)
+            .visible(false) // Start hidden
+            .build()
+            {
+                Ok(_window) => {
+                    debug!("Recording overlay window created successfully (hidden)");
+                }
+                Err(e) => {
+                    debug!("Failed to create recording overlay window: {}", e);
+                }
+            }
+        }
+    }
+}
+
+/// Shows the recording overlay window with fade-in animation
+pub fn show_recording_overlay(app_handle: &AppHandle) {
+    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
+        let _ = overlay_window.show();
+        // Emit event to trigger fade-in animation with recording state
+        let _ = overlay_window.emit("show-overlay", "recording");
+    }
+}
+
+/// Shows the transcribing overlay window
+pub fn show_transcribing_overlay(app_handle: &AppHandle) {
+    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
+        let _ = overlay_window.show();
+        // Emit event to switch to transcribing state
+        let _ = overlay_window.emit("show-overlay", "transcribing");
+    }
+}
+
+/// Hides the recording overlay window with fade-out animation
+pub fn hide_recording_overlay(app_handle: &AppHandle) {
+    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
+        // Emit event to trigger fade-out animation
+        let _ = overlay_window.emit("hide-overlay", ());
+        // Hide the window after a short delay to allow animation to complete
+        let window_clone = overlay_window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            let _ = window_clone.hide();
+        });
+    }
 }

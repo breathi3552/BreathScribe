@@ -38,6 +38,7 @@ pub fn run() {
     env_logger::init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_os::init())
@@ -150,6 +151,9 @@ pub fn run() {
             app.manage(recording_manager.clone());
             app.manage(model_manager.clone());
             app.manage(transcription_manager.clone());
+
+            // Create the recording overlay window (hidden by default)
+            utils::create_recording_overlay(&app.handle());
 
             shortcut::init_shortcuts(app);
 

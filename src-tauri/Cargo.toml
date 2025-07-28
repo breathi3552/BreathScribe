@@ -51,6 +51,7 @@ tauri-plugin-process = "2"
 rodio = { git = "https://github.com/cjpais/rodio.git" }
 reqwest = { version = "0.11", features = ["json", "stream"] }
 futures-util = "0.3"
+tauri-plugin-fs = "2"
 
 [dependencies.ort-sys]
 version = "=2.0.0-rc.9"

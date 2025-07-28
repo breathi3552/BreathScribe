@@ -3,7 +3,7 @@ use crate::settings::get_settings;
 use log::{debug, info};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tauri::{App, LogicalSize, Manager, WebviewWindowBuilder};
+use tauri::{App, Manager};
 
 const WHISPER_SAMPLE_RATE: usize = 16000;
 
@@ -195,7 +195,6 @@ impl AudioRecordingManager {
                         binding_id: binding_id.to_string(),
                     };
                     debug!("Recording started for binding {binding_id}");
-                    self.show_overlay();
                     return true;
                 }
             }
@@ -240,9 +239,6 @@ impl AudioRecordingManager {
 
                 *self.is_recording.lock().unwrap() = false;
 
-                // Hide the overlay
-                self.hide_overlay();
-
                 // In on-demand mode turn the mic off again
                 if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
                     self.stop_microphone_stream();
@@ -260,60 +256,6 @@ impl AudioRecordingManager {
                 }
             }
             _ => None,
-        }
-    }
-
-    /* ---------- overlay window -------------------------------------------- */
-
-    fn show_overlay(&self) {
-        if let Some(overlay_window) = self.app_handle.get_webview_window("recording_overlay") {
-            let _ = overlay_window.show();
-        } else {
-            // Get screen dimensions for positioning
-            if let Ok(monitors) = self.app_handle.primary_monitor() {
-                if let Some(monitor) = monitors {
-                    let size = monitor.size();
-                    let scale = monitor.scale_factor();
-                    let screen_width = (size.width as f64 / scale) as i32;
-                    let screen_height = (size.height as f64 / scale) as i32;
-
-                    // Position at bottom center, 30px from bottom
-                    let x = (screen_width - 150) / 2;
-                    let y = screen_height - 30 - 30;
-
-                    match WebviewWindowBuilder::new(
-                        &self.app_handle,
-                        "recording_overlay",
-                        tauri::WebviewUrl::App("src/overlay/index.html".into()),
-                    )
-                    .title("Recording")
-                    .position(x as f64, y as f64)
-                    .resizable(false)
-                    .maximizable(false)
-                    .minimizable(false)
-                    .closable(false)
-                    .decorations(false)
-                    .always_on_top(true)
-                    .skip_taskbar(true)
-                    .transparent(true)
-                    .focused(false)
-                    .build()
-                    {
-                        Ok(_window) => {
-                            debug!("Recording overlay window created successfully");
-                        }
-                        Err(e) => {
-                            debug!("Failed to create recording overlay window: {}", e);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn hide_overlay(&self) {
-        if let Some(overlay_window) = self.app_handle.get_webview_window("recording_overlay") {
-            let _ = overlay_window.hide();
         }
     }
 }

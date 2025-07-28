@@ -2024,6 +2024,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-autostart",
  "tauri-plugin-clipboard-manager",
+ "tauri-plugin-fs",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-macos-permissions",
  "tauri-plugin-opener",
@@ -5448,6 +5449,28 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.11",
+]
+
+[[package]]
+name = "tauri-plugin-fs"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c6ef84ee2f2094ce093e55106d90d763ba343fad57566992962e8f76d113f99"
+dependencies = [
+ "anyhow",
+ "dunce",
+ "glob",
+ "percent-encoding",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "tauri",
+ "tauri-plugin",
+ "tauri-utils",
+ "thiserror 2.0.11",
+ "toml",
+ "url",
 ]
 
 [[package]]

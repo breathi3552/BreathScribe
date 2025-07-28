@@ -5,6 +5,8 @@ use crate::utils;
 use crate::utils::change_tray_icon;
 use crate::utils::play_recording_start_sound;
 use crate::utils::play_recording_stop_sound;
+use crate::utils::show_recording_overlay;
+use crate::utils::show_transcribing_overlay;
 use crate::utils::TrayIconState;
 use log::debug;
 use once_cell::sync::Lazy;
@@ -30,6 +32,7 @@ impl ShortcutAction for TranscribeAction {
 
         let binding_id = binding_id.to_string();
         change_tray_icon(app, TrayIconState::Recording);
+        show_recording_overlay(app);
 
         let rm = app.state::<Arc<AudioRecordingManager>>();
 
@@ -78,6 +81,7 @@ impl ShortcutAction for TranscribeAction {
         let tm = Arc::clone(&app.state::<Arc<TranscriptionManager>>());
 
         change_tray_icon(app, TrayIconState::Transcribing);
+        show_transcribing_overlay(app);
 
         // Play audio feedback for recording stop
         play_recording_stop_sound(app);
@@ -119,23 +123,29 @@ impl ShortcutAction for TranscribeAction {
                                     ),
                                     Err(e) => eprintln!("Failed to paste transcription: {}", e),
                                 }
+                                // Hide the overlay after transcription is complete
+                                utils::hide_recording_overlay(&ah_clone);
                                 change_tray_icon(&ah_clone, TrayIconState::Idle);
                             })
                             .unwrap_or_else(|e| {
                                 eprintln!("Failed to run paste on main thread: {:?}", e);
+                                utils::hide_recording_overlay(&ah);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             });
                         } else {
+                            utils::hide_recording_overlay(&ah);
                             change_tray_icon(&ah, TrayIconState::Idle);
                         }
                     }
                     Err(err) => {
                         debug!("Global Shortcut Transcription error: {}", err);
+                        utils::hide_recording_overlay(&ah);
                         change_tray_icon(&ah, TrayIconState::Idle);
-                    },
+                    }
                 }
             } else {
                 debug!("No samples retrieved from recording stop");
+                utils::hide_recording_overlay(&ah);
                 change_tray_icon(&ah, TrayIconState::Idle);
             }
         });

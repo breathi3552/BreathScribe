@@ -1,12 +1,12 @@
 .recording-overlay {
     height: 40px;
-    /*width: min-content;*/
-    width: 120px;
+    width: fit-content;
+    min-width: 160px;
     display: flex;
     gap: 12px;
     align-items: center;
     padding-left: 6px;
-    padding-right: 24px;
+    padding-right: 6px;
     background: rgba(0, 0, 0, 0.6);
     border-radius: 24px;
     opacity: 0;
@@ -37,7 +37,7 @@
 
 .transcribing-text {
     color: #faa2ca;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     font-family:
         -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -52,4 +52,28 @@
     50% {
         opacity: 1;
     }
+}
+
+.cancel-button {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e53e3e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition:
+        background-color 150ms ease-out,
+        transform 100ms ease-out;
+    flex-shrink: 0;
+}
+
+.cancel-button:hover {
+    background: #c53030;
+    transform: scale(1.05);
+}
+
+.cancel-button:active {
+    transform: scale(0.95);
 }

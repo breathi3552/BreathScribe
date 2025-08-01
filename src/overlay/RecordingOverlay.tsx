@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import "./RecordingOverlay.css";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 
 type OverlayState = "recording" | "transcribing";
 
@@ -36,7 +37,7 @@ const RecordingOverlay: React.FC = () => {
 
         smoothedLevelsRef.current = smoothed;
         console.log(smoothed.length);
-        setLevels(smoothed.slice(0, 10));
+        setLevels(smoothed.slice(0, 9));
       });
 
       // Cleanup function
@@ -82,6 +83,24 @@ const RecordingOverlay: React.FC = () => {
               }}
             />
           ))}
+        </div>
+      )}
+      {state === "recording" && (
+        <div
+          className="cancel-button"
+          onClick={() => {
+            invoke("cancel_operation");
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path
+              d="M9 3L3 9M3 3L9 9"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
       )}
       {state === "transcribing" && (

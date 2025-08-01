@@ -44,10 +44,16 @@ const RecordingOverlay: React.FC = () => {
 
   return (
     <div className={`recording-overlay ${isVisible ? "fade-in" : ""}`}>
-      <img width="32" height="32" src={getIconPath()} alt={getIconAlt()} />
+      <img
+        width="28"
+        height="28"
+        src={getIconPath()}
+        alt={getIconAlt()}
+        style={{}}
+      />
       {state === "recording" && (
         <div className="bars-container">
-          {Array.from({ length: 8 }, (_, i) => (
+          {Array.from({ length: 12 }, (_, i) => (
             <div
               key={i}
               className="bar"

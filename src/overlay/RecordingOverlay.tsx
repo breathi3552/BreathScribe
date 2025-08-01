@@ -63,49 +63,57 @@ const RecordingOverlay: React.FC = () => {
 
   return (
     <div className={`recording-overlay ${isVisible ? "fade-in" : ""}`}>
-      <img
-        width="28"
-        height="28"
-        src={getIconPath()}
-        alt={getIconAlt()}
-        style={{}}
-      />
-      {state === "recording" && (
-        <div className="bars-container">
-          {levels.map((v, i) => (
-            <div
-              key={i}
-              className="bar"
-              style={{
-                height: `${4 + Math.pow(v, 0.7) * 32}px`, // Slight curve for better visual
-                transition: "height 60ms ease-out",
-                opacity: Math.max(0.4, v * 1.7), // Minimum opacity for visibility
-              }}
-            />
-          ))}
-        </div>
-      )}
-      {state === "recording" && (
-        <div
-          className="cancel-button"
-          onClick={() => {
-            invoke("cancel_operation");
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path
-              d="M9 3L3 9M3 3L9 9"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-      )}
-      {state === "transcribing" && (
-        <div className="transcribing-text">Transcribing...</div>
-      )}
+      <div className="overlay-left">
+        <img
+          width="28"
+          height="28"
+          src={getIconPath()}
+          alt={getIconAlt()}
+          style={{}}
+        />
+      </div>
+
+      <div className="overlay-middle">
+        {state === "recording" && (
+          <div className="bars-container">
+            {levels.map((v, i) => (
+              <div
+                key={i}
+                className="bar"
+                style={{
+                  height: `${4 + Math.pow(v, 0.7) * 32}px`, // Slight curve for better visual
+                  transition: "height 60ms ease-out",
+                  opacity: Math.max(0.4, v * 1.7), // Minimum opacity for visibility
+                }}
+              />
+            ))}
+          </div>
+        )}
+        {state === "transcribing" && (
+          <div className="transcribing-text">Transcribing...</div>
+        )}
+      </div>
+
+      <div className="overlay-right">
+        {state === "recording" && (
+          <div
+            className="cancel-button"
+            onClick={() => {
+              invoke("cancel_operation");
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M9 3L3 9M3 3L9 9"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

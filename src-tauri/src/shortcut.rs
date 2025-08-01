@@ -127,6 +127,14 @@ pub fn change_selected_language_setting(app: AppHandle, language: String) -> Res
     Ok(())
 }
 
+#[tauri::command]
+pub fn change_show_overlay_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.show_overlay = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
 fn _register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
     // Parse shortcut and return error if it fails
     let shortcut = match binding.current_binding.parse::<Shortcut>() {

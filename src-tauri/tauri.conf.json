@@ -10,13 +10,14 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Handy",
         "width": 540,
-        "height": 680,
+        "height": 720,
         "minWidth": 540,
-        "minHeight": 680,
+        "minHeight": 720,
         "resizable": true,
         "maximizable": false
       }

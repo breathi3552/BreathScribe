@@ -276,7 +276,6 @@ pub fn hide_recording_overlay(app_handle: &AppHandle) {
 }
 
 pub fn emit_levels(app_handle: &AppHandle, levels: &Vec<f32>) {
-    println!("levels {:#?}", levels);
     // emit levels to main app
     let _ = app_handle.emit("mic-level", levels);
 

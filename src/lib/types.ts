@@ -29,6 +29,7 @@ export const SettingsSchema = z.object({
   selected_output_device: z.string().nullable().optional(),
   translate_to_english: z.boolean(),
   selected_language: z.string(),
+  show_overlay: z.boolean(),
 });
 
 export const BindingResponseSchema = z.object({

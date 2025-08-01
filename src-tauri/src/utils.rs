@@ -245,6 +245,12 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
 
 /// Shows the recording overlay window with fade-in animation
 pub fn show_recording_overlay(app_handle: &AppHandle) {
+    // Check if show_overlay is enabled in settings
+    let settings = settings::get_settings(app_handle);
+    if !settings.show_overlay {
+        return;
+    }
+
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         let _ = overlay_window.show();
         // Emit event to trigger fade-in animation with recording state
@@ -254,6 +260,12 @@ pub fn show_recording_overlay(app_handle: &AppHandle) {
 
 /// Shows the transcribing overlay window
 pub fn show_transcribing_overlay(app_handle: &AppHandle) {
+    // Check if show_overlay is enabled in settings
+    let settings = settings::get_settings(app_handle);
+    if !settings.show_overlay {
+        return;
+    }
+
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         let _ = overlay_window.show();
         // Emit event to switch to transcribing state
@@ -263,6 +275,8 @@ pub fn show_transcribing_overlay(app_handle: &AppHandle) {
 
 /// Hides the recording overlay window with fade-out animation
 pub fn hide_recording_overlay(app_handle: &AppHandle) {
+    // Check if show_overlay is enabled in settings - if disabled, the overlay shouldn't be shown anyway
+    // but we still want to hide it in case the setting was changed while recording
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         // Emit event to trigger fade-out animation
         let _ = overlay_window.emit("hide-overlay", ());

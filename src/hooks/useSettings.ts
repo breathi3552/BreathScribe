@@ -199,6 +199,9 @@ export const useSettings = (): UseSettingsReturn => {
               language: value,
             });
             break;
+          case "show_overlay":
+            await invoke("change_show_overlay_setting", { enabled: value });
+            break;
           case "bindings":
             // Handle bindings separately - they use their own invoke methods
             break;
@@ -243,6 +246,7 @@ export const useSettings = (): UseSettingsReturn => {
         selected_output_device: "Default",
         translate_to_english: false,
         selected_language: "auto",
+        show_overlay: true,
       };
 
       const defaultValue = defaults[key];

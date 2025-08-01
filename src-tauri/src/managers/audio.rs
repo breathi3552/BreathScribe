@@ -4,7 +4,7 @@ use crate::utils;
 use log::{debug, info};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tauri::{App, Emitter, Manager};
+use tauri::{App, Manager};
 
 const WHISPER_SAMPLE_RATE: usize = 16000;
 

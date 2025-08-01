@@ -326,7 +326,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
             let screen_height = (size.height as f64 / scale) as i32;
 
             // Position at bottom center, 30px from bottom
-            let x = (screen_width - 150) / 2;
+            let x = (screen_width - 160) / 2;
             let y = screen_height - 30 - 30;
 
             match WebviewWindowBuilder::new(
@@ -340,6 +340,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
             .maximizable(false)
             .minimizable(false)
             .closable(false)
+            .accept_first_mouse(true)
             .decorations(false)
             .always_on_top(true)
             .skip_taskbar(true)

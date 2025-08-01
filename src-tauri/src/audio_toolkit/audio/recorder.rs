@@ -10,7 +10,7 @@ use cpal::{
 };
 
 use crate::audio_toolkit::{
-    audio::FrameResampler,
+    audio::{AudioVisualiser, FrameResampler},
     constants,
     vad::{self, VadFrame},
     VoiceActivityDetector,
@@ -27,6 +27,7 @@ pub struct AudioRecorder {
     cmd_tx: Option<mpsc::Sender<Cmd>>,
     worker_handle: Option<std::thread::JoinHandle<()>>,
     vad: Option<Arc<Mutex<Box<dyn vad::VoiceActivityDetector>>>>,
+    level_cb: Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
 }
 
 impl AudioRecorder {
@@ -36,11 +37,20 @@ impl AudioRecorder {
             cmd_tx: None,
             worker_handle: None,
             vad: None,
+            level_cb: None,
         })
     }
 
     pub fn with_vad(mut self, vad: Box<dyn VoiceActivityDetector>) -> Self {
         self.vad = Some(Arc::new(Mutex::new(vad)));
+        self
+    }
+
+    pub fn with_level_callback<F>(mut self, cb: F) -> Self
+    where
+        F: Fn(Vec<f32>) + Send + Sync + 'static,
+    {
+        self.level_cb = Some(Arc::new(cb));
         self
     }
 
@@ -62,6 +72,8 @@ impl AudioRecorder {
 
         let thread_device = device.clone();
         let vad = self.vad.clone();
+        // Move the optional level callback into the worker thread
+        let level_cb = self.level_cb.clone();
 
         let worker = std::thread::spawn(move || {
             let config = AudioRecorder::get_preferred_config(&thread_device)
@@ -105,7 +117,7 @@ impl AudioRecorder {
             stream.play().expect("failed to start stream");
 
             // keep the stream alive while we process samples
-            run_consumer(sample_rate, vad, sample_rx, cmd_rx);
+            run_consumer(sample_rate, vad, sample_rx, cmd_rx, level_cb);
             // stream is dropped here, after run_consumer returns
         });
 
@@ -215,6 +227,7 @@ fn run_consumer(
     vad: Option<Arc<Mutex<Box<dyn vad::VoiceActivityDetector>>>>,
     sample_rx: mpsc::Receiver<Vec<f32>>,
     cmd_rx: mpsc::Receiver<Cmd>,
+    level_cb: Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
 ) {
     let mut frame_resampler = FrameResampler::new(
         in_sample_rate as usize,
@@ -224,6 +237,17 @@ fn run_consumer(
 
     let mut processed_samples = Vec::<f32>::new();
     let mut recording = false;
+
+    // ---------- spectrum visualisation setup ---------------------------- //
+    const BUCKETS: usize = 16;
+    const WINDOW_SIZE: usize = 512;
+    let mut visualizer = AudioVisualiser::new(
+        in_sample_rate,
+        WINDOW_SIZE,
+        BUCKETS,
+        80.0,   // vocal_min_hz
+        4000.0, // vocal_max_hz
+    );
 
     fn handle_frame(
         samples: &[f32],
@@ -252,6 +276,14 @@ fn run_consumer(
             Err(_) => break, // stream closed
         };
 
+        // ---------- spectrum processing ---------------------------------- //
+        if let Some(buckets) = visualizer.feed(&raw) {
+            if let Some(cb) = &level_cb {
+                cb(buckets);
+            }
+        }
+
+        // ---------- existing pipeline ------------------------------------ //
         frame_resampler.push(&raw, &mut |frame: &[f32]| {
             handle_frame(frame, recording, &vad, &mut processed_samples)
         });
@@ -262,6 +294,7 @@ fn run_consumer(
                 Cmd::Start => {
                     processed_samples.clear();
                     recording = true;
+                    visualizer.reset(); // Reset visualization buffer
                     if let Some(v) = &vad {
                         v.lock().unwrap().reset();
                     }

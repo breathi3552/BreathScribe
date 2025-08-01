@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import "./RecordingOverlay.css";
 import { listen } from "@tauri-apps/api/event";
 
@@ -7,6 +7,8 @@ type OverlayState = "recording" | "transcribing";
 const RecordingOverlay: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [state, setState] = useState<OverlayState>("recording");
+  const [levels, setLevels] = useState<number[]>(Array(16).fill(0));
+  const smoothedLevelsRef = useRef<number[]>(Array(16).fill(0));
 
   useEffect(() => {
     const setupEventListeners = async () => {
@@ -22,10 +24,26 @@ const RecordingOverlay: React.FC = () => {
         setIsVisible(false);
       });
 
+      // Listen for mic-level updates
+      const unlistenLevel = await listen<number[]>("mic-level", (event) => {
+        const newLevels = event.payload as number[];
+
+        // Apply smoothing to reduce jitter
+        const smoothed = smoothedLevelsRef.current.map((prev, i) => {
+          const target = newLevels[i] || 0;
+          return prev * 0.7 + target * 0.3; // Smooth transition
+        });
+
+        smoothedLevelsRef.current = smoothed;
+        console.log(smoothed.length);
+        setLevels(smoothed.slice(0, 10));
+      });
+
       // Cleanup function
       return () => {
         unlistenShow();
         unlistenHide();
+        unlistenLevel();
       };
     };
 
@@ -53,13 +71,14 @@ const RecordingOverlay: React.FC = () => {
       />
       {state === "recording" && (
         <div className="bars-container">
-          {Array.from({ length: 12 }, (_, i) => (
+          {levels.map((v, i) => (
             <div
               key={i}
               className="bar"
               style={{
-                animationDelay: `${i * 100}ms`,
-                animationDuration: `${800 + Math.random() * 400}ms`,
+                height: `${4 + Math.pow(v, 0.7) * 32}px`, // Slight curve for better visual
+                transition: "height 60ms ease-out",
+                opacity: Math.max(0.4, v * 1.7), // Minimum opacity for visibility
               }}
             />
           ))}

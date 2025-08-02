@@ -342,7 +342,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
 
             // Position at bottom center of work area
             let x = work_area_x + (work_area_width - OVERLAY_WIDTH) / 2.0;
-            let y = work_area_y + work_area_height - OVERLAY_HEIGHT - OVERLAY_BOTTOM_OFFSET;
+            let y = work_area_y + work_area_height - OVERLAY_BOTTOM_OFFSET;
 
             match WebviewWindowBuilder::new(
                 app_handle,

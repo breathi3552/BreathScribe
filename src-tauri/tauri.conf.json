@@ -15,9 +15,9 @@
       {
         "title": "Handy",
         "width": 540,
-        "height": 720,
+        "height": 700,
         "minWidth": 540,
-        "minHeight": 720,
+        "minHeight": 700,
         "resizable": true,
         "maximizable": false
       }
@@ -30,9 +30,7 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
-    "resources": [
-      "resources/**/*"
-    ],
+    "resources": ["resources/**/*"],
     "license": "MIT",
     "icon": [
       "icons/32x32.png",

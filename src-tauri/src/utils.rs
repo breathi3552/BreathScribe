@@ -324,14 +324,19 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
     // Get screen dimensions for positioning
     if let Ok(monitors) = app_handle.primary_monitor() {
         if let Some(monitor) = monitors {
+            const OVERLAY_WIDTH: f64 = 172.0;
+            const OVERLAY_HEIGHT: f64 = 40.0;
+
+            const OVERLAY_BOTTOM_OFFSET: f64 = 60.0;
+
             let size = monitor.size();
             let scale = monitor.scale_factor();
-            let screen_width = (size.width as f64 / scale) as i32;
-            let screen_height = (size.height as f64 / scale) as i32;
+            let screen_width = size.width as f64 / scale;
+            let screen_height = size.height as f64 / scale;
 
             // Position at bottom center, 30px from bottom
-            let x = (screen_width - 160) / 2;
-            let y = screen_height - 30 - 30;
+            let x = (screen_width - OVERLAY_WIDTH) / 2.0;
+            let y = screen_height - OVERLAY_HEIGHT - OVERLAY_BOTTOM_OFFSET;
 
             match WebviewWindowBuilder::new(
                 app_handle,
@@ -339,7 +344,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
                 tauri::WebviewUrl::App("src/overlay/index.html".into()),
             )
             .title("Recording")
-            .position(x as f64, y as f64)
+            .position(x, y)
             .resizable(false)
             .inner_size(172.0, 40.0)
             .shadow(false)

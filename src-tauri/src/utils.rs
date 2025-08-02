@@ -341,6 +341,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
             .title("Recording")
             .position(x as f64, y as f64)
             .resizable(false)
+            .inner_size(160.0, 40.0)
             .maximizable(false)
             .minimizable(false)
             .closable(false)

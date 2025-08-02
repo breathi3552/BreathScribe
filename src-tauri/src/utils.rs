@@ -321,22 +321,24 @@ fn play_audio_file(
 
 /// Creates the recording overlay window and keeps it hidden by default
 pub fn create_recording_overlay(app_handle: &AppHandle) {
-    // Get screen dimensions for positioning
+    // Get work area dimensions for positioning (respects taskbars, docks, etc.)
     if let Ok(monitors) = app_handle.primary_monitor() {
         if let Some(monitor) = monitors {
             const OVERLAY_WIDTH: f64 = 172.0;
-            const OVERLAY_HEIGHT: f64 = 40.0;
+            const OVERLAY_HEIGHT: f64 = 00.0;
 
-            const OVERLAY_BOTTOM_OFFSET: f64 = 60.0;
+            const OVERLAY_BOTTOM_OFFSET: f64 = 12.0;
 
-            let size = monitor.size();
+            let work_area = monitor.work_area();
             let scale = monitor.scale_factor();
-            let screen_width = size.width as f64 / scale;
-            let screen_height = size.height as f64 / scale;
+            let work_area_width = work_area.size.width as f64 / scale;
+            let work_area_height = work_area.size.height as f64 / scale;
+            let work_area_x = work_area.position.x as f64 / scale;
+            let work_area_y = work_area.position.y as f64 / scale;
 
-            // Position at bottom center, 30px from bottom
-            let x = (screen_width - OVERLAY_WIDTH) / 2.0;
-            let y = screen_height - OVERLAY_HEIGHT - OVERLAY_BOTTOM_OFFSET;
+            // Position at bottom center of work area
+            let x = work_area_x + (work_area_width - OVERLAY_WIDTH) / 2.0;
+            let y = work_area_y + work_area_height - OVERLAY_HEIGHT - OVERLAY_BOTTOM_OFFSET;
 
             match WebviewWindowBuilder::new(
                 app_handle,

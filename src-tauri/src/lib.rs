@@ -78,9 +78,25 @@ pub fn run() {
         ))
         .manage(Mutex::new(ShortcutToggleStates::default()))
         .setup(move |app| {
+            // Get the current theme to set the appropriate initial icon
+            let initial_theme = if let Some(main_window) = app.get_webview_window("main") {
+                main_window.theme().unwrap_or(tauri::Theme::Dark)
+            } else {
+                tauri::Theme::Dark
+            };
+
+            println!("Initial system theme: {:?}", initial_theme);
+
+            // Choose the appropriate initial icon based on theme
+            let initial_icon_path = match initial_theme {
+                tauri::Theme::Dark => "resources/tray_idle.png",
+                tauri::Theme::Light => "resources/tray_idle_dark.png",
+                _ => "resources/tray_idle.png", // Default fallback
+            };
+
             let tray = TrayIconBuilder::new()
                 .icon(Image::from_path(app.path().resolve(
-                    "resources/tray_idle.png",
+                    initial_icon_path,
                     tauri::path::BaseDirectory::Resource,
                 )?)?)
                 .show_menu_on_left_click(true)
@@ -150,6 +166,11 @@ pub fn run() {
                         println!("Failed to set activation policy: {}", e);
                     }
                 }
+            }
+            tauri::WindowEvent::ThemeChanged(theme) => {
+                println!("Theme changed to: {:?}", theme);
+                // Update tray icon to match new theme, maintaining idle state
+                utils::change_tray_icon(&window.app_handle(), utils::TrayIconState::Idle);
             }
             _ => {}
         })

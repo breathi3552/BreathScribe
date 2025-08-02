@@ -30,6 +30,7 @@ export const SettingsSchema = z.object({
   translate_to_english: z.boolean(),
   selected_language: z.string(),
   show_overlay: z.boolean(),
+  debug_mode: z.boolean(),
 });
 
 export const BindingResponseSchema = z.object({

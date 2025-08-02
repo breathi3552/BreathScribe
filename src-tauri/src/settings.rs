@@ -32,6 +32,8 @@ pub struct AppSettings {
     pub selected_language: String,
     #[serde(default = "default_show_overlay")]
     pub show_overlay: bool,
+    #[serde(default = "default_debug_mode")]
+    pub debug_mode: bool,
 }
 
 fn default_model() -> String {
@@ -61,6 +63,11 @@ fn default_show_overlay() -> bool {
     true
 }
 
+fn default_debug_mode() -> bool {
+    // Default to false - debug mode should be opt-in
+    false
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -85,6 +92,7 @@ pub fn get_default_settings() -> AppSettings {
             current_binding: default_shortcut.to_string(),
         },
     );
+
     // bindings.insert(
     //     "test".to_string(),
     //     ShortcutBinding {
@@ -107,6 +115,7 @@ pub fn get_default_settings() -> AppSettings {
         translate_to_english: false,
         selected_language: "auto".to_string(),
         show_overlay: true,
+        debug_mode: false,
     }
 }
 

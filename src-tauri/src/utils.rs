@@ -327,6 +327,10 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
             const OVERLAY_WIDTH: f64 = 172.0;
             const OVERLAY_HEIGHT: f64 = 00.0;
 
+            // Platform-specific bottom offset
+            #[cfg(target_os = "windows")]
+            const OVERLAY_BOTTOM_OFFSET: f64 = 46.0;
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
             const OVERLAY_BOTTOM_OFFSET: f64 = 12.0;
 
             let work_area = monitor.work_area();

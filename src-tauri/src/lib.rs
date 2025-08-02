@@ -78,9 +78,16 @@ pub fn run() {
         ))
         .manage(Mutex::new(ShortcutToggleStates::default()))
         .setup(move |app| {
+            // Log the current system theme
+            if let Some(main_window) = app.get_webview_window("main") {
+                if let Ok(theme) = main_window.theme() {
+                    println!("System theme: {:?}", theme);
+                }
+            }
+
             let tray = TrayIconBuilder::new()
                 .icon(Image::from_path(app.path().resolve(
-                    "resources/tray_idle.png",
+                    "resources/tray_idle_dark.png",
                     tauri::path::BaseDirectory::Resource,
                 )?)?)
                 .show_menu_on_left_click(true)

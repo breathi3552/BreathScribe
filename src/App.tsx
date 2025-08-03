@@ -6,6 +6,7 @@ import Footer from "./components/footer";
 import HandyTextLogo from "./components/icons/HandyTextLogo";
 import Onboarding from "./components/onboarding";
 import { Settings } from "./components/settings/Settings";
+import { Toaster } from "sonner";
 
 function App() {
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
@@ -43,6 +44,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col w-full">
+      <Toaster />
       <div className="flex flex-col items-center pt-6 gap-8 px-4 flex-1">
         <HandyTextLogo width={240} />
         <AccessibilityPermissions />

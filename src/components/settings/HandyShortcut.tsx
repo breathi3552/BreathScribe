@@ -11,6 +11,7 @@ import ResetIcon from "../icons/ResetIcon";
 import { SettingContainer } from "../ui/SettingContainer";
 import { useSettings } from "../../hooks/useSettings";
 import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
 
 interface HandyShortcutProps {
   descriptionMode?: "inline" | "tooltip";
@@ -38,7 +39,7 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
   useEffect(() => {
     const detectOsType = async () => {
       try {
-        const detectedType = await type();
+        const detectedType = type();
         let normalizedType: OSType;
 
         switch (detectedType) {
@@ -75,8 +76,18 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.repeat) return; // ignore auto-repeat
       if (e.key === "Escape") {
-        // Cancel recording
-        if (editingShortcutId) {
+        // Cancel recording and restore original binding
+        if (editingShortcutId && originalBinding) {
+          try {
+            await updateBinding(editingShortcutId, originalBinding);
+            await invoke("resume_binding", { id: editingShortcutId }).catch(
+              console.error,
+            );
+          } catch (error) {
+            console.error("Failed to restore original binding:", error);
+            toast.error("Failed to restore original shortcut");
+          }
+        } else if (editingShortcutId) {
           await invoke("resume_binding", { id: editingShortcutId }).catch(
             console.error,
           );
@@ -129,6 +140,20 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
             );
           } catch (error) {
             console.error("Failed to change binding:", error);
+            toast.error(`Failed to set shortcut: ${error}`);
+
+            // Reset to original binding on error
+            if (originalBinding) {
+              try {
+                await updateBinding(editingShortcutId, originalBinding);
+                await invoke("resume_binding", { id: editingShortcutId }).catch(
+                  console.error,
+                );
+              } catch (resetError) {
+                console.error("Failed to reset binding:", resetError);
+                toast.error("Failed to reset shortcut to original value");
+              }
+            }
           }
 
           // Exit editing mode and reset states
@@ -141,11 +166,21 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     };
 
     // Add click outside handler
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = async (e: MouseEvent) => {
       const activeElement = shortcutRefs.current.get(editingShortcutId);
       if (activeElement && !activeElement.contains(e.target as Node)) {
-        // Cancel shortcut recording - the hook will handle rollback
-        if (editingShortcutId) {
+        // Cancel shortcut recording and restore original binding
+        if (editingShortcutId && originalBinding) {
+          try {
+            await updateBinding(editingShortcutId, originalBinding);
+            await invoke("resume_binding", { id: editingShortcutId }).catch(
+              console.error,
+            );
+          } catch (error) {
+            console.error("Failed to restore original binding:", error);
+            toast.error("Failed to restore original shortcut");
+          }
+        } else if (editingShortcutId) {
           invoke("resume_binding", { id: editingShortcutId }).catch(
             console.error,
           );

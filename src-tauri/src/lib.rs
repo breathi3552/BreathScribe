@@ -183,6 +183,8 @@ pub fn run() {
             shortcut::change_selected_language_setting,
             shortcut::change_show_overlay_setting,
             shortcut::change_debug_mode_setting,
+            shortcut::suspend_binding,
+            shortcut::resume_binding,
             trigger_update_check,
             commands::cancel_operation,
             commands::get_app_dir_path,

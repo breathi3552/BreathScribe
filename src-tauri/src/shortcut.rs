@@ -56,6 +56,9 @@ pub fn change_binding(
         });
     }
 
+    // Validate the new shortcut before we touch the current registration
+    validate_shortcut_string(&binding)?;
+
     // Create an updated binding
     let mut updated_binding = binding_to_modify;
     updated_binding.current_binding = binding;
@@ -143,12 +146,60 @@ pub fn change_debug_mode_setting(app: AppHandle, enabled: bool) -> Result<(), St
     Ok(())
 }
 
+/// Determine whether a shortcut string contains at least one non-modifier key.
+/// We allow single non-modifier keys (e.g. "f5" or "space") but disallow
+/// modifier-only combos (e.g. "ctrl" or "ctrl+shift").
+fn validate_shortcut_string(raw: &str) -> Result<(), String> {
+    let modifiers = [
+        "ctrl", "control", "shift", "alt", "option", "meta", "command", "cmd", "super", "win",
+        "windows",
+    ];
+    let has_non_modifier = raw
+        .split('+')
+        .any(|part| !modifiers.contains(&part.trim().to_lowercase().as_str()));
+    if has_non_modifier {
+        Ok(())
+    } else {
+        Err("Shortcut must contain at least one non-modifier key".into())
+    }
+}
+
+/// Temporarily unregister a binding while the user is editing it in the UI.
+/// This avoids firing the action while keys are being recorded.
+#[tauri::command]
+pub fn suspend_binding(app: AppHandle, id: String) -> Result<(), String> {
+    if let Some(b) = settings::get_bindings(&app).get(&id).cloned() {
+        _unregister_shortcut(&app, b)?;
+    }
+    Ok(())
+}
+
+/// Re-register the binding after the user has finished editing.
+#[tauri::command]
+pub fn resume_binding(app: AppHandle, id: String) -> Result<(), String> {
+    if let Some(b) = settings::get_bindings(&app).get(&id).cloned() {
+        _register_shortcut(&app, b)?;
+    }
+    Ok(())
+}
+
 fn _register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
+    // Validate human-level rules first
+    validate_shortcut_string(&binding.current_binding)?;
+
     // Parse shortcut and return error if it fails
     let shortcut = match binding.current_binding.parse::<Shortcut>() {
         Ok(s) => s,
         Err(e) => return Err(format!("Failed to parse shortcut: {}", e)),
     };
+
+    // Prevent duplicate registrations that would silently shadow one another
+    if app.global_shortcut().is_registered(shortcut) {
+        return Err(format!(
+            "Shortcut '{}' is already in use",
+            binding.current_binding
+        ));
+    }
 
     // Clone binding.id for use in the closure
     let binding_id_for_closure = binding.id.clone();

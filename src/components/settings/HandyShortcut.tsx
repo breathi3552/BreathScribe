@@ -5,6 +5,7 @@ import { getKeyName } from "../../lib/utils/keyboard";
 import ResetIcon from "../icons/ResetIcon";
 import { SettingContainer } from "../ui/SettingContainer";
 import { useSettings } from "../../hooks/useSettings";
+import { invoke } from "@tauri-apps/api/core";
 
 interface HandyShortcutProps {
   descriptionMode?: "inline" | "tooltip";
@@ -82,6 +83,20 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
 
     // Keyboard event listeners
     const handleKeyDown = async (e: KeyboardEvent) => {
+      if (e.repeat) return; // ignore auto-repeat
+      if (e.key === "Escape") {
+        // Cancel recording
+        if (editingShortcutId) {
+          await invoke("resume_binding", { id: editingShortcutId }).catch(
+            console.error,
+          );
+        }
+        setEditingShortcutId(null);
+        setKeyPressed([]);
+        setRecordedKeys([]);
+        setOriginalBinding("");
+        return;
+      }
       e.preventDefault();
 
       // Get the key and normalize it (unify left/right modifiers)
@@ -118,6 +133,10 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
         if (editingShortcutId && bindings[editingShortcutId]) {
           try {
             await updateBinding(editingShortcutId, newShortcut);
+            // Re-register the shortcut now that recording is finished
+            await invoke("resume_binding", { id: editingShortcutId }).catch(
+              console.error,
+            );
           } catch (error) {
             console.error("Failed to change binding:", error);
           }
@@ -136,6 +155,11 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
       const activeElement = shortcutRefs.current.get(editingShortcutId);
       if (activeElement && !activeElement.contains(e.target as Node)) {
         // Cancel shortcut recording - the hook will handle rollback
+        if (editingShortcutId) {
+          invoke("resume_binding", { id: editingShortcutId }).catch(
+            console.error,
+          );
+        }
         setEditingShortcutId(null);
         setKeyPressed([]);
         setRecordedKeys([]);
@@ -162,8 +186,11 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
   ]);
 
   // Start recording a new shortcut
-  const startRecording = (id: string) => {
+  const startRecording = async (id: string) => {
     if (editingShortcutId === id) return; // Already editing this shortcut
+
+    // Suspend current binding to avoid firing while recording
+    await invoke("suspend_binding", { id }).catch(console.error);
 
     // Store the original binding to restore if canceled
     setOriginalBinding(bindings[id]?.current_binding || "");

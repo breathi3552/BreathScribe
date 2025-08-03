@@ -190,6 +190,7 @@ pub fn run() {
             commands::models::get_model_info,
             commands::models::download_model,
             commands::models::delete_model,
+            commands::models::cancel_download,
             commands::models::set_active_model,
             commands::models::get_current_model,
             commands::models::get_transcription_model_status,

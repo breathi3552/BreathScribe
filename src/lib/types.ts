@@ -51,6 +51,8 @@ export const ModelInfoSchema = z.object({
   description: z.string(),
   size_mb: z.number(),
   is_downloaded: z.boolean(),
+  is_downloading: z.boolean(),
+  partial_size: z.number(),
 });
 
 export type ModelInfo = z.infer<typeof ModelInfoSchema>;

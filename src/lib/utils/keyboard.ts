@@ -49,8 +49,7 @@ export const getKeyName = (
         case "meta":
           // Windows key on Windows/Linux, Command key on Mac
           if (osType === "macos") return "command";
-          if (osType === "windows") return "win";
-          return "super"; // Linux convention
+          return "super";
         default:
           return baseModifier;
       }

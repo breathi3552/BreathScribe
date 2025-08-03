@@ -53,11 +53,6 @@ pub fn change_binding(
     if let Err(e) = _unregister_shortcut(&app, binding_to_modify.clone()) {
         let error_msg = format!("Failed to unregister shortcut: {}", e);
         eprintln!("change_binding error: {}", error_msg);
-        return Ok(BindingResponse {
-            success: false,
-            binding: None,
-            error: Some(error_msg),
-        });
     }
 
     // Validate the new shortcut before we touch the current registration

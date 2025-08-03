@@ -109,6 +109,16 @@ pub async fn has_any_models_or_downloads(
 }
 
 #[tauri::command]
+pub async fn cancel_download(
+    model_manager: State<'_, Arc<ModelManager>>,
+    model_id: String,
+) -> Result<(), String> {
+    model_manager
+        .cancel_download(&model_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_recommended_first_model() -> Result<String, String> {
     // Recommend small model for first-time users
     Ok("small".to_string())

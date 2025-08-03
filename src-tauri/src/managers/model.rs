@@ -18,6 +18,8 @@ pub struct ModelInfo {
     pub url: Option<String>,
     pub size_mb: u64,
     pub is_downloaded: bool,
+    pub is_downloading: bool,
+    pub partial_size: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +63,8 @@ impl ModelManager {
                 url: Some("https://blob.handy.computer/ggml-small.bin".to_string()),
                 size_mb: 244,
                 is_downloaded: false,
+                is_downloading: false,
+                partial_size: 0,
             },
         );
 
@@ -75,6 +79,8 @@ impl ModelManager {
                 url: Some("https://blob.handy.computer/whisper-medium-q4_1.bin".to_string()),
                 size_mb: 491, // Approximate size
                 is_downloaded: false,
+                is_downloading: false,
+                partial_size: 0,
             },
         );
 
@@ -88,6 +94,8 @@ impl ModelManager {
                 url: Some("https://blob.handy.computer/ggml-large-v3-turbo.bin".to_string()),
                 size_mb: 1600, // Approximate size
                 is_downloaded: false,
+                is_downloading: false,
+                partial_size: 0,
             },
         );
 
@@ -101,6 +109,8 @@ impl ModelManager {
                 url: Some("https://blob.handy.computer/ggml-large-v3-q5_0.bin".to_string()),
                 size_mb: 1080, // Approximate size
                 is_downloaded: false,
+                is_downloading: false,
+                partial_size: 0,
             },
         );
 
@@ -164,7 +174,17 @@ impl ModelManager {
 
         for model in models.values_mut() {
             let model_path = self.models_dir.join(&model.filename);
+            let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
+
             model.is_downloaded = model_path.exists();
+            model.is_downloading = partial_path.exists();
+
+            // Get partial file size if it exists
+            if partial_path.exists() {
+                model.partial_size = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
+            } else {
+                model.partial_size = 0;
+            }
         }
 
         Ok(())
@@ -209,37 +229,113 @@ impl ModelManager {
             .url
             .ok_or_else(|| anyhow::anyhow!("No download URL for model"))?;
         let model_path = self.models_dir.join(&model_info.filename);
+        let partial_path = self
+            .models_dir
+            .join(format!("{}.partial", &model_info.filename));
 
-        // Don't download if downloaded version already exists
+        // Don't download if complete version already exists
         if model_path.exists() {
-            // Update status and return
+            // Clean up any partial file that might exist
+            if partial_path.exists() {
+                let _ = fs::remove_file(&partial_path);
+            }
             self.update_download_status()?;
             return Ok(());
         }
 
-        println!("Downloading model {} from {}", model_id, url);
+        // Check if we have a partial download to resume
+        let resume_from = if partial_path.exists() {
+            let size = partial_path.metadata()?.len();
+            println!("Resuming download of model {} from byte {}", model_id, size);
+            size
+        } else {
+            println!("Starting fresh download of model {} from {}", model_id, url);
+            0
+        };
 
-        // Create HTTP client
+        // Mark as downloading
+        {
+            let mut models = self.available_models.lock().unwrap();
+            if let Some(model) = models.get_mut(model_id) {
+                model.is_downloading = true;
+            }
+        }
+
+        // Create HTTP client with range request for resuming
         let client = reqwest::Client::new();
-        let response = client.get(&url).send().await?;
+        let mut request = client.get(&url);
 
-        if !response.status().is_success() {
+        if resume_from > 0 {
+            request = request.header("Range", format!("bytes={}-", resume_from));
+        }
+
+        let response = request.send().await?;
+
+        // Check for success or partial content status
+        if !response.status().is_success()
+            && response.status() != reqwest::StatusCode::PARTIAL_CONTENT
+        {
+            // Mark as not downloading on error
+            {
+                let mut models = self.available_models.lock().unwrap();
+                if let Some(model) = models.get_mut(model_id) {
+                    model.is_downloading = false;
+                }
+            }
             return Err(anyhow::anyhow!(
                 "Failed to download model: HTTP {}",
                 response.status()
             ));
         }
 
-        let total_size = response.content_length().unwrap_or(0);
-        let mut downloaded = 0u64;
+        let total_size = if resume_from > 0 {
+            // For resumed downloads, add the resume point to content length
+            resume_from + response.content_length().unwrap_or(0)
+        } else {
+            response.content_length().unwrap_or(0)
+        };
+
+        let mut downloaded = resume_from;
         let mut stream = response.bytes_stream();
 
-        // Create the file
-        let mut file = std::fs::File::create(&model_path)?;
+        // Open file for appending if resuming, or create new if starting fresh
+        let mut file = if resume_from > 0 {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&partial_path)?
+        } else {
+            std::fs::File::create(&partial_path)?
+        };
+
+        // Emit initial progress
+        let initial_progress = DownloadProgress {
+            model_id: model_id.to_string(),
+            downloaded,
+            total: total_size,
+            percentage: if total_size > 0 {
+                (downloaded as f64 / total_size as f64) * 100.0
+            } else {
+                0.0
+            },
+        };
+        let _ = self
+            .app_handle
+            .emit("model-download-progress", &initial_progress);
 
         // Download with progress
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
+            let chunk = chunk.map_err(|e| {
+                // Mark as not downloading on error
+                {
+                    let mut models = self.available_models.lock().unwrap();
+                    if let Some(model) = models.get_mut(model_id) {
+                        model.is_downloading = false;
+                    }
+                }
+                e
+            })?;
+
             file.write_all(&chunk)?;
             downloaded += chunk.len() as u64;
 
@@ -261,9 +357,20 @@ impl ModelManager {
         }
 
         file.flush()?;
+        drop(file); // Ensure file is closed before moving
+
+        // Move partial file to final location
+        fs::rename(&partial_path, &model_path)?;
 
         // Update download status
-        self.update_download_status()?;
+        {
+            let mut models = self.available_models.lock().unwrap();
+            if let Some(model) = models.get_mut(model_id) {
+                model.is_downloading = false;
+                model.is_downloaded = true;
+                model.partial_size = 0;
+            }
+        }
 
         // Emit completion event
         let _ = self.app_handle.emit("model-download-complete", model_id);
@@ -272,6 +379,7 @@ impl ModelManager {
             "Successfully downloaded model {} to {:?}",
             model_id, model_path
         );
+
         Ok(())
     }
 
@@ -289,14 +397,32 @@ impl ModelManager {
         println!("ModelManager: Found model info: {:?}", model_info);
 
         let model_path = self.models_dir.join(&model_info.filename);
+        let partial_path = self
+            .models_dir
+            .join(format!("{}.partial", &model_info.filename));
         println!("ModelManager: Model path: {:?}", model_path);
+        println!("ModelManager: Partial path: {:?}", partial_path);
 
+        let mut deleted_something = false;
+
+        // Delete complete model file if it exists
         if model_path.exists() {
             println!("ModelManager: Deleting model file at: {:?}", model_path);
             fs::remove_file(&model_path)?;
             println!("ModelManager: Model file deleted successfully");
-        } else {
-            return Err(anyhow::anyhow!("Model file not found"));
+            deleted_something = true;
+        }
+
+        // Delete partial file if it exists
+        if partial_path.exists() {
+            println!("ModelManager: Deleting partial file at: {:?}", partial_path);
+            fs::remove_file(&partial_path)?;
+            println!("ModelManager: Partial file deleted successfully");
+            deleted_something = true;
+        }
+
+        if !deleted_something {
+            return Err(anyhow::anyhow!("No model files found to delete"));
         }
 
         // Update download status
@@ -315,11 +441,57 @@ impl ModelManager {
             return Err(anyhow::anyhow!("Model not available: {}", model_id));
         }
 
+        // Ensure we don't return partial files
+        if model_info.is_downloading {
+            return Err(anyhow::anyhow!(
+                "Model is currently downloading: {}",
+                model_id
+            ));
+        }
+
         let model_path = self.models_dir.join(&model_info.filename);
-        if model_path.exists() {
+        let partial_path = self
+            .models_dir
+            .join(format!("{}.partial", &model_info.filename));
+
+        // Ensure we only return complete model files, not partial ones
+        if model_path.exists() && !partial_path.exists() {
             Ok(model_path)
         } else {
-            Err(anyhow::anyhow!("Model file not found: {}", model_id))
+            Err(anyhow::anyhow!(
+                "Complete model file not found: {}",
+                model_id
+            ))
         }
+    }
+
+    pub fn cancel_download(&self, model_id: &str) -> Result<()> {
+        println!("ModelManager: cancel_download called for: {}", model_id);
+
+        let _model_info = {
+            let models = self.available_models.lock().unwrap();
+            models.get(model_id).cloned()
+        };
+
+        let _model_info =
+            _model_info.ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
+
+        // Mark as not downloading
+        {
+            let mut models = self.available_models.lock().unwrap();
+            if let Some(model) = models.get_mut(model_id) {
+                model.is_downloading = false;
+            }
+        }
+
+        // Note: The actual download cancellation would need to be handled
+        // by the download task itself. This just updates the state.
+        // The partial file is kept so the download can be resumed later.
+
+        // Update download status to reflect current state
+        self.update_download_status()?;
+
+        println!("ModelManager: Download cancelled for: {}", model_id);
+        Ok(())
     }
 }

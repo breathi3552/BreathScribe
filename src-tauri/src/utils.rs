@@ -14,7 +14,7 @@ use std::thread;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIcon;
-use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, Theme, WebviewWindowBuilder};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 /// Sends a paste command (Cmd+V or Ctrl+V) using platform-specific virtual key codes.
@@ -82,13 +82,32 @@ pub enum TrayIconState {
     Transcribing,
 }
 
+/// Gets the current system theme, defaulting to Dark if unavailable
+fn get_current_theme(app: &AppHandle) -> Theme {
+    if let Some(main_window) = app.get_webview_window("main") {
+        main_window.theme().unwrap_or(Theme::Dark)
+    } else {
+        Theme::Dark
+    }
+}
+
 pub fn change_tray_icon(app: &AppHandle, icon: TrayIconState) {
     let tray = app.state::<TrayIcon>();
+    let theme = get_current_theme(app);
 
-    let icon_path = match icon {
-        TrayIconState::Idle => "resources/tray_idle.png",
-        TrayIconState::Recording => "resources/tray_recording.png",
-        TrayIconState::Transcribing => "resources/tray_transcribing.png",
+    let icon_path = match (theme, &icon) {
+        // Dark theme uses regular icons (lighter colored for visibility)
+        (Theme::Dark, TrayIconState::Idle) => "resources/tray_idle.png",
+        (Theme::Dark, TrayIconState::Recording) => "resources/tray_recording.png",
+        (Theme::Dark, TrayIconState::Transcribing) => "resources/tray_transcribing.png",
+        // Light theme uses dark icons (darker colored for visibility)
+        (Theme::Light, TrayIconState::Idle) => "resources/tray_idle_dark.png",
+        (Theme::Light, TrayIconState::Recording) => "resources/tray_recording_dark.png",
+        (Theme::Light, TrayIconState::Transcribing) => "resources/tray_transcribing_dark.png",
+        // Fallback for any other theme variants
+        (_, TrayIconState::Idle) => "resources/tray_idle.png",
+        (_, TrayIconState::Recording) => "resources/tray_recording.png",
+        (_, TrayIconState::Transcribing) => "resources/tray_transcribing.png",
     };
 
     let _ = tray.set_icon(Some(

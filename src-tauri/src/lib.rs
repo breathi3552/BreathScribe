@@ -60,6 +60,9 @@ pub fn run() {
     env_logger::init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main_window(app);
+        }))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -75,9 +78,25 @@ pub fn run() {
         ))
         .manage(Mutex::new(ShortcutToggleStates::default()))
         .setup(move |app| {
+            // Get the current theme to set the appropriate initial icon
+            let initial_theme = if let Some(main_window) = app.get_webview_window("main") {
+                main_window.theme().unwrap_or(tauri::Theme::Dark)
+            } else {
+                tauri::Theme::Dark
+            };
+
+            println!("Initial system theme: {:?}", initial_theme);
+
+            // Choose the appropriate initial icon based on theme
+            let initial_icon_path = match initial_theme {
+                tauri::Theme::Dark => "resources/tray_idle.png",
+                tauri::Theme::Light => "resources/tray_idle_dark.png",
+                _ => "resources/tray_idle.png", // Default fallback
+            };
+
             let tray = TrayIconBuilder::new()
                 .icon(Image::from_path(app.path().resolve(
-                    "resources/tray_idle.png",
+                    initial_icon_path,
                     tauri::path::BaseDirectory::Resource,
                 )?)?)
                 .show_menu_on_left_click(true)
@@ -148,6 +167,11 @@ pub fn run() {
                     }
                 }
             }
+            tauri::WindowEvent::ThemeChanged(theme) => {
+                println!("Theme changed to: {:?}", theme);
+                // Update tray icon to match new theme, maintaining idle state
+                utils::change_tray_icon(&window.app_handle(), utils::TrayIconState::Idle);
+            }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
@@ -159,6 +183,8 @@ pub fn run() {
             shortcut::change_selected_language_setting,
             shortcut::change_show_overlay_setting,
             shortcut::change_debug_mode_setting,
+            shortcut::suspend_binding,
+            shortcut::resume_binding,
             trigger_update_check,
             commands::cancel_operation,
             commands::get_app_dir_path,
@@ -166,6 +192,7 @@ pub fn run() {
             commands::models::get_model_info,
             commands::models::download_model,
             commands::models::delete_model,
+            commands::models::cancel_download,
             commands::models::set_active_model,
             commands::models::get_current_model,
             commands::models::get_transcription_model_status,

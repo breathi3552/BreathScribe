@@ -1,10 +1,17 @@
 import React, { useEffect, useState, useRef } from "react";
 import { BindingResponseSchema, ShortcutBindingsMap } from "../../lib/types";
 import { type } from "@tauri-apps/plugin-os";
-import { getKeyName } from "../../lib/utils/keyboard";
+import {
+  getKeyName,
+  formatKeyCombination,
+  normalizeKey,
+  type OSType,
+} from "../../lib/utils/keyboard";
 import ResetIcon from "../icons/ResetIcon";
 import { SettingContainer } from "../ui/SettingContainer";
 import { useSettings } from "../../hooks/useSettings";
+import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
 
 interface HandyShortcutProps {
   descriptionMode?: "inline" | "tooltip";
@@ -23,56 +30,41 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     null,
   );
   const [originalBinding, setOriginalBinding] = useState<string>("");
-  const [isMacOS, setIsMacOS] = useState<boolean>(false);
+  const [osType, setOsType] = useState<OSType>("unknown");
   const shortcutRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
   const bindings = getSetting("bindings") || {};
 
-  // Check if running on macOS
+  // Detect and store OS type
   useEffect(() => {
-    const checkOsType = async () => {
+    const detectOsType = async () => {
       try {
-        const osType = await type();
-        setIsMacOS(osType === "macos");
+        const detectedType = type();
+        let normalizedType: OSType;
+
+        switch (detectedType) {
+          case "macos":
+            normalizedType = "macos";
+            break;
+          case "windows":
+            normalizedType = "windows";
+            break;
+          case "linux":
+            normalizedType = "linux";
+            break;
+          default:
+            normalizedType = "unknown";
+        }
+
+        setOsType(normalizedType);
       } catch (error) {
         console.error("Error detecting OS type:", error);
-        setIsMacOS(false);
+        setOsType("unknown");
       }
     };
 
-    checkOsType();
+    detectOsType();
   }, []);
-
-  // Normalize modifier keys (unify left/right variants)
-  const normalizeKey = (key: string): string => {
-    // Handle left/right variants of modifier keys
-    if (key.startsWith("left ") || key.startsWith("right ")) {
-      const parts = key.split(" ");
-      if (parts.length === 2) {
-        // Return just the modifier name without left/right prefix
-        return parts[1];
-      }
-    }
-    return key;
-  };
-
-  // Format keys for macOS display
-  const formatMacOSKeys = (key: string): string => {
-    if (!isMacOS) return key; // Only format for macOS
-
-    const keyMap: Record<string, string> = {
-      alt: "option",
-    };
-
-    return keyMap[key.toLowerCase()] || key;
-  };
-
-  // Format a key combination for display
-  const formatKeyCombination = (combination: string): string => {
-    if (!isMacOS) return combination; // Only format for macOS
-
-    return combination.split("+").map(formatMacOSKeys).join(" + ");
-  };
 
   useEffect(() => {
     // Only add event listeners when we're in editing mode
@@ -82,10 +74,34 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
 
     // Keyboard event listeners
     const handleKeyDown = async (e: KeyboardEvent) => {
+      if (e.repeat) return; // ignore auto-repeat
+      if (e.key === "Escape") {
+        // Cancel recording and restore original binding
+        if (editingShortcutId && originalBinding) {
+          try {
+            await updateBinding(editingShortcutId, originalBinding);
+            await invoke("resume_binding", { id: editingShortcutId }).catch(
+              console.error,
+            );
+          } catch (error) {
+            console.error("Failed to restore original binding:", error);
+            toast.error("Failed to restore original shortcut");
+          }
+        } else if (editingShortcutId) {
+          await invoke("resume_binding", { id: editingShortcutId }).catch(
+            console.error,
+          );
+        }
+        setEditingShortcutId(null);
+        setKeyPressed([]);
+        setRecordedKeys([]);
+        setOriginalBinding("");
+        return;
+      }
       e.preventDefault();
 
-      // Get the key and normalize it (unify left/right modifiers)
-      const rawKey = getKeyName(e);
+      // Get the key with OS-specific naming and normalize it
+      const rawKey = getKeyName(e, osType);
       const key = normalizeKey(rawKey);
 
       console.log("You pressed", rawKey, "normalized to", key);
@@ -102,8 +118,8 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     const handleKeyUp = async (e: KeyboardEvent) => {
       e.preventDefault();
 
-      // Get the key and normalize it
-      const rawKey = getKeyName(e);
+      // Get the key with OS-specific naming and normalize it
+      const rawKey = getKeyName(e, osType);
       const key = normalizeKey(rawKey);
 
       // Remove from currently pressed keys
@@ -118,8 +134,26 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
         if (editingShortcutId && bindings[editingShortcutId]) {
           try {
             await updateBinding(editingShortcutId, newShortcut);
+            // Re-register the shortcut now that recording is finished
+            await invoke("resume_binding", { id: editingShortcutId }).catch(
+              console.error,
+            );
           } catch (error) {
             console.error("Failed to change binding:", error);
+            toast.error(`Failed to set shortcut: ${error}`);
+
+            // Reset to original binding on error
+            if (originalBinding) {
+              try {
+                await updateBinding(editingShortcutId, originalBinding);
+                await invoke("resume_binding", { id: editingShortcutId }).catch(
+                  console.error,
+                );
+              } catch (resetError) {
+                console.error("Failed to reset binding:", resetError);
+                toast.error("Failed to reset shortcut to original value");
+              }
+            }
           }
 
           // Exit editing mode and reset states
@@ -132,10 +166,25 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     };
 
     // Add click outside handler
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = async (e: MouseEvent) => {
       const activeElement = shortcutRefs.current.get(editingShortcutId);
       if (activeElement && !activeElement.contains(e.target as Node)) {
-        // Cancel shortcut recording - the hook will handle rollback
+        // Cancel shortcut recording and restore original binding
+        if (editingShortcutId && originalBinding) {
+          try {
+            await updateBinding(editingShortcutId, originalBinding);
+            await invoke("resume_binding", { id: editingShortcutId }).catch(
+              console.error,
+            );
+          } catch (error) {
+            console.error("Failed to restore original binding:", error);
+            toast.error("Failed to restore original shortcut");
+          }
+        } else if (editingShortcutId) {
+          invoke("resume_binding", { id: editingShortcutId }).catch(
+            console.error,
+          );
+        }
         setEditingShortcutId(null);
         setKeyPressed([]);
         setRecordedKeys([]);
@@ -159,11 +208,15 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     bindings,
     originalBinding,
     updateBinding,
+    osType,
   ]);
 
   // Start recording a new shortcut
-  const startRecording = (id: string) => {
+  const startRecording = async (id: string) => {
     if (editingShortcutId === id) return; // Already editing this shortcut
+
+    // Suspend current binding to avoid firing while recording
+    await invoke("suspend_binding", { id }).catch(console.error);
 
     // Store the original binding to restore if canceled
     setOriginalBinding(bindings[id]?.current_binding || "");
@@ -173,15 +226,11 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
   };
 
   // Format the current shortcut keys being recorded
-  const formatCurrentKeys = () => {
+  const formatCurrentKeys = (): string => {
     if (recordedKeys.length === 0) return "Press keys...";
 
-    if (!isMacOS) {
-      return recordedKeys.join("+");
-    }
-
-    // Map each key to its macOS-friendly name for display
-    return recordedKeys.map(formatMacOSKeys).join(" + ");
+    // Use the same formatting as the display to ensure consistency
+    return formatKeyCombination(recordedKeys.join("+"), osType);
   };
 
   // Store references to shortcut elements
@@ -248,7 +297,7 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
                 className="px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 hover:bg-logo-primary/10 rounded cursor-pointer hover:border-logo-primary"
                 onClick={() => startRecording(primaryId)}
               >
-                {formatKeyCombination(primaryBinding.current_binding)}
+                {formatKeyCombination(primaryBinding.current_binding, osType)}
               </div>
             )}
             <button

@@ -1,7 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import { BindingResponseSchema, ShortcutBindingsMap } from "../../lib/types";
 import { type } from "@tauri-apps/plugin-os";
-import { getKeyName } from "../../lib/utils/keyboard";
+import {
+  getKeyName,
+  formatKeyCombination,
+  normalizeKey,
+  type OSType,
+} from "../../lib/utils/keyboard";
 import ResetIcon from "../icons/ResetIcon";
 import { SettingContainer } from "../ui/SettingContainer";
 import { useSettings } from "../../hooks/useSettings";
@@ -24,56 +29,41 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     null,
   );
   const [originalBinding, setOriginalBinding] = useState<string>("");
-  const [isMacOS, setIsMacOS] = useState<boolean>(false);
+  const [osType, setOsType] = useState<OSType>("unknown");
   const shortcutRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
   const bindings = getSetting("bindings") || {};
 
-  // Check if running on macOS
+  // Detect and store OS type
   useEffect(() => {
-    const checkOsType = async () => {
+    const detectOsType = async () => {
       try {
-        const osType = await type();
-        setIsMacOS(osType === "macos");
+        const detectedType = await type();
+        let normalizedType: OSType;
+
+        switch (detectedType) {
+          case "macos":
+            normalizedType = "macos";
+            break;
+          case "windows":
+            normalizedType = "windows";
+            break;
+          case "linux":
+            normalizedType = "linux";
+            break;
+          default:
+            normalizedType = "unknown";
+        }
+
+        setOsType(normalizedType);
       } catch (error) {
         console.error("Error detecting OS type:", error);
-        setIsMacOS(false);
+        setOsType("unknown");
       }
     };
 
-    checkOsType();
+    detectOsType();
   }, []);
-
-  // Normalize modifier keys (unify left/right variants)
-  const normalizeKey = (key: string): string => {
-    // Handle left/right variants of modifier keys
-    if (key.startsWith("left ") || key.startsWith("right ")) {
-      const parts = key.split(" ");
-      if (parts.length === 2) {
-        // Return just the modifier name without left/right prefix
-        return parts[1];
-      }
-    }
-    return key;
-  };
-
-  // Format keys for macOS display
-  const formatMacOSKeys = (key: string): string => {
-    if (!isMacOS) return key; // Only format for macOS
-
-    const keyMap: Record<string, string> = {
-      alt: "option",
-    };
-
-    return keyMap[key.toLowerCase()] || key;
-  };
-
-  // Format a key combination for display
-  const formatKeyCombination = (combination: string): string => {
-    if (!isMacOS) return combination; // Only format for macOS
-
-    return combination.split("+").map(formatMacOSKeys).join(" + ");
-  };
 
   useEffect(() => {
     // Only add event listeners when we're in editing mode
@@ -99,8 +89,8 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
       }
       e.preventDefault();
 
-      // Get the key and normalize it (unify left/right modifiers)
-      const rawKey = getKeyName(e);
+      // Get the key with OS-specific naming and normalize it
+      const rawKey = getKeyName(e, osType);
       const key = normalizeKey(rawKey);
 
       console.log("You pressed", rawKey, "normalized to", key);
@@ -117,8 +107,8 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     const handleKeyUp = async (e: KeyboardEvent) => {
       e.preventDefault();
 
-      // Get the key and normalize it
-      const rawKey = getKeyName(e);
+      // Get the key with OS-specific naming and normalize it
+      const rawKey = getKeyName(e, osType);
       const key = normalizeKey(rawKey);
 
       // Remove from currently pressed keys
@@ -183,6 +173,7 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     bindings,
     originalBinding,
     updateBinding,
+    osType,
   ]);
 
   // Start recording a new shortcut
@@ -200,15 +191,11 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
   };
 
   // Format the current shortcut keys being recorded
-  const formatCurrentKeys = () => {
+  const formatCurrentKeys = (): string => {
     if (recordedKeys.length === 0) return "Press keys...";
 
-    if (!isMacOS) {
-      return recordedKeys.join("+");
-    }
-
-    // Map each key to its macOS-friendly name for display
-    return recordedKeys.map(formatMacOSKeys).join(" + ");
+    // Use the same formatting as the display to ensure consistency
+    return formatKeyCombination(recordedKeys.join("+"), osType);
   };
 
   // Store references to shortcut elements
@@ -275,7 +262,7 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
                 className="px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 hover:bg-logo-primary/10 rounded cursor-pointer hover:border-logo-primary"
                 onClick={() => startRecording(primaryId)}
               >
-                {formatKeyCombination(primaryBinding.current_binding)}
+                {formatKeyCombination(primaryBinding.current_binding, osType)}
               </div>
             )}
             <button

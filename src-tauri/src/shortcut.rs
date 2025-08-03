@@ -15,7 +15,7 @@ pub fn init_shortcuts(app: &App) {
     for (_id, binding) in settings.bindings {
         // Pass app.handle() which is &AppHandle
         if let Err(e) = _register_shortcut(app.handle(), binding) {
-            eprintln!("Failed to register shortcut {}: {}", _id, e);
+            eprintln!("Failed to register shortcut {} during init: {}", _id, e);
         }
     }
 }
@@ -39,25 +39,32 @@ pub fn change_binding(
     let binding_to_modify = match settings.bindings.get(&id) {
         Some(binding) => binding.clone(),
         None => {
+            let error_msg = format!("Binding with id '{}' not found", id);
+            eprintln!("change_binding error: {}", error_msg);
             return Ok(BindingResponse {
                 success: false,
                 binding: None,
-                error: Some(format!("Binding with id '{}' not found", id)),
-            })
+                error: Some(error_msg),
+            });
         }
     };
 
     // Unregister the existing binding
     if let Err(e) = _unregister_shortcut(&app, binding_to_modify.clone()) {
+        let error_msg = format!("Failed to unregister shortcut: {}", e);
+        eprintln!("change_binding error: {}", error_msg);
         return Ok(BindingResponse {
             success: false,
             binding: None,
-            error: Some(format!("Failed to unregister shortcut: {}", e)),
+            error: Some(error_msg),
         });
     }
 
     // Validate the new shortcut before we touch the current registration
-    validate_shortcut_string(&binding)?;
+    if let Err(e) = validate_shortcut_string(&binding) {
+        eprintln!("change_binding validation error: {}", e);
+        return Err(e);
+    }
 
     // Create an updated binding
     let mut updated_binding = binding_to_modify;
@@ -65,10 +72,12 @@ pub fn change_binding(
 
     // Register the new binding
     if let Err(e) = _register_shortcut(&app, updated_binding.clone()) {
+        let error_msg = format!("Failed to register shortcut: {}", e);
+        eprintln!("change_binding error: {}", error_msg);
         return Ok(BindingResponse {
             success: false,
             binding: None,
-            error: Some(format!("Failed to register shortcut: {}", e)),
+            error: Some(error_msg),
         });
     }
 
@@ -169,7 +178,10 @@ fn validate_shortcut_string(raw: &str) -> Result<(), String> {
 #[tauri::command]
 pub fn suspend_binding(app: AppHandle, id: String) -> Result<(), String> {
     if let Some(b) = settings::get_bindings(&app).get(&id).cloned() {
-        _unregister_shortcut(&app, b)?;
+        if let Err(e) = _unregister_shortcut(&app, b) {
+            eprintln!("suspend_binding error for id '{}': {}", id, e);
+            return Err(e);
+        }
     }
     Ok(())
 }
@@ -178,27 +190,42 @@ pub fn suspend_binding(app: AppHandle, id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn resume_binding(app: AppHandle, id: String) -> Result<(), String> {
     if let Some(b) = settings::get_bindings(&app).get(&id).cloned() {
-        _register_shortcut(&app, b)?;
+        if let Err(e) = _register_shortcut(&app, b) {
+            eprintln!("resume_binding error for id '{}': {}", id, e);
+            return Err(e);
+        }
     }
     Ok(())
 }
 
 fn _register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
     // Validate human-level rules first
-    validate_shortcut_string(&binding.current_binding)?;
+    if let Err(e) = validate_shortcut_string(&binding.current_binding) {
+        eprintln!(
+            "_register_shortcut validation error for binding '{}': {}",
+            binding.current_binding, e
+        );
+        return Err(e);
+    }
 
     // Parse shortcut and return error if it fails
     let shortcut = match binding.current_binding.parse::<Shortcut>() {
         Ok(s) => s,
-        Err(e) => return Err(format!("Failed to parse shortcut: {}", e)),
+        Err(e) => {
+            let error_msg = format!(
+                "Failed to parse shortcut '{}': {}",
+                binding.current_binding, e
+            );
+            eprintln!("_register_shortcut parse error: {}", error_msg);
+            return Err(error_msg);
+        }
     };
 
     // Prevent duplicate registrations that would silently shadow one another
     if app.global_shortcut().is_registered(shortcut) {
-        return Err(format!(
-            "Shortcut '{}' is already in use",
-            binding.current_binding
-        ));
+        let error_msg = format!("Shortcut '{}' is already in use", binding.current_binding);
+        eprintln!("_register_shortcut duplicate error: {}", error_msg);
+        return Err(error_msg);
     }
 
     // Clone binding.id for use in the closure
@@ -248,7 +275,11 @@ fn _register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), S
                 }
             }
         })
-        .map_err(|e| format!("Couldn't register shortcut: {}", e))?;
+        .map_err(|e| {
+            let error_msg = format!("Couldn't register shortcut '{}': {}", binding.current_binding, e);
+            eprintln!("_register_shortcut registration error: {}", error_msg);
+            error_msg
+        })?;
 
     Ok(())
 }
@@ -256,12 +287,24 @@ fn _register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), S
 fn _unregister_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
     let shortcut = match binding.current_binding.parse::<Shortcut>() {
         Ok(s) => s,
-        Err(e) => return Err(format!("Failed to parse shortcut: {}", e)),
+        Err(e) => {
+            let error_msg = format!(
+                "Failed to parse shortcut '{}' for unregistration: {}",
+                binding.current_binding, e
+            );
+            eprintln!("_unregister_shortcut parse error: {}", error_msg);
+            return Err(error_msg);
+        }
     };
 
-    app.global_shortcut()
-        .unregister(shortcut)
-        .map_err(|e| format!("Failed to unregister shortcut: {}", e))?;
+    app.global_shortcut().unregister(shortcut).map_err(|e| {
+        let error_msg = format!(
+            "Failed to unregister shortcut '{}': {}",
+            binding.current_binding, e
+        );
+        eprintln!("_unregister_shortcut error: {}", error_msg);
+        error_msg
+    })?;
 
     Ok(())
 }

@@ -1,5 +1,6 @@
 import React from "react";
-import { ToggleSwitch } from "../ui/ToggleSwitch";
+import { Dropdown } from "../ui/Dropdown";
+import { SettingContainer } from "../ui/SettingContainer";
 import { useSettings } from "../../hooks/useSettings";
 
 interface ShowOverlayProps {
@@ -7,23 +8,33 @@ interface ShowOverlayProps {
   grouped?: boolean;
 }
 
+const overlayOptions = [
+  { value: "none", label: "Do not show" },
+  { value: "bottom", label: "On bottom" },
+  { value: "top", label: "On top" }
+];
+
 export const ShowOverlay: React.FC<ShowOverlayProps> = ({
   descriptionMode = "tooltip",
-  grouped = false,
+  grouped = false
 }) => {
   const { getSetting, updateSetting, isUpdating } = useSettings();
 
-  const showOverlayEnabled = getSetting("show_overlay") ?? true;
+  const selectedPosition = getSetting("overlay_position") || "bottom";
 
   return (
-    <ToggleSwitch
-      checked={showOverlayEnabled}
-      onChange={(enabled) => updateSetting("show_overlay", enabled)}
-      isUpdating={isUpdating("show_overlay")}
-      label="Show Overlay"
+    <SettingContainer
+      title="Show Overlay"
       description="Display visual feedback overlay during recording and transcription"
       descriptionMode={descriptionMode}
       grouped={grouped}
-    />
+    >
+      <Dropdown
+        options={overlayOptions}
+        selectedValue={selectedPosition}
+        onSelect={(value) => updateSetting("overlay_position", value)}
+        disabled={isUpdating("overlay_position")}
+      />
+    </SettingContainer>
   );
 };

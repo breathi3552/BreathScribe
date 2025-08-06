@@ -181,7 +181,7 @@ pub fn run() {
             shortcut::change_audio_feedback_setting,
             shortcut::change_translate_to_english_setting,
             shortcut::change_selected_language_setting,
-            shortcut::change_show_overlay_setting,
+            shortcut::change_overlay_position_setting,
             shortcut::change_debug_mode_setting,
             shortcut::suspend_binding,
             shortcut::resume_binding,

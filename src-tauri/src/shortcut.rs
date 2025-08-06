@@ -135,10 +135,14 @@ pub fn change_selected_language_setting(app: AppHandle, language: String) -> Res
 }
 
 #[tauri::command]
-pub fn change_show_overlay_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
-    settings.show_overlay = enabled;
+    settings.overlay_position = position;
     settings::write_settings(&app, settings);
+    
+    // Update overlay position without recreating window
+    crate::utils::update_overlay_position(&app);
+    
     Ok(())
 }
 

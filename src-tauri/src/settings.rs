@@ -30,8 +30,8 @@ pub struct AppSettings {
     pub translate_to_english: bool,
     #[serde(default = "default_selected_language")]
     pub selected_language: String,
-    #[serde(default = "default_show_overlay")]
-    pub show_overlay: bool,
+    #[serde(default = "default_overlay_position")]
+    pub overlay_position: String,
     #[serde(default = "default_debug_mode")]
     pub debug_mode: bool,
 }
@@ -58,9 +58,9 @@ fn default_selected_language() -> String {
     "auto".to_string()
 }
 
-fn default_show_overlay() -> bool {
-    // Default to true - users expect visual feedback by default
-    true
+fn default_overlay_position() -> String {
+    // Default to "bottom" - less intrusive position
+    "bottom".to_string()
 }
 
 fn default_debug_mode() -> bool {
@@ -114,7 +114,7 @@ pub fn get_default_settings() -> AppSettings {
         selected_output_device: None,
         translate_to_english: false,
         selected_language: "auto".to_string(),
-        show_overlay: true,
+        overlay_position: "bottom".to_string(),
         debug_mode: false,
     }
 }

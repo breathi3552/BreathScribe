@@ -38,6 +38,11 @@ export const OutputDeviceSelector: React.FC<OutputDeviceSelectorProps> = ({
     console.log("Output device reset to default");
   };
 
+  const outputDeviceOptions = outputDevices.map(device => ({
+    value: device.name,
+    label: device.name
+  }));
+
   return (
     <SettingContainer
       title="Output Device"
@@ -47,12 +52,12 @@ export const OutputDeviceSelector: React.FC<OutputDeviceSelectorProps> = ({
     >
       <div className="flex items-center space-x-1">
         <Dropdown
-          devices={outputDevices}
-          selectedDevice={selectedOutputDevice}
+          options={outputDeviceOptions}
+          selectedValue={selectedOutputDevice}
           onSelect={handleOutputDeviceSelect}
           placeholder={isLoading ? "Loading..." : "Select output device..."}
           disabled={isUpdating("selected_output_device") || isLoading}
-          refreshDevices={refreshOutputDevices}
+          onRefresh={refreshOutputDevices}
         />
         <button
           className="px-2 py-1 hover:bg-logo-primary/30 active:bg-logo-primary/50 active:scale-95 rounded fill-text hover:cursor-pointer hover:border-logo-primary border border-transparent transition-all duration-150"

@@ -5,7 +5,7 @@ use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 
 use crate::actions::ACTION_MAP;
 use crate::settings::ShortcutBinding;
-use crate::settings::{self, get_settings};
+use crate::settings::{self, get_settings, OverlayPosition};
 use crate::ManagedToggleState;
 
 pub fn init_shortcuts(app: &App) {
@@ -137,7 +137,16 @@ pub fn change_selected_language_setting(app: AppHandle, language: String) -> Res
 #[tauri::command]
 pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
-    settings.overlay_position = position;
+    let parsed = match position.as_str() {
+        "none" => OverlayPosition::None,
+        "top" => OverlayPosition::Top,
+        "bottom" => OverlayPosition::Bottom,
+        other => {
+            eprintln!("Invalid overlay position '{}', defaulting to bottom", other);
+            OverlayPosition::Bottom
+        }
+    };
+    settings.overlay_position = parsed;
     settings::write_settings(&app, settings);
     
     // Update overlay position without recreating window

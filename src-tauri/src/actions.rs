@@ -1,13 +1,10 @@
+use crate::audio_feedback::{play_recording_start_sound, play_recording_stop_sound};
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::transcription::TranscriptionManager;
+use crate::overlay::{show_recording_overlay, show_transcribing_overlay};
 use crate::settings::get_settings;
+use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils;
-use crate::utils::change_tray_icon;
-use crate::utils::play_recording_start_sound;
-use crate::utils::play_recording_stop_sound;
-use crate::utils::show_recording_overlay;
-use crate::utils::show_transcribing_overlay;
-use crate::utils::TrayIconState;
 use log::debug;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;

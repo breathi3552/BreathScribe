@@ -12,6 +12,14 @@ pub struct ShortcutBinding {
     pub current_binding: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OverlayPosition {
+    None,
+    Top,
+    Bottom,
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
@@ -31,55 +39,46 @@ pub struct AppSettings {
     #[serde(default = "default_selected_language")]
     pub selected_language: String,
     #[serde(default = "default_overlay_position")]
-    pub overlay_position: String,
+    pub overlay_position: OverlayPosition,
     #[serde(default = "default_debug_mode")]
     pub debug_mode: bool,
 }
 
 fn default_model() -> String {
-    // Default to empty string if no models are available yet
-    // The UI will handle prompting for model download
     "".to_string()
 }
 
 fn default_always_on_microphone() -> bool {
-    // Default to false for better user experience
-    // True would be the old behavior (always-on for low latency)
     false
 }
 
 fn default_translate_to_english() -> bool {
-    // Default to false - users need to opt-in to translation
     false
 }
 
 fn default_selected_language() -> String {
-    // Default to auto-detection for backward compatibility
     "auto".to_string()
 }
 
-fn default_overlay_position() -> String {
-    // Default to "bottom" - less intrusive position
-    "bottom".to_string()
+fn default_overlay_position() -> OverlayPosition {
+    OverlayPosition::Bottom
 }
 
 fn default_debug_mode() -> bool {
-    // Default to false - debug mode should be opt-in
     false
 }
 
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
-    // Set platform-specific default keyboard shortcuts
     #[cfg(target_os = "windows")]
     let default_shortcut = "ctrl+space";
     #[cfg(target_os = "macos")]
-    let default_shortcut = "alt+space"; // Alt key on macOS (Option key)
+    let default_shortcut = "alt+space";
     #[cfg(target_os = "linux")]
     let default_shortcut = "ctrl+space";
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let default_shortcut = "alt+space"; // Fallback for other platforms
+    let default_shortcut = "alt+space";
 
     let mut bindings = HashMap::new();
     bindings.insert(
@@ -93,17 +92,6 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
 
-    // bindings.insert(
-    //     "test".to_string(),
-    //     ShortcutBinding {
-    //         id: "test".to_string(),
-    //         name: "Test".to_string(),
-    //         description: "This is a test binding.".to_string(),
-    //         default_binding: "ctrl+d".to_string(),
-    //         current_binding: "ctrl+d".to_string(),
-    //     },
-    // );
-
     AppSettings {
         bindings,
         push_to_talk: true,
@@ -114,7 +102,7 @@ pub fn get_default_settings() -> AppSettings {
         selected_output_device: None,
         translate_to_english: false,
         selected_language: "auto".to_string(),
-        overlay_position: "bottom".to_string(),
+        overlay_position: OverlayPosition::Bottom,
         debug_mode: false,
     }
 }

@@ -1,9 +1,13 @@
 mod actions;
+mod audio_feedback;
 pub mod audio_toolkit;
+mod clipboard;
 mod commands;
 mod managers;
+mod overlay;
 mod settings;
 mod shortcut;
+mod tray;
 mod utils;
 
 use managers::audio::AudioRecordingManager;

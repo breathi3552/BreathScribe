@@ -15,9 +15,9 @@
       {
         "title": "Handy",
         "width": 540,
-        "height": 750,
+        "height": 720,
         "minWidth": 540,
-        "minHeight": 750,
+        "minHeight": 720,
         "resizable": true,
         "maximizable": false
       }

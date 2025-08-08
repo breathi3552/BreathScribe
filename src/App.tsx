@@ -34,7 +34,7 @@ function App() {
   if (showOnboarding) {
     return (
       <div className="min-h-screen flex flex-col w-full">
-        <div className="flex flex-col items-center pt-6 gap-8 px-4 flex-1">
+        <div className="flex flex-col items-center p-4 gap-4 flex-1">
           <HandyTextLogo width={200} />
           <Onboarding onModelSelected={handleModelSelected} />
         </div>
@@ -45,7 +45,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col w-full">
       <Toaster />
-      <div className="flex flex-col items-center pt-6 gap-8 px-4 flex-1">
+      <div className="flex flex-col items-center p-4 gap-4 flex-1">
         <HandyTextLogo width={200} />
         <AccessibilityPermissions />
         <Settings />

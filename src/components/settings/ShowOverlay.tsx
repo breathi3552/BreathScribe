@@ -10,22 +10,23 @@ interface ShowOverlayProps {
 }
 
 const overlayOptions = [
-  { value: "none", label: "Do not show" },
-  { value: "bottom", label: "On bottom" },
-  { value: "top", label: "On top" }
+  { value: "none", label: "None" },
+  { value: "bottom", label: "Bottom" },
+  { value: "top", label: "Top" },
 ];
 
 export const ShowOverlay: React.FC<ShowOverlayProps> = ({
   descriptionMode = "tooltip",
-  grouped = false
+  grouped = false,
 }) => {
   const { getSetting, updateSetting, isUpdating } = useSettings();
 
-  const selectedPosition = (getSetting("overlay_position") || "bottom") as OverlayPosition;
+  const selectedPosition = (getSetting("overlay_position") ||
+    "bottom") as OverlayPosition;
 
   return (
     <SettingContainer
-      title="Show Overlay"
+      title="Overlay Position"
       description="Display visual feedback overlay during recording and transcription"
       descriptionMode={descriptionMode}
       grouped={grouped}
@@ -33,7 +34,9 @@ export const ShowOverlay: React.FC<ShowOverlayProps> = ({
       <Dropdown
         options={overlayOptions}
         selectedValue={selectedPosition}
-        onSelect={(value) => updateSetting("overlay_position", value as OverlayPosition)}
+        onSelect={(value) =>
+          updateSetting("overlay_position", value as OverlayPosition)
+        }
         disabled={isUpdating("overlay_position")}
       />
     </SettingContainer>

@@ -5,8 +5,17 @@ use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
 
 const OVERLAY_WIDTH: f64 = 172.0;
 const OVERLAY_HEIGHT: f64 = 36.0;
+
+#[cfg(target_os = "macos")]
 const OVERLAY_TOP_OFFSET: f64 = 46.0;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+const OVERLAY_TOP_OFFSET: f64 = 4.0;
+
+#[cfg(target_os = "macos")]
 const OVERLAY_BOTTOM_OFFSET: f64 = 15.0;
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+const OVERLAY_BOTTOM_OFFSET: f64 = 40.0;
 
 fn calculate_overlay_position(app_handle: &AppHandle) -> Option<(f64, f64)> {
     if let Ok(monitors) = app_handle.primary_monitor() {

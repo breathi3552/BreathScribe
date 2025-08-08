@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { SettingContainer } from "../ui/SettingContainer";
 import { useSettings } from "../../hooks/useSettings";
 
 interface CorrectWordsProps {

@@ -32,6 +32,11 @@ fn correct_words(text: &str, correct_words: &[String]) -> String {
         return text.to_string();
     }
 
+    // Pre-compute lowercase versions to avoid repeated allocations
+    let correct_words_lower: Vec<String> = correct_words.iter()
+        .map(|w| w.to_lowercase())
+        .collect();
+
     let words: Vec<&str> = text.split_whitespace().collect();
     let mut corrected_words = Vec::new();
 
@@ -43,19 +48,29 @@ fn correct_words(text: &str, correct_words: &[String]) -> String {
             continue;
         }
 
+        // Skip extremely long words to avoid performance issues
+        if cleaned_word.len() > 50 {
+            corrected_words.push(word.to_string());
+            continue;
+        }
+
         let mut best_match: Option<&String> = None;
         let mut best_score = f64::MAX;
 
-        for correct_word in correct_words {
-            let correct_word_lower = correct_word.to_lowercase();
+        for (i, correct_word_lower) in correct_words_lower.iter().enumerate() {
+            // Skip if lengths are too different (optimization)
+            let len_diff = (cleaned_word.len() as i32 - correct_word_lower.len() as i32).abs();
+            if len_diff > 5 {
+                continue;
+            }
             
             // Calculate Levenshtein distance (normalized by length)
-            let levenshtein_dist = levenshtein(&cleaned_word, &correct_word_lower);
+            let levenshtein_dist = levenshtein(&cleaned_word, correct_word_lower);
             let max_len = cleaned_word.len().max(correct_word_lower.len()) as f64;
             let levenshtein_score = if max_len > 0.0 { levenshtein_dist as f64 / max_len } else { 1.0 };
             
             // Calculate phonetic similarity using Soundex
-            let phonetic_match = soundex(&cleaned_word, &correct_word_lower);
+            let phonetic_match = soundex(&cleaned_word, correct_word_lower);
             
             // Combine scores: favor phonetic matches, but also consider string similarity
             let combined_score = if phonetic_match {
@@ -66,7 +81,7 @@ fn correct_words(text: &str, correct_words: &[String]) -> String {
             
             // Accept if the score is good enough (threshold: 0.4 for good matches)
             if combined_score < 0.4 && combined_score < best_score {
-                best_match = Some(correct_word);
+                best_match = Some(&correct_words[i]);
                 best_score = combined_score;
             }
         }
@@ -85,14 +100,12 @@ fn correct_words(text: &str, correct_words: &[String]) -> String {
                 replacement.clone()
             };
             
-            // Preserve punctuation from original word
-            let original_suffix: String = word.chars().rev()
-                .take_while(|c| !c.is_alphabetic())
-                .collect::<String>()
-                .chars().rev().collect();
-            let original_prefix: String = word.chars()
-                .take_while(|c| !c.is_alphabetic())
-                .collect();
+            // Preserve punctuation from original word - optimized version
+            let prefix_end = word.chars().take_while(|c| !c.is_alphabetic()).count();
+            let suffix_start = word.char_indices().rev().take_while(|(_, c)| !c.is_alphabetic()).count();
+            
+            let original_prefix = if prefix_end > 0 { &word[..prefix_end] } else { "" };
+            let original_suffix = if suffix_start > 0 { &word[word.len() - suffix_start..] } else { "" };
                 
             corrected_words.push(format!("{}{}{}", original_prefix, corrected, original_suffix));
         } else {

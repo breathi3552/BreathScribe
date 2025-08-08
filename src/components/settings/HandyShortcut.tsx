@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from "react";
-import { BindingResponseSchema, ShortcutBindingsMap } from "../../lib/types";
 import { type } from "@tauri-apps/plugin-os";
 import {
   getKeyName,

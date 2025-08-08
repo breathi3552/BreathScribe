@@ -1,0 +1,64 @@
+use enigo::Enigo;
+use enigo::Key;
+use enigo::Keyboard;
+use enigo::Settings;
+use tauri::AppHandle;
+use tauri_plugin_clipboard_manager::ClipboardExt;
+
+/// Sends a paste command (Cmd+V or Ctrl+V) using platform-specific virtual key codes.
+/// This ensures the paste works regardless of keyboard layout (e.g., Russian, AZERTY, DVORAK).
+fn send_paste() -> Result<(), String> {
+    // Platform-specific key definitions
+    #[cfg(target_os = "macos")]
+    let (modifier_key, v_key_code) = (Key::Meta, Key::Other(9));
+    #[cfg(target_os = "windows")]
+    let (modifier_key, v_key_code) = (Key::Control, Key::Other(0x56)); // VK_V
+    #[cfg(target_os = "linux")]
+    let (modifier_key, v_key_code) = (Key::Control, Key::Unicode('v'));
+
+    let mut enigo = Enigo::new(&Settings::default())
+        .map_err(|e| format!("Failed to initialize Enigo: {}", e))?;
+
+    // Press modifier + V
+    enigo
+        .key(modifier_key, enigo::Direction::Press)
+        .map_err(|e| format!("Failed to press modifier key: {}", e))?;
+    enigo
+        .key(v_key_code, enigo::Direction::Press)
+        .map_err(|e| format!("Failed to press V key: {}", e))?;
+
+    // Release V + modifier (reverse order)
+    enigo
+        .key(v_key_code, enigo::Direction::Release)
+        .map_err(|e| format!("Failed to release V key: {}", e))?;
+    enigo
+        .key(modifier_key, enigo::Direction::Release)
+        .map_err(|e| format!("Failed to release modifier key: {}", e))?;
+
+    Ok(())
+}
+
+pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
+    let clipboard = app_handle.clipboard();
+
+    // get the current clipboard content
+    let clipboard_content = clipboard.read_text().unwrap_or_default();
+
+    clipboard
+        .write_text(&text)
+        .map_err(|e| format!("Failed to write to clipboard: {}", e))?;
+
+    // small delay to ensure the clipboard content has been written to
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    send_paste()?;
+
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    // restore the clipboard
+    clipboard
+        .write_text(&clipboard_content)
+        .map_err(|e| format!("Failed to restore clipboard: {}", e))?;
+
+    Ok(())
+}

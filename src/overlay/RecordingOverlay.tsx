@@ -1,7 +1,12 @@
-import React, { useEffect, useState, useRef } from "react";
-import "./RecordingOverlay.css";
-import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  MicrophoneIcon,
+  TranscriptionIcon,
+  CancelIcon,
+} from "../components/icons";
+import "./RecordingOverlay.css";
 
 type OverlayState = "recording" | "transcribing";
 
@@ -51,27 +56,17 @@ const RecordingOverlay: React.FC = () => {
     setupEventListeners();
   }, []);
 
-  const getIconPath = () => {
-    return state === "recording"
-      ? "/icon/recording.png"
-      : "/icon/transcribing.png";
-  };
-
-  const getIconAlt = () => {
-    return state === "recording" ? "Recording Icon" : "Transcribing Icon";
+  const getIcon = () => {
+    if (state === "recording") {
+      return <MicrophoneIcon />;
+    } else {
+      return <TranscriptionIcon />;
+    }
   };
 
   return (
     <div className={`recording-overlay ${isVisible ? "fade-in" : ""}`}>
-      <div className="overlay-left">
-        <img
-          width="28"
-          height="28"
-          src={getIconPath()}
-          alt={getIconAlt()}
-          style={{}}
-        />
-      </div>
+      <div className="overlay-left">{getIcon()}</div>
 
       <div className="overlay-middle">
         {state === "recording" && (
@@ -81,7 +76,7 @@ const RecordingOverlay: React.FC = () => {
                 key={i}
                 className="bar"
                 style={{
-                  height: `${4 + Math.pow(v, 0.7) * 32}px`, // Slight curve for better visual
+                  height: `${Math.min(20, 4 + Math.pow(v, 0.7) * 16)}px`, // Cap at 20px max height
                   transition: "height 60ms ease-out",
                   opacity: Math.max(0.4, v * 1.7), // Minimum opacity for visibility
                 }}
@@ -102,15 +97,7 @@ const RecordingOverlay: React.FC = () => {
               invoke("cancel_operation");
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path
-                d="M9 3L3 9M3 3L9 9"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <CancelIcon />
           </div>
         )}
       </div>

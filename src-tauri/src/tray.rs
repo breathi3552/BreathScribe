@@ -1,0 +1,115 @@
+use tauri::image::Image;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::TrayIcon;
+use tauri::{AppHandle, Manager, Theme};
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TrayIconState {
+    Idle,
+    Recording,
+    Transcribing,
+}
+
+/// Gets the current system theme, defaulting to Dark if unavailable
+fn get_current_theme(app: &AppHandle) -> Theme {
+    if let Some(main_window) = app.get_webview_window("main") {
+        main_window.theme().unwrap_or(Theme::Dark)
+    } else {
+        Theme::Dark
+    }
+}
+
+pub fn change_tray_icon(app: &AppHandle, icon: TrayIconState) {
+    let tray = app.state::<TrayIcon>();
+    let theme = get_current_theme(app);
+
+    let icon_path = match (theme, &icon) {
+        // Dark theme uses regular icons (lighter colored for visibility)
+        (Theme::Dark, TrayIconState::Idle) => "resources/tray_idle.png",
+        (Theme::Dark, TrayIconState::Recording) => "resources/tray_recording.png",
+        (Theme::Dark, TrayIconState::Transcribing) => "resources/tray_transcribing.png",
+        // Light theme uses dark icons (darker colored for visibility)
+        (Theme::Light, TrayIconState::Idle) => "resources/tray_idle_dark.png",
+        (Theme::Light, TrayIconState::Recording) => "resources/tray_recording_dark.png",
+        (Theme::Light, TrayIconState::Transcribing) => "resources/tray_transcribing_dark.png",
+        // Fallback for any other theme variants
+        (_, TrayIconState::Idle) => "resources/tray_idle.png",
+        (_, TrayIconState::Recording) => "resources/tray_recording.png",
+        (_, TrayIconState::Transcribing) => "resources/tray_transcribing.png",
+    };
+
+    let _ = tray.set_icon(Some(
+        Image::from_path(
+            app.path()
+                .resolve(icon_path, tauri::path::BaseDirectory::Resource)
+                .expect("failed to resolve"),
+        )
+        .expect("failed to set icon"),
+    ));
+
+    // Update menu based on state
+    update_tray_menu(app, &icon);
+}
+
+pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState) {
+    // Platform-specific accelerators
+    #[cfg(target_os = "macos")]
+    let (settings_accelerator, quit_accelerator) = (Some("Cmd+,"), Some("Cmd+Q"));
+    #[cfg(not(target_os = "macos"))]
+    let (settings_accelerator, quit_accelerator) = (Some("Ctrl+,"), Some("Ctrl+Q"));
+
+    // Create common menu items
+    let version_label = format!("Handy v{}", env!("CARGO_PKG_VERSION"));
+    let version_i = MenuItem::with_id(app, "version", &version_label, false, None::<&str>)
+        .expect("failed to create version item");
+    let settings_i = MenuItem::with_id(app, "settings", "Settings...", true, settings_accelerator)
+        .expect("failed to create settings item");
+    let check_updates_i = MenuItem::with_id(
+        app,
+        "check_updates",
+        "Check for Updates...",
+        true,
+        None::<&str>,
+    )
+    .expect("failed to create check updates item");
+    let quit_i = MenuItem::with_id(app, "quit", "Quit", true, quit_accelerator)
+        .expect("failed to create quit item");
+    let separator = || PredefinedMenuItem::separator(app).expect("failed to create separator");
+
+    let menu = match state {
+        TrayIconState::Recording | TrayIconState::Transcribing => {
+            let cancel_i = MenuItem::with_id(app, "cancel", "Cancel", true, None::<&str>)
+                .expect("failed to create cancel item");
+            Menu::with_items(
+                app,
+                &[
+                    &version_i,
+                    &separator(),
+                    &cancel_i,
+                    &separator(),
+                    &settings_i,
+                    &check_updates_i,
+                    &separator(),
+                    &quit_i,
+                ],
+            )
+            .expect("failed to create menu")
+        }
+        TrayIconState::Idle => Menu::with_items(
+            app,
+            &[
+                &version_i,
+                &separator(),
+                &settings_i,
+                &check_updates_i,
+                &separator(),
+                &quit_i,
+            ],
+        )
+        .expect("failed to create menu"),
+    };
+
+    let tray = app.state::<TrayIcon>();
+    let _ = tray.set_menu(Some(menu));
+    let _ = tray.set_icon_as_template(true);
+}

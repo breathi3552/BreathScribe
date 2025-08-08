@@ -199,8 +199,8 @@ export const useSettings = (): UseSettingsReturn => {
               language: value,
             });
             break;
-          case "show_overlay":
-            await invoke("change_show_overlay_setting", { enabled: value });
+          case "overlay_position":
+            await invoke("change_overlay_position_setting", { position: value });
             break;
           case "debug_mode":
             await invoke("change_debug_mode_setting", { enabled: value });
@@ -249,7 +249,7 @@ export const useSettings = (): UseSettingsReturn => {
         selected_output_device: "Default",
         translate_to_english: false,
         selected_language: "auto",
-        show_overlay: true,
+        overlay_position: "bottom",
         debug_mode: false,
       };
 

@@ -55,6 +55,11 @@ export const MicrophoneSelector: React.FC<MicrophoneSelectorProps> = ({
     console.log("Microphone reset to default");
   };
 
+  const microphoneOptions = audioDevices.map(device => ({
+    value: device.name,
+    label: device.name
+  }));
+
   return (
     <SettingContainer
       title="Microphone"
@@ -64,12 +69,12 @@ export const MicrophoneSelector: React.FC<MicrophoneSelectorProps> = ({
     >
       <div className="flex items-center space-x-1">
         <Dropdown
-          devices={audioDevices}
-          selectedDevice={selectedMicrophone}
+          options={microphoneOptions}
+          selectedValue={selectedMicrophone}
           onSelect={handleMicrophoneSelect}
           placeholder={isLoading ? "Loading..." : "Select microphone..."}
           disabled={isUpdating("selected_microphone") || isLoading}
-          refreshDevices={refreshAudioDevices}
+          onRefresh={refreshAudioDevices}
         />
         <button
           className="px-2 py-1 hover:bg-logo-primary/30 active:bg-logo-primary/50 active:scale-95 rounded fill-text hover:cursor-pointer hover:border-logo-primary border border-transparent transition-all duration-150"

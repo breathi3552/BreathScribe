@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useSettings } from "../../hooks/useSettings";
+import { Input } from "../ui/Input";
+import { Button } from "../ui/Button";
 import { SettingContainer } from "../ui/SettingContainer";
 
 interface CorrectWordsProps {
@@ -44,39 +46,43 @@ export const CorrectWords: React.FC<CorrectWordsProps> = React.memo(({
         grouped={grouped}
       >
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="text"
+            className="max-w-[128px]"
             value={newWord}
             onChange={(e) => setNewWord(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Add a word"
-            className="px-2 py-1 text-sm border border-mid-gray/30 rounded focus:outline-none focus:ring-1 focus:ring-logo-primary focus:border-transparent bg-background"
+            variant="compact"
             disabled={isUpdating("correct_words")}
           />
-          <button
+          <Button
             onClick={handleAddWord}
             disabled={!newWord.trim() || newWord.includes(' ') || newWord.trim().length > 50 || isUpdating("correct_words")}
-            className="px-3 py-1 text-xs font-medium text-white bg-logo-primary rounded hover:bg-logo-primary/90 focus:outline-none focus:ring-1 focus:ring-logo-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            variant="primary"
+            size="md"
           >
             Add
-          </button>
+          </Button>
         </div>
       </SettingContainer>
       {correctWords.length > 0 && (
         <div className={`px-4 p-2 ${grouped ? "" : "rounded-lg border border-mid-gray/20"} flex flex-wrap gap-1`}>
           {correctWords.map((word) => (
-            <button
+            <Button
               key={word}
               onClick={() => handleRemoveWord(word)}
               disabled={isUpdating("correct_words")}
-              className="inline-flex items-center gap-1 px-2 py-1 bg-mid-gray/10 rounded text-xs hover:bg-red-100 hover:text-red-700 focus:outline-none disabled:opacity-50 cursor-pointer transition-colors"
+              variant="secondary"
+              size="sm"
+              className="inline-flex items-center gap-1 cursor-pointer"
               aria-label={`Remove ${word}`}
             >
               <span>{word}</span>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </button>
+            </Button>
           ))}
         </div>
       )}

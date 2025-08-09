@@ -34,10 +34,13 @@ export const OutputDeviceSelector: React.FC<OutputDeviceSelectorProps> = React.m
     await resetSetting("selected_output_device");
   };
 
-  const outputDeviceOptions = outputDevices.map(device => ({
-    value: device.name,
-    label: device.name
-  }));
+  const outputDeviceOptions = [
+    { value: "Default", label: "Default" },
+    ...outputDevices.map(device => ({
+      value: device.name,
+      label: device.name
+    }))
+  ];
 
   return (
     <SettingContainer
@@ -51,7 +54,7 @@ export const OutputDeviceSelector: React.FC<OutputDeviceSelectorProps> = React.m
           options={outputDeviceOptions}
           selectedValue={selectedOutputDevice}
           onSelect={handleOutputDeviceSelect}
-          placeholder={isLoading ? "Loading..." : "Select output device..."}
+          placeholder={isLoading ? "Loading..." : ""}
           disabled={isUpdating("selected_output_device") || isLoading}
           onRefresh={refreshOutputDevices}
         />

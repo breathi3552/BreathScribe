@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useSettings } from "../../hooks/useSettings";
+import { SettingContainer } from "../ui/SettingContainer";
 
 interface CorrectWordsProps {
   descriptionMode?: "inline" | "tooltip";
@@ -12,12 +13,10 @@ export const CorrectWords: React.FC<CorrectWordsProps> = ({
 }) => {
   const { getSetting, updateSetting, isUpdating } = useSettings();
   const [newWord, setNewWord] = useState("");
-
   const correctWords = getSetting("correct_words") || [];
 
   const handleAddWord = () => {
     const trimmedWord = newWord.trim();
-    // Don't allow spaces in words
     if (trimmedWord && !trimmedWord.includes(' ') && !correctWords.includes(trimmedWord)) {
       updateSetting("correct_words", [...correctWords, trimmedWord]);
       setNewWord("");
@@ -25,10 +24,7 @@ export const CorrectWords: React.FC<CorrectWordsProps> = ({
   };
 
   const handleRemoveWord = (wordToRemove: string) => {
-    updateSetting(
-      "correct_words", 
-      correctWords.filter((word) => word !== wordToRemove)
-    );
+    updateSetting("correct_words", correctWords.filter((word) => word !== wordToRemove));
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -39,48 +35,34 @@ export const CorrectWords: React.FC<CorrectWordsProps> = ({
   };
 
   return (
-    <div className={`px-4 p-2 ${grouped ? "" : "rounded-lg border border-mid-gray/20"}`}>
-      {/* Title, info button, input and add button all in one line */}
-      <div className="flex items-center gap-2">
-        <h3 className="text-sm font-medium">Custom Words</h3>
-        {descriptionMode === "tooltip" && (
-          <div title="Add words that are often misheard or misspelled during transcription. The system will automatically correct similar-sounding words to match your list.">
-            <svg
-              className="w-4 h-4 text-mid-gray cursor-help hover:text-logo-primary transition-colors duration-200 select-none"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-        )}
-        <input
-          type="text"
-          value={newWord}
-          onChange={(e) => setNewWord(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Add a word"
-          className="flex-1 px-2 py-1 text-sm border border-mid-gray/30 rounded focus:outline-none focus:ring-1 focus:ring-logo-primary focus:border-transparent bg-background"
-          disabled={isUpdating("correct_words")}
-        />
-        <button
-          onClick={handleAddWord}
-          disabled={!newWord.trim() || newWord.includes(' ') || isUpdating("correct_words")}
-          className="px-3 py-1 text-xs font-medium text-white bg-logo-primary rounded hover:bg-logo-primary/90 focus:outline-none focus:ring-1 focus:ring-logo-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          Add
-        </button>
-      </div>
-
-      {/* Words list - flex wrap layout */}
+    <>
+      <SettingContainer
+        title="Custom Words"
+        description="Add words that are often misheard or misspelled during transcription. The system will automatically correct similar-sounding words to match your list."
+        descriptionMode={descriptionMode}
+        grouped={grouped}
+      >
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={newWord}
+            onChange={(e) => setNewWord(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Add a word"
+            className="px-2 py-1 text-sm border border-mid-gray/30 rounded focus:outline-none focus:ring-1 focus:ring-logo-primary focus:border-transparent bg-background"
+            disabled={isUpdating("correct_words")}
+          />
+          <button
+            onClick={handleAddWord}
+            disabled={!newWord.trim() || newWord.includes(' ') || isUpdating("correct_words")}
+            className="px-3 py-1 text-xs font-medium text-white bg-logo-primary rounded hover:bg-logo-primary/90 focus:outline-none focus:ring-1 focus:ring-logo-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Add
+          </button>
+        </div>
+      </SettingContainer>
       {correctWords.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className={`px-4 p-2 ${grouped ? "" : "rounded-lg border border-mid-gray/20"} flex flex-wrap gap-1`}>
           {correctWords.map((word) => (
             <button
               key={word}
@@ -90,23 +72,13 @@ export const CorrectWords: React.FC<CorrectWordsProps> = ({
               aria-label={`Remove ${word}`}
             >
               <span>{word}</span>
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={3}
-                  d="M6 18L18 6M6 6l12 12"
-                />
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 };

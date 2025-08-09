@@ -7,7 +7,7 @@ interface CorrectWordsProps {
   grouped?: boolean;
 }
 
-export const CorrectWords: React.FC<CorrectWordsProps> = ({
+export const CorrectWords: React.FC<CorrectWordsProps> = React.memo(({
   descriptionMode = "tooltip",
   grouped = false,
 }) => {
@@ -17,8 +17,9 @@ export const CorrectWords: React.FC<CorrectWordsProps> = ({
 
   const handleAddWord = () => {
     const trimmedWord = newWord.trim();
-    if (trimmedWord && !trimmedWord.includes(' ') && !correctWords.includes(trimmedWord)) {
-      updateSetting("correct_words", [...correctWords, trimmedWord]);
+    const sanitizedWord = trimmedWord.replace(/[<>"'&]/g, '');
+    if (sanitizedWord && !sanitizedWord.includes(' ') && sanitizedWord.length <= 50 && !correctWords.includes(sanitizedWord)) {
+      updateSetting("correct_words", [...correctWords, sanitizedWord]);
       setNewWord("");
     }
   };
@@ -54,7 +55,7 @@ export const CorrectWords: React.FC<CorrectWordsProps> = ({
           />
           <button
             onClick={handleAddWord}
-            disabled={!newWord.trim() || newWord.includes(' ') || isUpdating("correct_words")}
+            disabled={!newWord.trim() || newWord.includes(' ') || newWord.trim().length > 50 || isUpdating("correct_words")}
             className="px-3 py-1 text-xs font-medium text-white bg-logo-primary rounded hover:bg-logo-primary/90 focus:outline-none focus:ring-1 focus:ring-logo-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Add
@@ -81,4 +82,4 @@ export const CorrectWords: React.FC<CorrectWordsProps> = ({
       )}
     </>
   );
-};
+});

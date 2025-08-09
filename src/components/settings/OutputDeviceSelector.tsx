@@ -23,8 +23,7 @@ export const OutputDeviceSelector: React.FC<OutputDeviceSelectorProps> = React.m
     refreshOutputDevices,
   } = useSettings();
 
-  const selectedOutputDevice =
-    getSetting("selected_output_device") || "Default";
+  const selectedOutputDevice = getSetting("selected_output_device") === "default" ? "Default" : getSetting("selected_output_device") || "Default";
 
   const handleOutputDeviceSelect = async (deviceName: string) => {
     await updateSetting("selected_output_device", deviceName);
@@ -51,8 +50,8 @@ export const OutputDeviceSelector: React.FC<OutputDeviceSelectorProps> = React.m
           options={outputDeviceOptions}
           selectedValue={selectedOutputDevice}
           onSelect={handleOutputDeviceSelect}
-          placeholder={isLoading ? "Loading..." : "Select output device..."}
-          disabled={isUpdating("selected_output_device") || isLoading}
+          placeholder={isLoading || outputDevices.length === 0 ? "Loading..." : "Select output device..."}
+          disabled={isUpdating("selected_output_device") || isLoading || outputDevices.length === 0}
           onRefresh={refreshOutputDevices}
         />
         <ResetButton

@@ -23,7 +23,8 @@ export const MicrophoneSelector: React.FC<MicrophoneSelectorProps> = React.memo(
     refreshAudioDevices,
   } = useSettings();
 
-  const selectedMicrophone = getSetting("selected_microphone") || "Default";
+  const selectedMicrophone = getSetting("selected_microphone") === "default" ? "Default" : getSetting("selected_microphone") || "Default";
+  
 
   const handleMicrophoneSelect = async (deviceName: string) => {
     await updateSetting("selected_microphone", deviceName);
@@ -50,8 +51,8 @@ export const MicrophoneSelector: React.FC<MicrophoneSelectorProps> = React.memo(
           options={microphoneOptions}
           selectedValue={selectedMicrophone}
           onSelect={handleMicrophoneSelect}
-          placeholder={isLoading ? "Loading..." : "Select microphone..."}
-          disabled={isUpdating("selected_microphone") || isLoading}
+          placeholder={isLoading || audioDevices.length === 0 ? "Loading..." : "Select microphone..."}
+          disabled={isUpdating("selected_microphone") || isLoading || audioDevices.length === 0}
           onRefresh={refreshAudioDevices}
         />
         <ResetButton

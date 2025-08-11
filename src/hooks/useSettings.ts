@@ -200,10 +200,15 @@ export const useSettings = (): UseSettingsReturn => {
             });
             break;
           case "overlay_position":
-            await invoke("change_overlay_position_setting", { position: value });
+            await invoke("change_overlay_position_setting", {
+              position: value,
+            });
             break;
           case "debug_mode":
             await invoke("change_debug_mode_setting", { enabled: value });
+            break;
+          case "custom_words":
+            await invoke("update_custom_words", { words: value });
             break;
           case "bindings":
             // Handle bindings separately - they use their own invoke methods
@@ -251,6 +256,7 @@ export const useSettings = (): UseSettingsReturn => {
         selected_language: "auto",
         overlay_position: "bottom",
         debug_mode: false,
+        custom_words: [],
       };
 
       const defaultValue = defaults[key];

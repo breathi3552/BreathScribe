@@ -12,19 +12,22 @@ export const Button: React.FC<ButtonProps> = ({
   size = "md",
   ...props
 }) => {
-  const baseClasses = "font-medium rounded focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
-  
+  const baseClasses =
+    "font-medium rounded focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer";
+
   const variantClasses = {
-    primary: "text-white bg-background-ui hover:bg-background-ui/90 focus:ring-1 focus:ring-background-ui",
+    primary:
+      "text-white bg-background-ui hover:bg-background-ui/90 focus:ring-1 focus:ring-background-ui",
     secondary: "bg-mid-gray/10 hover:bg-background-ui/30 focus:outline-none",
-    danger: "text-white bg-red-600 hover:bg-red-700 focus:ring-1 focus:ring-red-500",
-    ghost: "text-current hover:bg-mid-gray/10 focus:bg-mid-gray/20"
+    danger:
+      "text-white bg-red-600 hover:bg-red-700 focus:ring-1 focus:ring-red-500",
+    ghost: "text-current hover:bg-mid-gray/10 focus:bg-mid-gray/20",
   };
 
   const sizeClasses = {
     sm: "px-2 py-1 text-xs",
-    md: "px-3 py-1 text-sm", 
-    lg: "px-4 py-2 text-base"
+    md: "px-4 py-[5px] text-sm",
+    lg: "px-4 py-2 text-base",
   };
 
   return (

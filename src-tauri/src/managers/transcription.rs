@@ -27,22 +27,22 @@ pub struct TranscriptionManager {
     current_model_id: Mutex<Option<String>>,
 }
 
-fn correct_words(text: &str, correct_words: &[String]) -> String {
-    if correct_words.is_empty() {
+fn apply_custom_words(text: &str, custom_words: &[String]) -> String {
+    if custom_words.is_empty() {
         return text.to_string();
     }
 
     // Pre-compute lowercase versions to avoid repeated allocations
-    let correct_words_lower: Vec<String> = correct_words.iter()
-        .map(|w| w.to_lowercase())
-        .collect();
+    let custom_words_lower: Vec<String> = custom_words.iter().map(|w| w.to_lowercase()).collect();
 
     let words: Vec<&str> = text.split_whitespace().collect();
     let mut corrected_words = Vec::new();
 
     for word in words {
-        let cleaned_word = word.trim_matches(|c: char| !c.is_alphabetic()).to_lowercase();
-        
+        let cleaned_word = word
+            .trim_matches(|c: char| !c.is_alphabetic())
+            .to_lowercase();
+
         if cleaned_word.is_empty() {
             corrected_words.push(word.to_string());
             continue;
@@ -57,31 +57,35 @@ fn correct_words(text: &str, correct_words: &[String]) -> String {
         let mut best_match: Option<&String> = None;
         let mut best_score = f64::MAX;
 
-        for (i, correct_word_lower) in correct_words_lower.iter().enumerate() {
+        for (i, custom_word_lower) in custom_words_lower.iter().enumerate() {
             // Skip if lengths are too different (optimization)
-            let len_diff = (cleaned_word.len() as i32 - correct_word_lower.len() as i32).abs();
+            let len_diff = (cleaned_word.len() as i32 - custom_word_lower.len() as i32).abs();
             if len_diff > 5 {
                 continue;
             }
-            
+
             // Calculate Levenshtein distance (normalized by length)
-            let levenshtein_dist = levenshtein(&cleaned_word, correct_word_lower);
-            let max_len = cleaned_word.len().max(correct_word_lower.len()) as f64;
-            let levenshtein_score = if max_len > 0.0 { levenshtein_dist as f64 / max_len } else { 1.0 };
-            
+            let levenshtein_dist = levenshtein(&cleaned_word, custom_word_lower);
+            let max_len = cleaned_word.len().max(custom_word_lower.len()) as f64;
+            let levenshtein_score = if max_len > 0.0 {
+                levenshtein_dist as f64 / max_len
+            } else {
+                1.0
+            };
+
             // Calculate phonetic similarity using Soundex
-            let phonetic_match = soundex(&cleaned_word, correct_word_lower);
-            
+            let phonetic_match = soundex(&cleaned_word, custom_word_lower);
+
             // Combine scores: favor phonetic matches, but also consider string similarity
             let combined_score = if phonetic_match {
-                levenshtein_score * 0.3  // Give significant boost to phonetic matches
+                levenshtein_score * 0.3 // Give significant boost to phonetic matches
             } else {
                 levenshtein_score
             };
-            
+
             // Accept if the score is good enough (threshold: 0.4 for good matches)
             if combined_score < 0.4 && combined_score < best_score {
-                best_match = Some(&correct_words[i]);
+                best_match = Some(&custom_words[i]);
                 best_score = combined_score;
             }
         }
@@ -99,15 +103,30 @@ fn correct_words(text: &str, correct_words: &[String]) -> String {
             } else {
                 replacement.clone()
             };
-            
+
             // Preserve punctuation from original word - optimized version
             let prefix_end = word.chars().take_while(|c| !c.is_alphabetic()).count();
-            let suffix_start = word.char_indices().rev().take_while(|(_, c)| !c.is_alphabetic()).count();
-            
-            let original_prefix = if prefix_end > 0 { &word[..prefix_end] } else { "" };
-            let original_suffix = if suffix_start > 0 { &word[word.len() - suffix_start..] } else { "" };
-                
-            corrected_words.push(format!("{}{}{}", original_prefix, corrected, original_suffix));
+            let suffix_start = word
+                .char_indices()
+                .rev()
+                .take_while(|(_, c)| !c.is_alphabetic())
+                .count();
+
+            let original_prefix = if prefix_end > 0 {
+                &word[..prefix_end]
+            } else {
+                ""
+            };
+            let original_suffix = if suffix_start > 0 {
+                &word[word.len() - suffix_start..]
+            } else {
+                ""
+            };
+
+            corrected_words.push(format!(
+                "{}{}{}",
+                original_prefix, corrected, original_suffix
+            ));
         } else {
             corrected_words.push(word.to_string());
         }
@@ -298,9 +317,9 @@ impl TranscriptionManager {
             result.push_str(&segment);
         }
 
-        // Apply word correction if correct words are configured
-        let corrected_result = if !settings.correct_words.is_empty() {
-            correct_words(&result, &settings.correct_words)
+        // Apply word correction if custom words are configured
+        let corrected_result = if !settings.custom_words.is_empty() {
+            apply_custom_words(&result, &settings.custom_words)
         } else {
             result
         };

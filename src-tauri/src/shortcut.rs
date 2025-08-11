@@ -148,10 +148,10 @@ pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Resu
     };
     settings.overlay_position = parsed;
     settings::write_settings(&app, settings);
-    
+
     // Update overlay position without recreating window
     crate::utils::update_overlay_position(&app);
-    
+
     Ok(())
 }
 
@@ -164,9 +164,9 @@ pub fn change_debug_mode_setting(app: AppHandle, enabled: bool) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn update_correct_words(app: AppHandle, words: Vec<String>) -> Result<(), String> {
+pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
-    settings.correct_words = words;
+    settings.custom_words = words;
     settings::write_settings(&app, settings);
     Ok(())
 }

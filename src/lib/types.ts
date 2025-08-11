@@ -34,7 +34,7 @@ export const SettingsSchema = z.object({
   selected_language: z.string(),
   overlay_position: OverlayPositionSchema,
   debug_mode: z.boolean(),
-  correct_words: z.array(z.string()).optional().default([]),
+  custom_words: z.array(z.string()).optional().default([]),
 });
 
 export const BindingResponseSchema = z.object({

@@ -43,7 +43,7 @@ pub struct AppSettings {
     #[serde(default = "default_debug_mode")]
     pub debug_mode: bool,
     #[serde(default)]
-    pub correct_words: Vec<String>,
+    pub custom_words: Vec<String>,
 }
 
 fn default_model() -> String {
@@ -106,7 +106,7 @@ pub fn get_default_settings() -> AppSettings {
         selected_language: "auto".to_string(),
         overlay_position: OverlayPosition::Bottom,
         debug_mode: false,
-        correct_words: Vec::new(),
+        custom_words: Vec::new(),
     }
 }
 

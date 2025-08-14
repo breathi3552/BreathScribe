@@ -68,23 +68,6 @@ CMAKE_POLICY_VERSION_MINIMUM=3.5 bun run tauri dev
 bun run tauri build
 ```
 
-**Model Files Setup:**
-
-For development, you need to download the required model files:
-
-1. Create the models directory inside the resources folder:
-   ```bash
-   mkdir -p src-tauri/resources/models
-   ```
-
-2. Download the required VAD model for development:
-   ```bash
-   # Download Silero VAD model (required for voice activity detection)
-   curl -o src-tauri/resources/models/silero_vad_v4.onnx https://blob.handy.computer/silero_vad_v4.onnx
-   ```
-
-   **Note:** Whisper models are no longer bundled with the app. Users will download their preferred model (Small, Medium, Turbo, or Large) from within the app on first run.
-
 **Whisper Models:**
 
 The app now supports dynamic model downloading and switching:

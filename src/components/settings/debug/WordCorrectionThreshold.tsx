@@ -23,7 +23,7 @@ export const WordCorrectionThreshold: React.FC<
       min={0.0}
       max={1.0}
       label="Word Correction Threshold"
-      description="Controls how aggressively custom words are applied. Lower values mean more corrections will be made, higher values mean fewer corrections. Range: 0 (most aggressive) to 1 (least aggressive)."
+      description="Controls how aggressively custom words are applied. Lower values mean fewer corrections will be made, higher values mean more corrections. Range: 0 (least aggressive) to 1 (most aggressive)."
       descriptionMode={descriptionMode}
       grouped={grouped}
     />

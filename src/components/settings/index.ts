@@ -8,3 +8,4 @@ export { ShowOverlay } from "./ShowOverlay";
 export { HandyShortcut } from "./HandyShortcut";
 export { TranslateToEnglish } from "./TranslateToEnglish";
 export { CustomWords } from "./CustomWords";
+export { AppDataDirectory } from "./AppDataDirectory";

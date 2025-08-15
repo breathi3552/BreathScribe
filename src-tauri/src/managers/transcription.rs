@@ -27,7 +27,7 @@ pub struct TranscriptionManager {
     current_model_id: Mutex<Option<String>>,
 }
 
-fn apply_custom_words(text: &str, custom_words: &[String]) -> String {
+fn apply_custom_words(text: &str, custom_words: &[String], threshold: f64) -> String {
     if custom_words.is_empty() {
         return text.to_string();
     }
@@ -83,8 +83,8 @@ fn apply_custom_words(text: &str, custom_words: &[String]) -> String {
                 levenshtein_score
             };
 
-            // Accept if the score is good enough (threshold: 0.4 for good matches)
-            if combined_score < 0.4 && combined_score < best_score {
+            // Accept if the score is good enough (configurable threshold)
+            if combined_score < threshold && combined_score < best_score {
                 best_match = Some(&custom_words[i]);
                 best_score = combined_score;
             }
@@ -319,7 +319,11 @@ impl TranscriptionManager {
 
         // Apply word correction if custom words are configured
         let corrected_result = if !settings.custom_words.is_empty() {
-            apply_custom_words(&result, &settings.custom_words)
+            apply_custom_words(
+                &result,
+                &settings.custom_words,
+                settings.word_correction_threshold,
+            )
         } else {
             result
         };

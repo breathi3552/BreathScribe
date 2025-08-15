@@ -210,6 +210,11 @@ export const useSettings = (): UseSettingsReturn => {
           case "custom_words":
             await invoke("update_custom_words", { words: value });
             break;
+          case "word_correction_threshold":
+            await invoke("change_word_correction_threshold_setting", {
+              threshold: value,
+            });
+            break;
           case "bindings":
             // Handle bindings separately - they use their own invoke methods
             break;
@@ -220,7 +225,7 @@ export const useSettings = (): UseSettingsReturn => {
             console.warn(`No handler for setting: ${String(key)}`);
         }
 
-        console.log(`Setting ${String(key)} updated to:`, value);
+        // console.log(`Setting ${String(key)} updated to:`, value);
       } catch (error) {
         console.error(`Failed to update setting ${String(key)}:`, error);
 

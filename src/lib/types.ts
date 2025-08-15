@@ -35,6 +35,7 @@ export const SettingsSchema = z.object({
   overlay_position: OverlayPositionSchema,
   debug_mode: z.boolean(),
   custom_words: z.array(z.string()).optional().default([]),
+  word_correction_threshold: z.number().optional().default(0.2),
 });
 
 export const BindingResponseSchema = z.object({

@@ -44,6 +44,8 @@ pub struct AppSettings {
     pub debug_mode: bool,
     #[serde(default)]
     pub custom_words: Vec<String>,
+    #[serde(default = "default_word_correction_threshold")]
+    pub word_correction_threshold: f64,
 }
 
 fn default_model() -> String {
@@ -70,13 +72,17 @@ fn default_debug_mode() -> bool {
     false
 }
 
+fn default_word_correction_threshold() -> f64 {
+    0.2
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
     let default_shortcut = "ctrl+space";
     #[cfg(target_os = "macos")]
-    let default_shortcut = "alt+space";
+    let default_shortcut = "option+space";
     #[cfg(target_os = "linux")]
     let default_shortcut = "ctrl+space";
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
@@ -107,6 +113,7 @@ pub fn get_default_settings() -> AppSettings {
         overlay_position: OverlayPosition::Bottom,
         debug_mode: false,
         custom_words: Vec::new(),
+        word_correction_threshold: default_word_correction_threshold(),
     }
 }
 

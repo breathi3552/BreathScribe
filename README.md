@@ -44,6 +44,7 @@ The process is entirely local:
 **Prerequisites:**
 - [Rust](https://rustup.rs/) (latest stable)
 - [Bun](https://bun.sh/) package manager
+- [Tauri Prerequisites](https://tauri.app/start/prerequisites/)
 - Platform-specific requirements:
   - **macOS**: Xcode Command Line Tools
   - **Windows**: Microsoft C++ Build Tools

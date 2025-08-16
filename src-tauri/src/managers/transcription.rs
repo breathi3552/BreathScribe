@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::sync::{Arc, Mutex};
 use strsim::levenshtein;
 use tauri::{App, AppHandle, Emitter, Manager};
-use whisper_rs::install_whisper_log_trampoline;
+use whisper_rs::install_logging_hooks;
 use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
 };
@@ -197,7 +197,7 @@ impl TranscriptionManager {
         );
 
         // Install log trampoline once per model load (safe to call multiple times)
-        install_whisper_log_trampoline();
+        install_logging_hooks();
 
         // Create new context
         let context =
@@ -295,7 +295,7 @@ impl TranscriptionManager {
         params.set_print_realtime(false);
         params.set_print_timestamps(false);
         params.set_suppress_blank(true);
-        params.set_suppress_non_speech_tokens(true);
+        params.set_suppress_nst(true);
 
         // Enable translation to English if requested
         if settings.translate_to_english {

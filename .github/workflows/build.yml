@@ -81,8 +81,8 @@ jobs:
           workspaces: "./src-tauri -> target"
           key: ${{ inputs.platform }}-${{ inputs.target }}-whisper-rs-0.14.4
 
-      - name: install dependencies (ubuntu only)
-        if: contains(inputs.platform, 'ubuntu')
+      - name: install dependencies (ubuntu 24.04)
+        if: contains(inputs.platform, 'ubuntu-24.04')
         run: |
           sudo apt-get update
           sudo apt-get install -y libappindicator3-dev librsvg2-dev patchelf libasound2-dev libopenblas-dev libx11-dev libxtst-dev libxrandr-dev \
@@ -92,6 +92,12 @@ jobs:
             libjavascriptcoregtk-4.1-dev=2.44.0-2 \
             gir1.2-javascriptcoregtk-4.1=2.44.0-2 \
             gir1.2-webkit2-4.1=2.44.0-2
+
+      - name: install dependencies (ubuntu 22.04)
+        if: contains(inputs.platform, 'ubuntu-22.04')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libopenblas-dev libx11-dev libxtst-dev libxrandr-dev
 
       - name: Install Vulkan SDK (Windows)
         if: contains(inputs.platform, 'windows')
@@ -104,8 +110,17 @@ jobs:
         if: contains(inputs.platform, 'windows') && inputs.sign-binaries
         run: cargo install trusted-signing-cli
 
-      - name: Prepare Vulkan SDK for Ubuntu
-        if: contains(inputs.platform, 'ubuntu')
+      - name: Prepare Vulkan SDK for Ubuntu 24.04
+        if: contains(inputs.platform, 'ubuntu-24.04')
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-1.3.290-noble.list https://packages.lunarg.com/vulkan/1.3.290/lunarg-vulkan-1.3.290-noble.list
+          sudo apt update
+          sudo apt install vulkan-sdk -y
+          sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Prepare Vulkan SDK for Ubuntu 22.04
+        if: contains(inputs.platform, 'ubuntu-22.04')
         run: |
           wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-1.3.290-jammy.list https://packages.lunarg.com/vulkan/1.3.290/lunarg-vulkan-1.3.290-jammy.list

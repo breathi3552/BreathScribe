@@ -1,15 +1,19 @@
-name: "Release"
+name: "Build Test"
 
-on: workflow_dispatch
-# on:
-#   push:
-#     branches:
-#       - "test-build"
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  publish-tauri:
+  build-test:
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +36,7 @@ jobs:
       platform: ${{ matrix.platform }}
       target: ${{ matrix.target }}
       build-args: ${{ matrix.args }}
-      sign-binaries: true
-      asset-prefix: "handy"
-      upload-artifacts: false
+      sign-binaries: false
+      asset-prefix: "handy-test"
+      upload-artifacts: true
     secrets: inherit

@@ -1,19 +1,11 @@
 name: "Build Test"
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-      - develop
-  pull_request:
-    branches:
-      - main
+on: workflow_dispatch
 
 jobs:
   build-test:
     permissions:
-      contents: read
+      contents: write
     strategy:
       fail-fast: false
       matrix:

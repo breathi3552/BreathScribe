@@ -295,6 +295,7 @@ impl TranscriptionManager {
         params.set_print_realtime(false);
         params.set_print_timestamps(false);
         params.set_suppress_blank(true);
+        params.set_no_speech_thold(0.2);
         params.set_suppress_non_speech_tokens(true);
 
         // Enable translation to English if requested

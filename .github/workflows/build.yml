@@ -79,7 +79,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
-          key: ${{ inputs.platform }}-${{ inputs.target }}
+          key: ${{ inputs.platform }}-${{ inputs.target }}-whisper-rs-0.14.4
 
       - name: install dependencies (ubuntu only)
         if: contains(inputs.platform, 'ubuntu')

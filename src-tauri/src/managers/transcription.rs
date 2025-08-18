@@ -296,6 +296,7 @@ impl TranscriptionManager {
         params.set_print_timestamps(false);
         params.set_suppress_blank(true);
         params.set_suppress_nst(true);
+        params.set_no_speech_thold(0.2);
 
         // Enable translation to English if requested
         if settings.translate_to_english {

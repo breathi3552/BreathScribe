@@ -135,9 +135,9 @@ The goal is to create both a useful tool and a foundation for others to build up
 
 ## Sponsors
 
-We're grateful for the support of our sponsors who help make Handy possible:
-
 <div align="center">
+  We're grateful for the support of our sponsors who help make Handy possible:
+  <br><br>
   <a href="https://wordcab.com">
     <img src="sponsor-images/wordcab.png" alt="Wordcab" width="120" height="120">
   </a>

@@ -68,6 +68,4 @@ jobs:
       asset-prefix: "handy"
       upload-artifacts: false
       release-id: ${{ needs.create-release.outputs.release-id }}
-      tag-name: "v${{ needs.create-release.outputs.version }}"
-      release-name: "v${{ needs.create-release.outputs.version }}"
     secrets: inherit

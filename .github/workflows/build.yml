@@ -198,6 +198,57 @@ jobs:
             src-tauri/target/${{ inputs.target }}/release/bundle/macos/*.app
           retention-days: 30
 
+      - name: Install FUSE for AppImage processing
+        if: contains(inputs.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fuse libfuse2
+
+      - name: Remove libwayland-client.so from AppImage
+        if: contains(inputs.platform, 'ubuntu')
+        run: |
+          # Find the AppImage file
+          APPIMAGE_PATH=$(find src-tauri/target/release/bundle/appimage -name "*.AppImage" | head -1)
+
+          if [ -n "$APPIMAGE_PATH" ]; then
+            echo "Processing AppImage: $APPIMAGE_PATH"
+
+            # Make AppImage executable
+            chmod +x "$APPIMAGE_PATH"
+
+            # Extract AppImage
+            cd "$(dirname "$APPIMAGE_PATH")"
+            APPIMAGE_NAME=$(basename "$APPIMAGE_PATH")
+
+            # Extract using the AppImage itself
+            "./$APPIMAGE_NAME" --appimage-extract
+
+            # Remove libwayland-client.so files
+            echo "Removing libwayland-client.so files..."
+            find squashfs-root -name "libwayland-client.so*" -type f -delete
+
+            # List what was removed for verification
+            echo "Files remaining in lib directories:"
+            find squashfs-root -name "lib*" -type d | head -5 | while read dir; do
+              echo "Contents of $dir:"
+              ls "$dir" | grep -E "(wayland|fuse)" || echo "  No wayland/fuse libraries found"
+            done
+
+            # Get appimagetool
+            wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+            chmod +x appimagetool-x86_64.AppImage
+
+            # Repackage AppImage with no-appstream to avoid warnings
+            ARCH=x86_64 ./appimagetool-x86_64.AppImage --no-appstream squashfs-root "$APPIMAGE_NAME"
+
+            # Clean up
+            rm -rf squashfs-root appimagetool-x86_64.AppImage
+
+            echo "libwayland-client.so removed from AppImage successfully"
+          else
+            echo "No AppImage found to process"
+          fi
+
       - name: Upload artifacts (Linux)
         if: inputs.upload-artifacts && contains(inputs.platform, 'ubuntu')
         uses: actions/upload-artifact@v4

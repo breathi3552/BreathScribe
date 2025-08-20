@@ -138,20 +138,13 @@ The goal is to create both a useful tool and a foundation for others to build up
 We're grateful for the support of our sponsors who help make Handy possible:
 
 <div align="center">
-  <table>
-    <tr>
-      <td align="center" width="150">
-        <a href="https://wordcab.com">
-          <img src="sponsor-images/wordcab.png" alt="Wordcab" width="120" height="120">
-        </a>
-      </td>
-      <td align="center" width="150">
-        <a href="https://github.com/epicenter-so/epicenter">
-          <img src="sponsor-images/epicenter.png" alt="Epicenter" width="120" height="120">
-        </a>
-      </td>
-    </tr>
-  </table>
+  <a href="https://wordcab.com">
+    <img src="sponsor-images/wordcab.png" alt="Wordcab" width="120" height="120">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/epicenter-so/epicenter">
+    <img src="sponsor-images/epicenter.png" alt="Epicenter" width="120" height="120">
+  </a>
 </div>
 
 ## Related Projects

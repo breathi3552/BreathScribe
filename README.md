@@ -133,6 +133,19 @@ We're actively seeking contributors! Priority areas include:
 
 The goal is to create both a useful tool and a foundation for others to build upon—a well-patterned, simple codebase that serves the community.
 
+## Sponsors
+
+We're grateful for the support of our sponsors who help make Handy possible:
+
+<div align="center">
+  <a href="https://wordcab.com">
+    <img src="sponsor-images/wordcab.png" alt="Wordcab" width="120" height="120" style="border-radius: 50%; margin: 0 20px;">
+  </a>
+  <a href="https://github.com/epicenter-so/epicenter">
+    <img src="sponsor-images/epicenter.png" alt="Epicenter" width="120" height="120" style="border-radius: 50%; margin: 0 20px;">
+  </a>
+</div>
+
 ## Related Projects
 
 - **[Handy CLI](https://github.com/cjpais/handy-cli)** - The original Python command-line version

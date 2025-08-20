@@ -9,30 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release-id: ${{ steps.create-release.outputs.result }}
-      version: ${{ steps.determine-version.outputs.version }}
+      version: ${{ steps.get-version.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Determine Version
-        id: determine-version
+      - name: Get version from tauri.conf.json
+        id: get-version
         shell: bash
         run: |
-          APP_VERSION=""
-          REF="${{ github.ref }}"
-
-          if [[ "$REF" == refs/tags/v* ]]; then
-            APP_VERSION="${REF#refs/tags/v}"
-            echo "Release version determined from tag: $APP_VERSION"
-          else
-            DESCRIBE=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-            APP_VERSION="${DESCRIBE#v}"
-            echo "CI version determined from latest tag or fallback: $APP_VERSION"
-          fi
-
-          echo "version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          VERSION=$(grep -o '"version": "[^"]*"' src-tauri/tauri.conf.json | cut -d'"' -f4)
+          echo "Application version from tauri.conf.json: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create Draft Release
         id: create-release
@@ -42,8 +30,8 @@ jobs:
             const { data } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag_name: `v${{ steps.determine-version.outputs.version }}`,
-              name: `v${{ steps.determine-version.outputs.version }}`,
+              tag_name: `v${{ steps.get-version.outputs.version }}`,
+              name: `v${{ steps.get-version.outputs.version }}`,
               draft: true,
               prerelease: false,
               generate_release_notes: true
@@ -80,4 +68,6 @@ jobs:
       asset-prefix: "handy"
       upload-artifacts: false
       release-id: ${{ needs.create-release.outputs.release-id }}
+      tag-name: "v${{ needs.create-release.outputs.version }}"
+      release-name: "v${{ needs.create-release.outputs.version }}"
     secrets: inherit

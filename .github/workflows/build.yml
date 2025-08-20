@@ -49,23 +49,13 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
 
-      - name: Determine Version
-        id: determine-version
+      - name: Get version from tauri.conf.json
+        id: get-version
         shell: bash
         run: |
-          APP_VERSION=""
-          REF="${{ inputs.ref }}"
-
-          if [[ "$REF" == refs/tags/v* ]]; then
-            APP_VERSION="${REF#refs/tags/v}"
-            echo "Release version determined from tag: $APP_VERSION"
-          else
-            DESCRIBE=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-            APP_VERSION="${DESCRIBE#v}"
-            echo "CI version determined from latest tag or fallback: $APP_VERSION"
-          fi
-
-          echo "version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          VERSION=$(grep -o '"version": "[^"]*"' src-tauri/tauri.conf.json | cut -d'"' -f4)
+          echo "Application version from tauri.conf.json: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - uses: oven-sh/setup-bun@v2
 
@@ -79,7 +69,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
-          key: ${{ inputs.platform }}-${{ inputs.target }}-whisper-rs-0.14.4
+          key: ${{ inputs.platform }}-${{ inputs.target }}
 
       - name: install dependencies (ubuntu 24.04)
         if: contains(inputs.platform, 'ubuntu-24.04')
@@ -159,13 +149,6 @@ jobs:
           echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
           echo "Certificate imported."
 
-      - name: Set application version
-        shell: bash
-        run: |
-          echo "Setting version to: ${{ steps.determine-version.outputs.version }}"
-          # Update version in tauri.conf.json
-          sed -i.bak 's/"version": "[^"]*"/"version": "${{ steps.determine-version.outputs.version }}"/' src-tauri/tauri.conf.json
-
       - name: Build with Tauri
         uses: tauri-apps/tauri-action@v0
         env:
@@ -183,8 +166,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.sign-binaries && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.sign-binaries && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         with:
-          tagName: ${{ inputs.release-id && format('v{0}', steps.determine-version.outputs.version) || '' }}
-          releaseName: ${{ inputs.release-id && format('v{0}', steps.determine-version.outputs.version) || '' }}
+          tagName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
+          releaseName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
           releaseId: ${{ inputs.release-id }}
           args: ${{ inputs.build-args }}
 

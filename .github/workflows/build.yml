@@ -198,6 +198,43 @@ jobs:
             src-tauri/target/${{ inputs.target }}/release/bundle/macos/*.app
           retention-days: 30
 
+      - name: Remove libwayland-client.so from AppImage
+        if: contains(inputs.platform, 'ubuntu')
+        run: |
+          # Find the AppImage file
+          APPIMAGE_PATH=$(find src-tauri/target/release/bundle/appimage -name "*.AppImage" | head -1)
+
+          if [ -n "$APPIMAGE_PATH" ]; then
+            echo "Processing AppImage: $APPIMAGE_PATH"
+
+            # Make AppImage executable
+            chmod +x "$APPIMAGE_PATH"
+
+            # Extract AppImage
+            cd "$(dirname "$APPIMAGE_PATH")"
+            APPIMAGE_NAME=$(basename "$APPIMAGE_PATH")
+            EXTRACT_DIR="${APPIMAGE_NAME%.AppImage}_extracted"
+
+            "./$APPIMAGE_NAME" --appimage-extract
+
+            # Remove libwayland-client.so files
+            find squashfs-root -name "libwayland-client.so*" -delete
+
+            # Get appimagetool
+            wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+            chmod +x appimagetool-x86_64.AppImage
+
+            # Repackage AppImage
+            ARCH=x86_64 ./appimagetool-x86_64.AppImage squashfs-root "$APPIMAGE_NAME"
+
+            # Clean up
+            rm -rf squashfs-root appimagetool-x86_64.AppImage
+
+            echo "libwayland-client.so removed from AppImage"
+          else
+            echo "No AppImage found to process"
+          fi
+
       - name: Upload artifacts (Linux)
         if: inputs.upload-artifacts && contains(inputs.platform, 'ubuntu')
         uses: actions/upload-artifact@v4

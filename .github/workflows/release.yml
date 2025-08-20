@@ -1,15 +1,59 @@
 name: "Release"
 
 on: workflow_dispatch
-# on:
-#   push:
-#     branches:
-#       - "test-build"
 
 jobs:
+  create-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      release-id: ${{ steps.create-release.outputs.result }}
+      version: ${{ steps.determine-version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version
+        id: determine-version
+        shell: bash
+        run: |
+          APP_VERSION=""
+          REF="${{ github.ref }}"
+
+          if [[ "$REF" == refs/tags/v* ]]; then
+            APP_VERSION="${REF#refs/tags/v}"
+            echo "Release version determined from tag: $APP_VERSION"
+          else
+            DESCRIBE=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            APP_VERSION="${DESCRIBE#v}"
+            echo "CI version determined from latest tag or fallback: $APP_VERSION"
+          fi
+
+          echo "version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create Draft Release
+        id: create-release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${{ steps.determine-version.outputs.version }}`,
+              name: `v${{ steps.determine-version.outputs.version }}`,
+              draft: true,
+              prerelease: false,
+              generate_release_notes: true
+            })
+            return data.id
+
   publish-tauri:
     permissions:
       contents: write
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -35,4 +79,5 @@ jobs:
       sign-binaries: true
       asset-prefix: "handy"
       upload-artifacts: false
+      release-id: ${{ needs.create-release.outputs.release-id }}
     secrets: inherit

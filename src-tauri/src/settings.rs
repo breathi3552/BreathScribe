@@ -20,6 +20,49 @@ pub enum OverlayPosition {
     Bottom,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelUnloadTimeout {
+    Never,
+    Immediately,
+    Min2,
+    Min5,
+    Min10,
+    Min15,
+    Hour1,
+    Sec5, // Debug mode only
+}
+
+impl Default for ModelUnloadTimeout {
+    fn default() -> Self {
+        ModelUnloadTimeout::Never
+    }
+}
+
+impl ModelUnloadTimeout {
+    pub fn to_minutes(self) -> Option<u64> {
+        match self {
+            ModelUnloadTimeout::Never => None,
+            ModelUnloadTimeout::Immediately => Some(0), // Special case for immediate unloading
+            ModelUnloadTimeout::Min2 => Some(2),
+            ModelUnloadTimeout::Min5 => Some(5),
+            ModelUnloadTimeout::Min10 => Some(10),
+            ModelUnloadTimeout::Min15 => Some(15),
+            ModelUnloadTimeout::Hour1 => Some(60),
+            ModelUnloadTimeout::Sec5 => Some(0), // Special case for debug - handled separately
+        }
+    }
+
+    pub fn to_seconds(self) -> Option<u64> {
+        match self {
+            ModelUnloadTimeout::Never => None,
+            ModelUnloadTimeout::Immediately => Some(0), // Special case for immediate unloading
+            ModelUnloadTimeout::Sec5 => Some(5),
+            _ => self.to_minutes().map(|m| m * 60),
+        }
+    }
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
@@ -44,6 +87,8 @@ pub struct AppSettings {
     pub debug_mode: bool,
     #[serde(default)]
     pub custom_words: Vec<String>,
+    #[serde(default)]
+    pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
     pub word_correction_threshold: f64,
 }
@@ -113,6 +158,7 @@ pub fn get_default_settings() -> AppSettings {
         overlay_position: OverlayPosition::Bottom,
         debug_mode: false,
         custom_words: Vec::new(),
+        model_unload_timeout: ModelUnloadTimeout::Never,
         word_correction_threshold: default_word_correction_threshold(),
     }
 }

@@ -8,6 +8,15 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager};
+use tar::Archive;
+use std::fs::File;
+use flate2::read::GzDecoder;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EngineType {
+    Whisper,
+    Parakeet,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {
@@ -20,6 +29,8 @@ pub struct ModelInfo {
     pub is_downloaded: bool,
     pub is_downloading: bool,
     pub partial_size: u64,
+    pub is_directory: bool,
+    pub engine_type: EngineType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +76,8 @@ impl ModelManager {
                 is_downloaded: false,
                 is_downloading: false,
                 partial_size: 0,
+                is_directory: false,
+                engine_type: EngineType::Whisper,
             },
         );
 
@@ -81,6 +94,8 @@ impl ModelManager {
                 is_downloaded: false,
                 is_downloading: false,
                 partial_size: 0,
+                is_directory: false,
+                engine_type: EngineType::Whisper,
             },
         );
 
@@ -96,6 +111,8 @@ impl ModelManager {
                 is_downloaded: false,
                 is_downloading: false,
                 partial_size: 0,
+                is_directory: false,
+                engine_type: EngineType::Whisper,
             },
         );
 
@@ -111,6 +128,26 @@ impl ModelManager {
                 is_downloaded: false,
                 is_downloading: false,
                 partial_size: 0,
+                is_directory: false,
+                engine_type: EngineType::Whisper,
+            },
+        );
+
+        // Add NVIDIA Parakeet model (directory-based)
+        available_models.insert(
+            "parakeet-tdt-0.6b-v3".to_string(),
+            ModelInfo {
+                id: "parakeet-tdt-0.6b-v3".to_string(),
+                name: "Parakeet V3".to_string(),
+                description: "The fastest and most accurate model".to_string(),
+                filename: "parakeet-tdt-0.6b-v3-int8".to_string(), // Directory name
+                url: Some("https://blob.handy.computer/parakeet-v3-int8.tar.gz".to_string()),
+                size_mb: 850, // Approximate size for int8 quantized model
+                is_downloaded: false,
+                is_downloading: false,
+                partial_size: 0,
+                is_directory: true,
+                engine_type: EngineType::Parakeet,
             },
         );
 
@@ -173,17 +210,41 @@ impl ModelManager {
         let mut models = self.available_models.lock().unwrap();
 
         for model in models.values_mut() {
-            let model_path = self.models_dir.join(&model.filename);
-            let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
+            if model.is_directory {
+                // For directory-based models, check if the directory exists
+                let model_path = self.models_dir.join(&model.filename);
+                let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
+                let extracting_path = self.models_dir.join(format!("{}.extracting", &model.filename));
 
-            model.is_downloaded = model_path.exists();
-            model.is_downloading = partial_path.exists();
+                // Clean up any leftover .extracting directories from interrupted extractions
+                if extracting_path.exists() {
+                    println!("Cleaning up interrupted extraction for model: {}", model.id);
+                    let _ = fs::remove_dir_all(&extracting_path);
+                }
 
-            // Get partial file size if it exists
-            if partial_path.exists() {
-                model.partial_size = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
+                model.is_downloaded = model_path.exists() && model_path.is_dir();
+                model.is_downloading = partial_path.exists();
+
+                // Get partial file size if it exists (for the .tar.gz being downloaded)
+                if partial_path.exists() {
+                    model.partial_size = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
+                } else {
+                    model.partial_size = 0;
+                }
             } else {
-                model.partial_size = 0;
+                // For file-based models (existing logic)
+                let model_path = self.models_dir.join(&model.filename);
+                let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
+
+                model.is_downloaded = model_path.exists();
+                model.is_downloading = partial_path.exists();
+
+                // Get partial file size if it exists
+                if partial_path.exists() {
+                    model.partial_size = partial_path.metadata().map(|m| m.len()).unwrap_or(0);
+                } else {
+                    model.partial_size = 0;
+                }
             }
         }
 
@@ -359,8 +420,74 @@ impl ModelManager {
         file.flush()?;
         drop(file); // Ensure file is closed before moving
 
-        // Move partial file to final location
-        fs::rename(&partial_path, &model_path)?;
+        // Handle directory-based models (extract tar.gz) vs file-based models
+        if model_info.is_directory {
+            // Emit extraction started event
+            let _ = self.app_handle.emit("model-extraction-started", model_id);
+            println!("Extracting archive for directory-based model: {}", model_id);
+
+            // Use a temporary extraction directory to ensure atomic operations
+            let temp_extract_dir = self.models_dir.join(format!("{}.extracting", &model_info.filename));
+            let final_model_dir = self.models_dir.join(&model_info.filename);
+            
+            // Clean up any previous incomplete extraction
+            if temp_extract_dir.exists() {
+                let _ = fs::remove_dir_all(&temp_extract_dir);
+            }
+            
+            // Create temporary extraction directory
+            fs::create_dir_all(&temp_extract_dir)?;
+
+            // Open the downloaded tar.gz file
+            let tar_gz = File::open(&partial_path)?;
+            let tar = GzDecoder::new(tar_gz);
+            let mut archive = Archive::new(tar);
+
+            // Extract to the temporary directory first
+            archive.unpack(&temp_extract_dir).map_err(|e| {
+                let error_msg = format!("Failed to extract archive: {}", e);
+                // Clean up failed extraction
+                let _ = fs::remove_dir_all(&temp_extract_dir);
+                let _ = self.app_handle.emit("model-extraction-failed", &serde_json::json!({
+                    "model_id": model_id,
+                    "error": error_msg
+                }));
+                anyhow::anyhow!(error_msg)
+            })?;
+            
+            // Find the actual extracted directory (archive might have a nested structure)
+            let extracted_dirs: Vec<_> = fs::read_dir(&temp_extract_dir)?
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+                .collect();
+                
+            if extracted_dirs.len() == 1 {
+                // Single directory extracted, move it to the final location
+                let source_dir = extracted_dirs[0].path();
+                if final_model_dir.exists() {
+                    fs::remove_dir_all(&final_model_dir)?;
+                }
+                fs::rename(&source_dir, &final_model_dir)?;
+                // Clean up temp directory
+                let _ = fs::remove_dir_all(&temp_extract_dir);
+            } else {
+                // Multiple items or no directories, rename the temp directory itself
+                if final_model_dir.exists() {
+                    fs::remove_dir_all(&final_model_dir)?;
+                }
+                fs::rename(&temp_extract_dir, &final_model_dir)?;
+            }
+
+            println!("Successfully extracted archive for model: {}", model_id);
+            // Emit extraction completed event
+            let _ = self.app_handle.emit("model-extraction-completed", model_id);
+            
+            // Remove the downloaded tar.gz file
+            let _ = fs::remove_file(&partial_path);
+        } else {
+            // Move partial file to final location for file-based models
+            fs::rename(&partial_path, &model_path)?;
+        }
 
         // Update download status
         {
@@ -405,15 +532,28 @@ impl ModelManager {
 
         let mut deleted_something = false;
 
-        // Delete complete model file if it exists
-        if model_path.exists() {
-            println!("ModelManager: Deleting model file at: {:?}", model_path);
-            fs::remove_file(&model_path)?;
-            println!("ModelManager: Model file deleted successfully");
-            deleted_something = true;
+        if model_info.is_directory {
+            // Delete complete model directory if it exists
+            if model_path.exists() && model_path.is_dir() {
+                println!(
+                    "ModelManager: Deleting model directory at: {:?}",
+                    model_path
+                );
+                fs::remove_dir_all(&model_path)?;
+                println!("ModelManager: Model directory deleted successfully");
+                deleted_something = true;
+            }
+        } else {
+            // Delete complete model file if it exists
+            if model_path.exists() {
+                println!("ModelManager: Deleting model file at: {:?}", model_path);
+                fs::remove_file(&model_path)?;
+                println!("ModelManager: Model file deleted successfully");
+                deleted_something = true;
+            }
         }
 
-        // Delete partial file if it exists
+        // Delete partial file if it exists (same for both types)
         if partial_path.exists() {
             println!("ModelManager: Deleting partial file at: {:?}", partial_path);
             fs::remove_file(&partial_path)?;
@@ -441,7 +581,7 @@ impl ModelManager {
             return Err(anyhow::anyhow!("Model not available: {}", model_id));
         }
 
-        // Ensure we don't return partial files
+        // Ensure we don't return partial files/directories
         if model_info.is_downloading {
             return Err(anyhow::anyhow!(
                 "Model is currently downloading: {}",
@@ -454,14 +594,26 @@ impl ModelManager {
             .models_dir
             .join(format!("{}.partial", &model_info.filename));
 
-        // Ensure we only return complete model files, not partial ones
-        if model_path.exists() && !partial_path.exists() {
-            Ok(model_path)
+        if model_info.is_directory {
+            // For directory-based models, ensure the directory exists and is complete
+            if model_path.exists() && model_path.is_dir() && !partial_path.exists() {
+                Ok(model_path)
+            } else {
+                Err(anyhow::anyhow!(
+                    "Complete model directory not found: {}",
+                    model_id
+                ))
+            }
         } else {
-            Err(anyhow::anyhow!(
-                "Complete model file not found: {}",
-                model_id
-            ))
+            // For file-based models (existing logic)
+            if model_path.exists() && !partial_path.exists() {
+                Ok(model_path)
+            } else {
+                Err(anyhow::anyhow!(
+                    "Complete model file not found: {}",
+                    model_id
+                ))
+            }
         }
     }
 

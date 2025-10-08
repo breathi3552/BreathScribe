@@ -162,10 +162,8 @@ pub fn run() {
                 TranscriptionManager::new(&app, model_manager.clone())
                     .expect("Failed to initialize transcription manager"),
             );
-            let history_manager = Arc::new(
-                HistoryManager::new(&app, settings.history_limit)
-                    .expect("Failed to initialize history manager"),
-            );
+            let history_manager =
+                Arc::new(HistoryManager::new(&app).expect("Failed to initialize history manager"));
 
             // Add managers to Tauri's managed state
             app.manage(recording_manager.clone());

@@ -269,3 +269,8 @@ pub fn get_stored_binding(app: &AppHandle, id: &str) -> ShortcutBinding {
 
     binding
 }
+
+pub fn get_history_limit(app: &AppHandle) -> usize {
+    let settings = get_settings(app);
+    settings.history_limit
+}

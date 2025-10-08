@@ -5,7 +5,6 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_sql::{Migration, MigrationKind};
 
@@ -25,11 +24,10 @@ pub struct HistoryManager {
     app_handle: AppHandle,
     recordings_dir: PathBuf,
     db_path: PathBuf,
-    history_limit: AtomicUsize,
 }
 
 impl HistoryManager {
-    pub fn new(app: &App, history_limit: usize) -> Result<Self> {
+    pub fn new(app: &App) -> Result<Self> {
         let app_handle = app.app_handle().clone();
 
         // Create recordings directory in app data dir
@@ -47,7 +45,6 @@ impl HistoryManager {
             app_handle,
             recordings_dir,
             db_path,
-            history_limit: AtomicUsize::new(history_limit),
         };
 
         // Initialize database
@@ -100,7 +97,7 @@ impl HistoryManager {
         transcription_text: String,
     ) -> Result<()> {
         // If history limit is 0, do not save at all.
-        if self.history_limit.load(Ordering::Relaxed) == 0 {
+        if crate::settings::get_history_limit(&self.app_handle) == 0 {
             return Ok(());
         }
 
@@ -160,7 +157,7 @@ impl HistoryManager {
             entries.push(row?);
         }
 
-        let limit = self.history_limit.load(Ordering::Relaxed);
+        let limit = crate::settings::get_history_limit(&self.app_handle);
         if entries.len() > limit {
             let entries_to_delete = &entries[limit..];
 
@@ -247,7 +244,7 @@ impl HistoryManager {
     pub async fn get_entry_by_id(&self, id: i64) -> Result<Option<HistoryEntry>> {
         let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
-            "SELECT id, file_name, timestamp, saved, title, transcription_text 
+            "SELECT id, file_name, timestamp, saved, title, transcription_text
              FROM transcription_history WHERE id = ?1",
         )?;
 
@@ -308,8 +305,7 @@ impl HistoryManager {
         }
     }
 
-    pub fn update_history_limit(&self, new_limit: usize) -> Result<()> {
-        self.history_limit.swap(new_limit, Ordering::Relaxed);
+    pub fn update_history_limit(&self) -> Result<()> {
         self.cleanup_old_entries()?;
         Ok(())
     }

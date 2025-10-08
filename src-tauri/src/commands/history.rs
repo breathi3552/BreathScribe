@@ -60,7 +60,7 @@ pub async fn update_history_limit(
     crate::settings::write_settings(&app, settings);
 
     history_manager
-        .update_history_limit(limit)
+        .update_history_limit()
         .map_err(|e| e.to_string())?;
 
     Ok(())

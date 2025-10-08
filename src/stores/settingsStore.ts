@@ -45,6 +45,7 @@ const DEFAULT_SETTINGS: Partial<Settings> = {
   overlay_position: "bottom",
   debug_mode: false,
   custom_words: [],
+  history_limit: 5,
 };
 
 const DEFAULT_AUDIO_DEVICE: AudioDevice = {
@@ -224,6 +225,9 @@ export const useSettingsStore = create<SettingsStore>()(
           case "paste_method":
             await invoke("change_paste_method_setting", { method: value });
             break;
+          case "history_limit":
+            await invoke("update_history_limit", { limit: value });
+            break;
           case "bindings":
           case "selected_model":
             break;
@@ -265,15 +269,15 @@ export const useSettingsStore = create<SettingsStore>()(
         set((state) => ({
           settings: state.settings
             ? {
-                ...state.settings,
-                bindings: {
-                  ...state.settings.bindings,
-                  [id]: {
-                    ...state.settings.bindings[id],
-                    current_binding: binding,
-                  },
+              ...state.settings,
+              bindings: {
+                ...state.settings.bindings,
+                [id]: {
+                  ...state.settings.bindings[id],
+                  current_binding: binding,
                 },
-              }
+              },
+            }
             : null,
         }));
 
@@ -286,15 +290,15 @@ export const useSettingsStore = create<SettingsStore>()(
           set((state) => ({
             settings: state.settings
               ? {
-                  ...state.settings,
-                  bindings: {
-                    ...state.settings.bindings,
-                    [id]: {
-                      ...state.settings.bindings[id],
-                      current_binding: originalBinding,
-                    },
+                ...state.settings,
+                bindings: {
+                  ...state.settings.bindings,
+                  [id]: {
+                    ...state.settings.bindings[id],
+                    current_binding: originalBinding,
                   },
-                }
+                },
+              }
               : null,
           }));
         }

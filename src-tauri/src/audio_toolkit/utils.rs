@@ -7,7 +7,6 @@ pub fn get_cpal_host() -> cpal::Host {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        use cpal::traits::HostTrait;
         cpal::default_host()
     }
 }

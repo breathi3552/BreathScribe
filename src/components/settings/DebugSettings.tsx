@@ -4,6 +4,7 @@ import { AppDataDirectory } from "./AppDataDirectory";
 import { SettingsGroup } from "../ui/SettingsGroup";
 import { HistoryLimit } from "./HistoryLimit";
 import { PasteMethodSetting } from "./PasteMethod";
+import { AlwaysOnMicrophone } from "./AlwaysOnMicrophone";
 
 export const DebugSettings: React.FC = () => {
   return (
@@ -13,6 +14,7 @@ export const DebugSettings: React.FC = () => {
         <WordCorrectionThreshold descriptionMode="tooltip" grouped={true} />
         <AppDataDirectory descriptionMode="tooltip" grouped={true} />
         <HistoryLimit descriptionMode="tooltip" grouped={true} />
+        <AlwaysOnMicrophone descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
     </div>
   );

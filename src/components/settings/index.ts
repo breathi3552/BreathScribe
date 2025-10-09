@@ -19,3 +19,4 @@ export { AppDataDirectory } from "./AppDataDirectory";
 export { ModelUnloadTimeoutSetting } from "./ModelUnloadTimeout";
 export { StartHidden } from "./StartHidden";
 export { HistoryLimit } from "./HistoryLimit";
+export { AutostartToggle } from "./AutostartToggle";

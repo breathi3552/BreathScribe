@@ -1,5 +1,6 @@
 use serde::Serialize;
 use tauri::{App, AppHandle, Emitter, Manager};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 
@@ -184,6 +185,32 @@ pub fn change_start_hidden_setting(app: AppHandle, enabled: bool) -> Result<(), 
         "settings-changed",
         serde_json::json!({
             "setting": "start_hidden",
+            "value": enabled
+        }),
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn change_autostart_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.autostart_enabled = enabled;
+    settings::write_settings(&app, settings);
+
+    // Apply the autostart setting immediately
+    let autostart_manager = app.autolaunch();
+    if enabled {
+        let _ = autostart_manager.enable();
+    } else {
+        let _ = autostart_manager.disable();
+    }
+
+    // Notify frontend
+    let _ = app.emit(
+        "settings-changed",
+        serde_json::json!({
+            "setting": "autostart_enabled",
             "value": enabled
         }),
     );

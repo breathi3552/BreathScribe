@@ -143,7 +143,10 @@ fn default_selected_language() -> String {
 }
 
 fn default_overlay_position() -> OverlayPosition {
-    OverlayPosition::Bottom
+    #[cfg(target_os = "linux")]
+    return OverlayPosition::None;
+    #[cfg(not(target_os = "linux"))]
+    return OverlayPosition::Bottom;
 }
 
 fn default_debug_mode() -> bool {

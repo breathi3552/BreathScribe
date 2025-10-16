@@ -41,6 +41,11 @@ export const SettingsSchema = z.object({
   bindings: ShortcutBindingsMapSchema,
   push_to_talk: z.boolean(),
   audio_feedback: z.boolean(),
+  audio_feedback_volume: z.number().optional().default(1.0),
+  sound_theme: z
+    .enum(["marimba", "pop", "custom"])
+    .optional()
+    .default("marimba"),
   start_hidden: z.boolean().optional().default(false),
   autostart_enabled: z.boolean().optional().default(false),
   selected_model: z.string(),

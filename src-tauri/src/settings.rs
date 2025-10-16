@@ -80,12 +80,42 @@ impl ModelUnloadTimeout {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SoundTheme {
+    Marimba,
+    Pop,
+    Custom,
+}
+
+impl SoundTheme {
+    fn as_str(&self) -> &'static str {
+        match self {
+            SoundTheme::Marimba => "marimba",
+            SoundTheme::Pop => "pop",
+            SoundTheme::Custom => "custom",
+        }
+    }
+
+    pub fn to_start_path(&self) -> String {
+        format!("resources/{}_start.wav", self.as_str())
+    }
+
+    pub fn to_stop_path(&self) -> String {
+        format!("resources/{}_stop.wav", self.as_str())
+    }
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
     pub bindings: HashMap<String, ShortcutBinding>,
     pub push_to_talk: bool,
     pub audio_feedback: bool,
+    #[serde(default = "default_audio_feedback_volume")]
+    pub audio_feedback_volume: f32,
+    #[serde(default = "default_sound_theme")]
+    pub sound_theme: SoundTheme,
     #[serde(default = "default_start_hidden")]
     pub start_hidden: bool,
     #[serde(default = "default_autostart_enabled")]
@@ -161,6 +191,14 @@ fn default_history_limit() -> usize {
     5
 }
 
+fn default_audio_feedback_volume() -> f32 {
+    1.0
+}
+
+fn default_sound_theme() -> SoundTheme {
+    SoundTheme::Marimba
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -189,6 +227,8 @@ pub fn get_default_settings() -> AppSettings {
         bindings,
         push_to_talk: true,
         audio_feedback: false,
+        audio_feedback_volume: default_audio_feedback_volume(),
+        sound_theme: default_sound_theme(),
         start_hidden: default_start_hidden(),
         autostart_enabled: default_autostart_enabled(),
         selected_model: "".to_string(),

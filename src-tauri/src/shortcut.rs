@@ -6,7 +6,7 @@ use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 
 use crate::actions::ACTION_MAP;
 use crate::settings::ShortcutBinding;
-use crate::settings::{self, get_settings, OverlayPosition, PasteMethod};
+use crate::settings::{self, get_settings, OverlayPosition, PasteMethod, SoundTheme};
 use crate::ManagedToggleState;
 
 pub fn init_shortcuts(app: &App) {
@@ -115,6 +115,31 @@ pub fn change_ptt_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
 pub fn change_audio_feedback_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.audio_feedback = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn change_audio_feedback_volume_setting(app: AppHandle, volume: f32) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.audio_feedback_volume = volume;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn change_sound_theme_setting(app: AppHandle, theme: String) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    let parsed = match theme.as_str() {
+        "marimba" => SoundTheme::Marimba,
+        "pop" => SoundTheme::Pop,
+        "custom" => SoundTheme::Custom,
+        other => {
+            eprintln!("Invalid sound theme '{}', defaulting to marimba", other);
+            SoundTheme::Marimba
+        }
+    };
+    settings.sound_theme = parsed;
     settings::write_settings(&app, settings);
     Ok(())
 }

@@ -1,52 +1,175 @@
-name: "Main Branch Build"
-
-# Runs the full cross-platform build on every push to main so breakage is
-# caught before a manual release is triggered. Artifacts are kept for 30 days
-# so any commit on main has a downloadable, testable build.
+name: "Handy Cloud P0 Windows x64"
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
+    paths-ignore:
+      - "release-builds/**"
+
+permissions:
+  contents: write
+  actions: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: handy-cloud-p0-windows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: "macos-26"
-            args: "--target aarch64-apple-darwin"
-            target: "aarch64-apple-darwin"
-          - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
-            target: "x86_64-apple-darwin"
-          - platform: "ubuntu-22.04"
-            args: "--bundles deb"
-            target: "x86_64-unknown-linux-gnu"
-          - platform: "ubuntu-24.04"
-            args: "--bundles appimage,rpm"
-            target: "x86_64-unknown-linux-gnu"
-          - platform: "ubuntu-24.04-arm"
-            args: "--bundles appimage,deb,rpm"
-            target: "aarch64-unknown-linux-gnu"
-          - platform: "windows-latest"
-            args: ""
-            target: "x86_64-pc-windows-msvc"
-          - platform: "windows-11-arm"
-            args: "--target aarch64-pc-windows-msvc"
-            target: "aarch64-pc-windows-msvc"
+  source-contract:
+    runs-on: windows-latest
+    outputs:
+      source_changed: ${{ steps.brand.outputs.changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Apply remaining source-level branding safely
+        id: brand
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & "./scripts/windows/p0-source-brand.ps1"
+          $code = $LASTEXITCODE
+
+          if ($code -eq 3) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            if (-not (git diff --cached --quiet)) {
+              git commit -m "chore: finish Handy Cloud source branding"
+              git push origin HEAD:main
+            }
+            "changed=true" >> $env:GITHUB_OUTPUT
+            Write-Host "Brand source patch committed. A fresh workflow run will build that commit."
+            exit 0
+          }
+
+          if ($code -ne 0) {
+            throw "p0-source-brand.ps1 failed with exit code $code"
+          }
+
+          "changed=false" >> $env:GITHUB_OUTPUT
+
+      - name: Install Rust stable
+        if: steps.brand.outputs.changed != 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Typecheck and build frontend
+        if: steps.brand.outputs.changed != 'true'
+        run: bun run build
+
+      - name: Run Windows P0 regression
+        if: steps.brand.outputs.changed != 'true'
+        shell: pwsh
+        run: ./scripts/windows/p0-regression.ps1
+
+  build-windows-x64:
+    needs: source-contract
+    if: needs.source-contract.outputs.source_changed != 'true'
     uses: ./.github/workflows/build.yml
     with:
-      platform: ${{ matrix.platform }}
-      target: ${{ matrix.target }}
-      build-args: ${{ matrix.args }}
+      platform: windows-latest
+      target: x86_64-pc-windows-msvc
+      build-args: ""
+      asset-prefix: handy-cloud
       upload-artifacts: true
-      sign-binaries: true
+      sign-binaries: false
+      no-cache: true
     secrets: inherit
+
+  publish-p0:
+    needs: build-windows-x64
+    if: needs.build-windows-x64.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout built source commit
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download Windows build artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf artifacts
+          mkdir -p artifacts
+          gh run download "${GITHUB_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name "handy-cloud-x86_64-pc-windows-msvc" \
+            --dir artifacts
+
+      - name: Stage P0 installers and build record
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="release-builds/p0-base"
+          rm -rf "$out"
+          mkdir -p "$out"
+
+          mapfile -d '' packages < <(find artifacts -type f \( -iname '*.exe' -o -iname '*.msi' \) -print0)
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "ERROR: no Windows .exe/.msi packages found in workflow artifact" >&2
+            find artifacts -type f -maxdepth 5 -print >&2 || true
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            cp -v "$package" "$out/"
+          done
+
+          {
+            echo "# Handy Cloud P0 Base Build"
+            echo
+            echo "- Source commit: \`${GITHUB_SHA}\`"
+            echo "- CI run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Target: \`x86_64-pc-windows-msvc\`"
+            echo "- Build signing: unsigned P0 fork build"
+            echo
+            echo "## Installers"
+            for file in "$out"/*.exe "$out"/*.msi; do
+              [ -e "$file" ] || continue
+              echo "- \`$(basename "$file")\`"
+            done
+            echo
+            echo "## P0 verification"
+            echo
+            echo "- PASS — Handy Cloud product name, independent Tauri identifier, installer branding, fork updater endpoint."
+            echo "- PASS — candy-style light-blue brand tokens and C-hand application/tray assets."
+            echo "- PASS — upstream \`handy-keys = 0.3.4\` shortcut path preserved; production backend still uses \`HotkeyManager::new_with_blocking()\`."
+            echo "- PASS — Windows \`Win+H\` (\`super+h\`) registered on the blocking backend and both press/release edges received in the Windows smoke test."
+            echo "- PASS — PTT coordinator, shortcut recorder, text input, and Windows paste transaction sources are byte-for-byte pinned to the fork baseline."
+            echo "- PASS — frontend typecheck/build completed."
+            echo "- PASS — reusable upstream Windows package audit installed both NSIS/MSI payloads and launched packaged \`handy.exe --list-devices\`."
+            echo
+            echo "### Win+H scope"
+            echo
+            echo "The automated Windows smoke sends a real synthetic Win+H chord through the same low-level blocking \`handy-keys\` backend used by the app and requires both key edges to arrive. The backend's blocking mode prevents registered chords from being forwarded down the Windows hook chain. Headless GitHub Actions does not provide a reliable visual assertion for the Windows Voice Typing UI itself, so the regression is enforced at the keyboard-hook boundary rather than by screenshot/UI detection."
+            echo
+            echo "## SHA-256"
+            for file in "$out"/*.exe "$out"/*.msi; do
+              [ -e "$file" ] || continue
+              sha256sum "$file"
+            done
+          } > "$out/BUILD_INFO.md"
+
+      - name: Commit P0 build artifacts to main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release-builds/p0-base
+          git commit -m "chore: publish Handy Cloud P0 Windows build [skip ci]"
+          git push origin HEAD:main

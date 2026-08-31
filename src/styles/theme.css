@@ -1,34 +1,26 @@
-/* Handy Colors */
+/* Handy Cloud Colors */
 
 :root {
-  /* Palette source of truth. Each themed color is defined once as a
-     light/dark pair; the active tokens below and the `data-theme` overrides
-     in App.css reference these, so a hex value lives in exactly one place. */
+  /* Candy-style light blue derived from the Handy Cloud C-hand icon. */
   --light-color-text: #0f0f0f;
   --light-color-background: #fbfbfb;
-  --light-color-logo-primary: #faa2ca;
-  --light-color-logo-stroke: #382731;
+  --light-color-logo-primary: #8ed1f7;
+  --light-color-logo-stroke: #315b7c;
 
   --dark-color-text: #fbfbfb;
   --dark-color-background: #2c2b29;
-  --dark-color-logo-primary: #f28cbb;
-  --dark-color-logo-stroke: #fad1ed;
+  --dark-color-logo-primary: #78c3ef;
+  --dark-color-logo-stroke: #d4efff;
 
-  /* Semantic status colors. First used by SecureInputWarning; intended to
-     replace the ad-hoc yellow-500/red-500 usages (e.g. ui/Alert.tsx) over
-     time so status styling is themeable from one place. */
   --light-color-warning: #d97706;
   --light-color-error: #dc2626;
   --dark-color-warning: #fbbf24;
   --dark-color-error: #f87171;
 
-  /* Tokens that do not change between light and dark */
-  --color-background-ui: #da5893;
+  --color-background-ui: #58b6e8;
   --color-text-stroke: #f6f6f6;
   --color-mid-gray: #808080;
 
-  /* Active palette — defaults to light, follows the OS via the media query
-     below, or is forced by `data-theme` (see the overrides below). */
   --color-text: var(--light-color-text);
   --color-background: var(--light-color-background);
   --color-logo-primary: var(--light-color-logo-primary);
@@ -50,13 +42,7 @@
 
 /*
  * Explicit theme override, driven by the `theme` setting via
- * `document.documentElement.dataset.theme`. When set, the higher-specificity
- * attribute selectors win over the `prefers-color-scheme` media query above,
- * so a user can keep Handy light or dark regardless of the OS setting.
- * `system` (or no attribute) leaves the OS in charge.
- *
- * Lives here (not in App.css) so every window that imports the shared palette —
- * the settings window and the recording overlay alike — honours the override.
+ * `document.documentElement.dataset.theme`.
  */
 :root[data-theme="light"] {
   --color-text: var(--light-color-text);

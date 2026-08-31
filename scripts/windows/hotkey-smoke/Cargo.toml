@@ -1,0 +1,8 @@
+[package]
+name = "handy-cloud-hotkey-smoke"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+handy-keys = "=0.3.4"

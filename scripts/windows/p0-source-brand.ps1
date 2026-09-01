@@ -78,9 +78,6 @@ if (-not $markerMatches) {
   bun run tauri icon $iconSource
   if ($LASTEXITCODE -ne 0) { throw "tauri icon generation failed" }
 
-  New-Item -ItemType Directory -Force -Path "src/assets" | Out-Null
-  Copy-Item "src-tauri/icons/128x128.png" "src/assets/handy-cloud-icon.png" -Force
-
   Add-Type -AssemblyName System.Drawing
 
   function Save-ResizedPng {

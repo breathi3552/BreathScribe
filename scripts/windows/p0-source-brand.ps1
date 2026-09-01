@@ -65,9 +65,8 @@ if ($content.StartsWith("# Handy`n") -or $content.StartsWith("# Handy`r`n")) {
 }
 
 # Generate all official Tauri icon slots from the approved Handy Cloud C-hand
-# SVG once. Tauri 2 accepts squared PNG or SVG input and produces the Windows
-# ICO plus the cross-platform PNG matrix.
-$iconSource = "brand/handy-cloud-icon-source.svg"
+# raster source. Tauri produces the Windows ICO plus the cross-platform PNG matrix.
+$iconSource = "brand/handy-cloud-icon-source.png"
 $iconMarker = "brand/P0_ICON_GENERATED.txt"
 if (-not (Test-Path $iconSource)) { throw "Missing approved brand icon source: $iconSource" }
 
@@ -98,9 +97,8 @@ if (-not $markerMatches) {
     } finally { $src.Dispose() }
   }
 
-  # Tauri already rendered the SVG to PNG; use that raster as the source for
-  # legacy files retained by the upstream tree so System.Drawing never has to
-  # parse SVG itself.
+  # Use Tauri's generated 256px raster for legacy icon files retained by the
+  # upstream tree, keeping all platform assets derived from the same source.
   $rasterSource = "src-tauri/icons/128x128@2x.png"
   Save-ResizedPng $rasterSource "src-tauri/icons/64x64.png" 64
   Save-ResizedPng $rasterSource "src-tauri/icons/icon.png" 512

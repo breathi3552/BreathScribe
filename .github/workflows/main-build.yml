@@ -38,9 +38,12 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           & "./scripts/windows/p0-source-brand.ps1"
-          $code = $LASTEXITCODE
+          if ($LASTEXITCODE -ne 0) {
+            throw "p0-source-brand.ps1 failed with exit code $LASTEXITCODE"
+          }
 
-          if ($code -eq 3) {
+          $dirty = [bool](git status --porcelain)
+          if ($dirty) {
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A
@@ -50,14 +53,9 @@ jobs:
             }
             "changed=true" >> $env:GITHUB_OUTPUT
             Write-Host "Brand source patch committed. A fresh workflow run will build that commit."
-            exit 0
+          } else {
+            "changed=false" >> $env:GITHUB_OUTPUT
           }
-
-          if ($code -ne 0) {
-            throw "p0-source-brand.ps1 failed with exit code $code"
-          }
-
-          "changed=false" >> $env:GITHUB_OUTPUT
 
       - name: Install Rust stable
         if: steps.brand.outputs.changed != 'true'

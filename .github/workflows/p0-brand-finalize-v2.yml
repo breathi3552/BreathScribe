@@ -1,0 +1,76 @@
+name: "P0 brand finalize v2"
+
+on:
+  push:
+    branches: [p0-brand-finalize-v2]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-brand-text:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Apply static Handy Cloud branding only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          function Replace-InFile {
+            param([string]$Path, [string]$Old, [string]$New)
+            if (-not (Test-Path $Path)) { throw "Missing path: $Path" }
+            $content = Get-Content $Path -Raw
+            $updated = $content.Replace($Old, $New)
+            if ($updated -ne $content) {
+              [System.IO.File]::WriteAllText((Resolve-Path $Path), $updated, (New-Object System.Text.UTF8Encoding($false)))
+              Write-Host "Updated $Path"
+            }
+          }
+
+          Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{} (Dev)", env!("CARGO_PKG_VERSION"))' 'format!("Handy Cloud v{} (Dev)", env!("CARGO_PKG_VERSION"))'
+          Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{}", env!("CARGO_PKG_VERSION"))' 'format!("Handy Cloud v{}", env!("CARGO_PKG_VERSION"))'
+          Replace-InFile "src/components/settings/about/AboutSettings.tsx" 'https://github.com/cjpais/Handy' 'https://github.com/breathi3552/Handy-Cloud'
+          Replace-InFile "package.json" '"name": "handy-app"' '"name": "handy-cloud-app"'
+          Replace-InFile "bun.lock" '"name": "handy-app"' '"name": "handy-cloud-app"'
+          Replace-InFile "src-tauri/Cargo.toml" 'description = "Handy"' 'description = "Handy Cloud"'
+          Replace-InFile "src-tauri/nsis/installer.nsi" 'Custom NSIS template for Handy with portable mode support.' 'Custom NSIS template for Handy Cloud with portable mode support.'
+
+          $logo = "src/components/icons/HandyTextLogo.tsx"
+          $logoContent = Get-Content $logo -Raw
+          if ($logoContent -notmatch 'eslint-disable i18next/no-literal-string') {
+            $logoContent = "/* eslint-disable i18next/no-literal-string */`n" + $logoContent
+            [System.IO.File]::WriteAllText((Resolve-Path $logo), $logoContent, (New-Object System.Text.UTF8Encoding($false)))
+          }
+
+          $localeRoot = "src/locales"
+          Get-ChildItem $localeRoot -Recurse -File -Filter "*.json" | ForEach-Object {
+            $content = Get-Content $_.FullName -Raw
+            $updated = [regex]::Replace($content, '(?<![\w-])Handy(?![\w-])', 'Handy Cloud')
+            if ($updated -ne $content) {
+              [System.IO.File]::WriteAllText($_.FullName, $updated, (New-Object System.Text.UTF8Encoding($false)))
+            }
+          }
+
+          $readme = "README.md"
+          $readmeContent = Get-Content $readme -Raw
+          if ($readmeContent -match '^# Handy\r?\n') {
+            $prefix = "# Handy Cloud`n`n> Handy Cloud is an independent fork of [cjpais/Handy](https://github.com/cjpais/Handy). P0 preserves the upstream local transcription and Windows interaction paths while establishing a separate product identity.`n"
+            $readmeContent = [regex]::Replace($readmeContent, '^# Handy\r?\n', $prefix, 1)
+            [System.IO.File]::WriteAllText((Resolve-Path $readme), $readmeContent, (New-Object System.Text.UTF8Encoding($false)))
+          }
+
+          if (git status --porcelain) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add README.md package.json bun.lock src/components/icons/HandyTextLogo.tsx src/components/settings/about/AboutSettings.tsx src/locales src-tauri/Cargo.toml src-tauri/nsis/installer.nsi src-tauri/src/tray.rs
+            git commit -m "chore: finalize Handy Cloud text branding"
+            git push origin HEAD:p0-brand-finalize-v2
+          } else {
+            Write-Host "Brand text is already finalized."
+          }

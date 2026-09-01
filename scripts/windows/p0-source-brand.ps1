@@ -65,22 +65,10 @@ if ($content.StartsWith("# Handy`n") -or $content.StartsWith("# Handy`r`n")) {
 }
 
 # Generate all official Tauri icon slots from the approved Handy Cloud C-hand
-# source image once. This removes the upstream Handy icon assets without hand-
-# editing the platform icon matrix.
-$iconSource = "brand/handy-cloud-icon-source.png"
-$iconSourceB64 = "brand/handy-cloud-icon-source.b64"
+# SVG once. Tauri 2 accepts squared PNG or SVG input and produces the Windows
+# ICO plus the cross-platform PNG matrix.
+$iconSource = "brand/handy-cloud-icon-source.svg"
 $iconMarker = "brand/P0_ICON_GENERATED.txt"
-
-if (-not (Test-Path $iconSource) -and (Test-Path $iconSourceB64)) {
-  $encoded = (Get-Content $iconSourceB64 -Raw).Trim()
-  [System.IO.File]::WriteAllBytes(
-    (Join-Path (Get-Location) $iconSource),
-    [Convert]::FromBase64String($encoded)
-  )
-  Remove-Item $iconSourceB64 -Force
-  $changed = $true
-  Write-Host "Materialized approved Handy Cloud icon source."
-}
 if (-not (Test-Path $iconSource)) { throw "Missing approved brand icon source: $iconSource" }
 
 $sourceHash = (Get-FileHash $iconSource -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -113,10 +101,13 @@ if (-not $markerMatches) {
     } finally { $src.Dispose() }
   }
 
-  # Non-standard legacy desktop assets retained by the upstream tree.
-  Save-ResizedPng $iconSource "src-tauri/icons/64x64.png" 64
-  Save-ResizedPng $iconSource "src-tauri/icons/icon.png" 512
-  Save-ResizedPng $iconSource "src-tauri/icons/logo.png" 512
+  # Tauri already rendered the SVG to PNG; use that raster as the source for
+  # legacy files retained by the upstream tree so System.Drawing never has to
+  # parse SVG itself.
+  $rasterSource = "src-tauri/icons/128x128@2x.png"
+  Save-ResizedPng $rasterSource "src-tauri/icons/64x64.png" 64
+  Save-ResizedPng $rasterSource "src-tauri/icons/icon.png" 512
+  Save-ResizedPng $rasterSource "src-tauri/icons/logo.png" 512
 
   function Save-TrayVariant {
     param([string]$Destination, [string]$Badge)
@@ -174,9 +165,4 @@ if (-not $markerMatches) {
   Write-Host "Generated Handy Cloud icon, installer, and tray asset matrix."
 }
 
-if ($changed) {
-  Write-Host "SOURCE_BRAND_CHANGED=true"
-  exit 3
-}
-Write-Host "SOURCE_BRAND_CHANGED=false"
-exit 0
+Write-Host "SOURCE_BRAND_CHANGED=$($changed.ToString().ToLowerInvariant())"

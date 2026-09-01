@@ -1,5 +1,5 @@
 import React from "react";
-import iconUrl from "../../assets/handy-cloud-icon.png";
+import iconUrl from "../../../brand/handy-cloud-icon-source.svg";
 
 interface HandyHandProps {
   width?: number | string;

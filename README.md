@@ -1,4 +1,6 @@
-# Handy
+# Handy Cloud
+
+> Handy Cloud is an independent fork of [cjpais/Handy](https://github.com/cjpais/Handy). P0 preserves the upstream local transcription and Windows interaction paths while establishing a separate product identity.
 
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/invite/WVBeWsNXK4)
 

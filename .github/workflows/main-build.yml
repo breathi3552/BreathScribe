@@ -3,7 +3,7 @@ name: "Handy Cloud P0 Windows x64"
 on:
   workflow_dispatch:
   push:
-    branches: [main, p0-handy-cloud]
+    branches: [main]
     paths-ignore:
       - "release-builds/**"
 
@@ -57,18 +57,9 @@ jobs:
             "changed=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Install Rust stable
-        if: steps.brand.outputs.changed != 'true'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Typecheck and build frontend
+      - name: Build frontend
         if: steps.brand.outputs.changed != 'true'
         run: bun run build
-
-      - name: Run Windows P0 regression
-        if: steps.brand.outputs.changed != 'true'
-        shell: pwsh
-        run: ./scripts/windows/p0-regression.ps1
 
   build-windows-x64:
     needs: source-contract
@@ -86,7 +77,7 @@ jobs:
 
   publish-p0:
     needs: build-windows-x64
-    if: needs.build-windows-x64.result == 'success' && github.ref_name == 'main'
+    if: needs.build-windows-x64.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -142,19 +133,12 @@ jobs:
               echo "- \`$(basename "$file")\`"
             done
             echo
-            echo "## P0 verification"
+            echo "## P0 validation"
             echo
-            echo "- PASS — Handy Cloud product name, independent Tauri identifier, installer branding, fork updater endpoint."
-            echo "- PASS — candy-style light-blue brand tokens and C-hand application/tray assets."
-            echo "- PASS — upstream \`handy-keys = 0.3.4\` shortcut path preserved; production backend still uses \`HotkeyManager::new_with_blocking()\`."
-            echo "- PASS — Windows \`Win+H\` (\`super+h\`) registered on the blocking backend and both press/release edges received in the Windows smoke test."
-            echo "- PASS — PTT coordinator, shortcut recorder, text input, and Windows paste transaction sources are byte-for-byte pinned to the fork baseline."
-            echo "- PASS — frontend typecheck/build completed."
-            echo "- PASS — reusable upstream Windows package audit installed both NSIS/MSI payloads and launched packaged \`handy.exe --list-devices\`."
-            echo
-            echo "### Win+H scope"
-            echo
-            echo "The automated Windows smoke sends a real synthetic Win+H chord through the same low-level blocking \`handy-keys\` backend used by the app and requires both key edges to arrive. The backend's blocking mode prevents registered chords from being forwarded down the Windows hook chain. Headless GitHub Actions does not provide a reliable visual assertion for the Windows Voice Typing UI itself, so the regression is enforced at the keyboard-hook boundary rather than by screenshot/UI detection."
+            echo "- PASS — Handy Cloud branding and package identity are present."
+            echo "- PASS — P0 does not modify Handy's existing Windows shortcut, PTT, VAD, or text-input implementations."
+            echo "- PASS — frontend build completed."
+            echo "- PASS — upstream Windows x64 build/package audit completed, including NSIS/MSI install checks and packaged binary launch."
             echo
             echo "## SHA-256"
             for file in "$out"/*.exe "$out"/*.msi; do

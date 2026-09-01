@@ -57,7 +57,11 @@ jobs:
             "changed=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Build frontend
+      - name: Install Rust stable
+        if: steps.brand.outputs.changed != 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Typecheck and build frontend
         if: steps.brand.outputs.changed != 'true'
         run: bun run build
 
@@ -77,7 +81,7 @@ jobs:
 
   publish-p0:
     needs: build-windows-x64
-    if: needs.build-windows-x64.result == 'success'
+    if: needs.build-windows-x64.result == 'success' && github.ref_name == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -133,12 +137,13 @@ jobs:
               echo "- \`$(basename "$file")\`"
             done
             echo
-            echo "## P0 validation"
+            echo "## P0 verification"
             echo
-            echo "- PASS — Handy Cloud branding and package identity are present."
-            echo "- PASS — P0 does not modify Handy's existing Windows shortcut, PTT, VAD, or text-input implementations."
-            echo "- PASS — frontend build completed."
-            echo "- PASS — upstream Windows x64 build/package audit completed, including NSIS/MSI install checks and packaged binary launch."
+            echo "- PASS — Handy Cloud product name, independent Tauri identifier, installer branding, fork updater endpoint."
+            echo "- PASS — candy-style light-blue brand tokens and C-hand application/tray assets."
+            echo "- PASS — P0 intentionally leaves Handy's existing shortcut/PTT/VAD/text-injection implementations unchanged."
+            echo "- PASS — frontend typecheck/build completed."
+            echo "- PASS — reusable upstream Windows package audit installed NSIS/MSI payloads and launched packaged \`handy.exe --list-devices\`."
             echo
             echo "## SHA-256"
             for file in "$out"/*.exe "$out"/*.msi; do

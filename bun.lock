@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "handy-cloud-app",
+      "name": "handy-app",
       "dependencies": {
         "@tailwindcss/vite": "^4.1.16",
         "@tauri-apps/api": "^2.11.0",

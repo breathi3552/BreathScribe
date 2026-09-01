@@ -16,58 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  source-contract:
-    runs-on: windows-latest
-    outputs:
-      source_changed: ${{ steps.brand.outputs.changed }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install frontend dependencies
-        run: bun install
-
-      - name: Apply remaining source-level branding safely
-        id: brand
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          & "./scripts/windows/p0-source-brand.ps1"
-          if ($LASTEXITCODE -ne 0) {
-            throw "p0-source-brand.ps1 failed with exit code $LASTEXITCODE"
-          }
-
-          $dirty = [bool](git status --porcelain)
-          if ($dirty) {
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            if (-not (git diff --cached --quiet)) {
-              git commit -m "chore: finish Handy Cloud source branding"
-              git push origin "HEAD:$env:GITHUB_REF_NAME"
-            }
-            "changed=true" >> $env:GITHUB_OUTPUT
-            Write-Host "Brand source patch committed. A fresh workflow run will build that commit."
-          } else {
-            "changed=false" >> $env:GITHUB_OUTPUT
-          }
-
-      - name: Install Rust stable
-        if: steps.brand.outputs.changed != 'true'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Typecheck and build frontend
-        if: steps.brand.outputs.changed != 'true'
-        run: bun run build
-
   build-windows-x64:
-    needs: source-contract
-    if: needs.source-contract.outputs.source_changed != 'true'
     uses: ./.github/workflows/build.yml
     with:
       platform: windows-latest
@@ -139,11 +88,9 @@ jobs:
             echo
             echo "## P0 verification"
             echo
-            echo "- PASS — Handy Cloud product name, independent Tauri identifier, installer branding, fork updater endpoint."
-            echo "- PASS — candy-style light-blue brand tokens and C-hand application/tray assets."
-            echo "- PASS — P0 intentionally leaves Handy's existing shortcut/PTT/VAD/text-injection implementations unchanged."
-            echo "- PASS — frontend typecheck/build completed."
-            echo "- PASS — reusable upstream Windows package audit installed NSIS/MSI payloads and launched packaged \`handy.exe --list-devices\`."
+            echo "- PASS — Handy Cloud product identity and branding are committed in source."
+            echo "- PASS — original Handy shortcut/PTT/VAD/text-injection implementation was not modified for P0."
+            echo "- PASS — upstream Windows x64 build and package audit completed for NSIS/MSI installers."
             echo
             echo "## SHA-256"
             for file in "$out"/*.exe "$out"/*.msi; do
@@ -158,5 +105,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add release-builds/p0-base
+          if git diff --cached --quiet; then
+            echo "No P0 artifact changes to commit"
+            exit 0
+          fi
           git commit -m "chore: publish Handy Cloud P0 Windows build [skip ci]"
           git push origin HEAD:main

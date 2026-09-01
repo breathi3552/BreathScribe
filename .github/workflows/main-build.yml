@@ -25,7 +25,7 @@ jobs:
       asset-prefix: handy-cloud
       upload-artifacts: true
       sign-binaries: false
-      no-cache: true
+      no-cache: false
     secrets: inherit
 
   publish-p0:
@@ -40,6 +40,17 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Verify preserved P0 core source paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'handy-keys = "0.3.4"' src-tauri/Cargo.toml
+          test -f src-tauri/src/shortcut/handy_keys.rs
+          test -f src-tauri/src/shortcut/handler.rs
+          test -f src-tauri/src/input.rs
+          test -d src-tauri/src/paste_tx
+          echo "Core shortcut and text-injection source paths are present."
 
       - name: Download Windows build artifact
         env:
@@ -79,6 +90,7 @@ jobs:
             echo "- CI run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo "- Target: \`x86_64-pc-windows-msvc\`"
             echo "- Build signing: unsigned P0 fork build"
+            echo "- Updater artifacts: disabled for P0"
             echo
             echo "## Installers"
             for file in "$out"/*.exe "$out"/*.msi; do
@@ -86,11 +98,12 @@ jobs:
               echo "- \`$(basename "$file")\`"
             done
             echo
-            echo "## P0 verification"
+            echo "## Automated P0 verification"
             echo
-            echo "- PASS — Handy Cloud product identity and branding are committed in source."
-            echo "- PASS — original Handy shortcut/PTT/VAD/text-injection implementation was not modified for P0."
-            echo "- PASS — upstream Windows x64 build and package audit completed for NSIS/MSI installers."
+            echo "- PASS — Windows x64 Tauri build completed."
+            echo "- PASS — upstream Windows NSIS/MSI package runtime audit completed, including packaged executable launch via \`--list-devices\`."
+            echo "- PASS — \`handy-keys 0.3.4\` remained in the Windows build dependency chain and the existing shortcut/text-injection source paths remain present."
+            echo "- NOT INTERACTIVE-CI VERIFIED — physical global Win+H suppression, keydown/keyup delivery and end-to-end Push-To-Talk behavior require an interactive Windows desktop smoke test; GitHub-hosted runners cannot truthfully certify that shell-level behavior."
             echo
             echo "## SHA-256"
             for file in "$out"/*.exe "$out"/*.msi; do

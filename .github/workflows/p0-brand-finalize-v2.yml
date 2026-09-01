@@ -48,7 +48,7 @@ jobs:
             [System.IO.File]::WriteAllText((Resolve-Path $logo), $logoContent, (New-Object System.Text.UTF8Encoding($false)))
           }
 
-          $localeRoot = "src/locales"
+          $localeRoot = "src/i18n/locales"
           Get-ChildItem $localeRoot -Recurse -File -Filter "*.json" | ForEach-Object {
             $content = Get-Content $_.FullName -Raw
             $updated = [regex]::Replace($content, '(?<![\w-])Handy(?![\w-])', 'Handy Cloud')
@@ -65,12 +65,16 @@ jobs:
             [System.IO.File]::WriteAllText((Resolve-Path $readme), $readmeContent, (New-Object System.Text.UTF8Encoding($false)))
           }
 
-          if (git status --porcelain) {
+          $changes = @(git status --porcelain)
+          if ($changes.Count -gt 0) {
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add README.md package.json bun.lock src/components/icons/HandyTextLogo.tsx src/components/settings/about/AboutSettings.tsx src/locales src-tauri/Cargo.toml src-tauri/nsis/installer.nsi src-tauri/src/tray.rs
+            git add -A
+            if ($LASTEXITCODE -ne 0) { throw "git add failed" }
             git commit -m "chore: finalize Handy Cloud text branding"
+            if ($LASTEXITCODE -ne 0) { throw "git commit failed" }
             git push origin HEAD:p0-brand-finalize-v2
+            if ($LASTEXITCODE -ne 0) { throw "git push failed" }
           } else {
             Write-Host "Brand text is already finalized."
           }

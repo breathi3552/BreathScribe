@@ -3,7 +3,7 @@ name: "Handy Cloud P0 Windows x64"
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, p0-handy-cloud]
     paths-ignore:
       - "release-builds/**"
 
@@ -49,7 +49,7 @@ jobs:
             git add -A
             if (-not (git diff --cached --quiet)) {
               git commit -m "chore: finish Handy Cloud source branding"
-              git push origin HEAD:main
+              git push origin "HEAD:$env:GITHUB_REF_NAME"
             }
             "changed=true" >> $env:GITHUB_OUTPUT
             Write-Host "Brand source patch committed. A fresh workflow run will build that commit."
@@ -86,7 +86,7 @@ jobs:
 
   publish-p0:
     needs: build-windows-x64
-    if: needs.build-windows-x64.result == 'success'
+    if: needs.build-windows-x64.result == 'success' && github.ref_name == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: write

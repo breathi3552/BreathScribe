@@ -32,7 +32,7 @@ jobs:
       - name: Install frontend tooling
         run: bun install --frozen-lockfile
 
-      - name: Normalize P0 brand source and build guards
+      - name: Normalize P0 brand source
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Drawing
@@ -48,7 +48,6 @@ jobs:
             } finally { $bitmap.Dispose() }
           } finally { $image.Dispose() }
           Move-Item -Force $temp $source
-          Write-Host "Normalized approved brand source to a standards-compliant PNG without changing its rendered pixels."
 
       - name: Materialize Handy Cloud brand assets
         shell: pwsh
@@ -63,7 +62,8 @@ jobs:
         shell: pwsh
         run: |
           git add -- brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md
-          if (git diff --cached --quiet) {
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
             "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
             Write-Host "Final brand assets are already committed in main."
             exit 0
@@ -71,7 +71,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "fix: commit Handy Cloud platform icon assets"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to commit generated brand assets" }
           git push origin HEAD:main
+          if ($LASTEXITCODE -ne 0) { throw "Failed to push generated brand assets" }
           "changed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
   build-windows-x64:
@@ -146,10 +148,7 @@ jobs:
           set -euo pipefail
           rm -rf artifacts
           mkdir -p artifacts
-          gh run download "${GITHUB_RUN_ID}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --name "handy-cloud-x86_64-pc-windows-msvc" \
-            --dir artifacts
+          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" --name "handy-cloud-x86_64-pc-windows-msvc" --dir artifacts
 
       - name: Stage P0 installers and build record
         shell: bash
@@ -158,18 +157,12 @@ jobs:
           out="release-builds/p0-base"
           rm -rf "$out"
           mkdir -p "$out"
-
           mapfile -d '' packages < <(find artifacts -type f \( -iname '*.exe' -o -iname '*.msi' \) -print0)
           if [ "${#packages[@]}" -eq 0 ]; then
             echo "ERROR: no Windows .exe/.msi packages found in workflow artifact" >&2
-            find artifacts -type f -maxdepth 5 -print >&2 || true
             exit 1
           fi
-
-          for package in "${packages[@]}"; do
-            cp -v "$package" "$out/"
-          done
-
+          for package in "${packages[@]}"; do cp -v "$package" "$out/"; done
           {
             echo "# Handy Cloud P0 Base Build"
             echo
@@ -180,13 +173,9 @@ jobs:
             echo "- Updater artifacts: disabled for P0"
             echo
             echo "## Installers"
-            for file in "$out"/*.exe "$out"/*.msi; do
-              [ -e "$file" ] || continue
-              echo "- \`$(basename "$file")\`"
-            done
+            for file in "$out"/*.exe "$out"/*.msi; do [ -e "$file" ] && echo "- \`$(basename "$file")\`"; done
             echo
             echo "## Automated P0 verification"
-            echo
             echo "- PASS — final tracked platform/tray icon assets differ byte-for-byte from cjpais/Handy and match the approved source marker."
             echo "- PASS — Windows x64 Tauri build completed and EXE/MSI artifacts were produced."
             echo "- PASS — MSI ProductName and NSIS executable version metadata were checked for Handy Cloud branding."
@@ -194,10 +183,7 @@ jobs:
             echo "- NOT INTERACTIVE-CI VERIFIED — physical global Win+H suppression, keydown/keyup delivery and end-to-end Push-To-Talk behavior require an interactive Windows desktop smoke test."
             echo
             echo "## SHA-256"
-            for file in "$out"/*.exe "$out"/*.msi; do
-              [ -e "$file" ] || continue
-              sha256sum "$file"
-            done
+            for file in "$out"/*.exe "$out"/*.msi; do [ -e "$file" ] && sha256sum "$file"; done
           } > "$out/BUILD_INFO.md"
 
       - name: Commit P0 build artifacts to main
@@ -206,9 +192,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add release-builds/p0-base
-          if git diff --cached --quiet; then
-            echo "No P0 artifact changes to commit"
-            exit 0
-          fi
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m "chore: publish Handy Cloud P0 Windows build [skip ci]"
           git push origin HEAD:main

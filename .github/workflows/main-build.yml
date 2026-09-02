@@ -61,7 +61,7 @@ jobs:
         id: commit
         shell: pwsh
         run: |
-          git add -- brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md
+          git add -- brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src-tauri/nsis/installer.nsi src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
             "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -178,7 +178,7 @@ jobs:
             echo "## Automated P0 verification"
             echo "- PASS — final tracked platform/tray icon assets differ byte-for-byte from cjpais/Handy and match the approved source marker."
             echo "- PASS — Windows x64 Tauri build completed and EXE/MSI artifacts were produced."
-            echo "- PASS — MSI ProductName and NSIS executable version metadata were checked for Handy Cloud branding."
+            echo "- PASS — NSIS installer icon and installed app icons were compared against the committed Handy Cloud icon.ico; MSI ProductName and app executable metadata were also checked."
             echo "- PASS — Win+H/blocking-hotkey source smoke guard and preserved core path checks completed without modifying core interaction logic."
             echo "- NOT INTERACTIVE-CI VERIFIED — physical global Win+H suppression, keydown/keyup delivery and end-to-end Push-To-Talk behavior require an interactive Windows desktop smoke test."
             echo

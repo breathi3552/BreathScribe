@@ -30,7 +30,6 @@ if (Test-Path "src-tauri/nsis/installer.nsi") {
   Replace-InFile "src-tauri/nsis/installer.nsi" "Custom NSIS template for Handy" "Custom NSIS template for Handy Cloud"
 }
 
-# Brand-copy only. Keep technical identifiers such as HandyKeys/handy-keys intact.
 $localeRoot = "src/i18n/locales"
 if (Test-Path $localeRoot) {
   Get-ChildItem $localeRoot -Recurse -File -Filter "*.json" | ForEach-Object {
@@ -70,7 +69,7 @@ $criticalIcons = @(
   "src-tauri/icons/icon.ico",
   "src-tauri/icons/icon.icns"
 )
-$criticalIconsPresent = ($criticalIcons | Where-Object { -not (Test-Path $_) }).Count -eq 0
+$criticalIconsPresent = @($criticalIcons | Where-Object { -not (Test-Path $_) }).Count -eq 0
 $needsIconGeneration = $ForceIcons -or (-not $markerMatches) -or (-not $criticalIconsPresent)
 
 if ($needsIconGeneration) {

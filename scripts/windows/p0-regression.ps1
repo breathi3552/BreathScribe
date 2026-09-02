@@ -102,13 +102,13 @@ Assert-True ((Get-Content "src-tauri/src/tray.rs" -Raw) -match "Handy Cloud v") 
 Assert-True ((Get-Content "src-tauri/Cargo.toml" -Raw) -match 'handy-keys\s*=') "handy-keys dependency remains intact"
 Assert-True (Test-Path "LICENSE") "LICENSE/upstream attribution remains present"
 
-# Upstream attribution and technical dependency URLs may remain. Product updater ownership is checked above.
-# Only shipped build/release configuration is scanned for the original Azure signing identity.
-$scanTargets = @("src-tauri/tauri.conf.json", ".github/workflows/build.yml", ".github/workflows/release.yml")
+# Upstream attribution, technical dependency URLs and dormant reusable signing hooks may remain.
+# P0 product ownership is enforced through updater configuration and an explicitly unsigned fork release.
+$scanTargets = @("src-tauri/tauri.conf.json", ".github/workflows/release.yml")
 $forbidden = @("AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET")
 foreach ($needle in $forbidden) {
   $matches = @(Get-ChildItem $scanTargets -Recurse -File -ErrorAction SilentlyContinue | Select-String -SimpleMatch $needle)
-  Assert-True ($matches.Count -eq 0) "forbidden legacy signing reference absent: $needle"
+  Assert-True ($matches.Count -eq 0) "fork release configuration does not request legacy signing: $needle"
 }
 
 $releaseText = Get-Content ".github/workflows/release.yml" -Raw

@@ -30,10 +30,25 @@ if (Test-Path "src-tauri/nsis/installer.nsi") {
   $path = "src-tauri/nsis/installer.nsi"
   $content = Get-Content $path -Raw
   $updated = [regex]::Replace($content, 'Custom NSIS template for Handy(?: Cloud)*', 'Custom NSIS template for Handy Cloud')
+
+  $installerDefine = '!define INSTALLERICON "{{installer_icon}}"'
+  $uninstallerDefine = '!define UNINSTALLERICON "{{uninstaller_icon}}"'
+  if (-not $updated.Contains($uninstallerDefine)) {
+    if (-not $updated.Contains($installerDefine)) { throw "NSIS installer icon placeholder missing from custom template" }
+    $updated = $updated.Replace($installerDefine, $installerDefine + "`n" + $uninstallerDefine)
+  }
+
+  $muiInstaller = '  !define MUI_ICON "${INSTALLERICON}"'
+  $muiUninstaller = '  !define MUI_UNICON "${UNINSTALLERICON}"'
+  if (-not $updated.Contains($muiUninstaller)) {
+    if (-not $updated.Contains($muiInstaller)) { throw "NSIS MUI installer icon definition missing from custom template" }
+    $updated = $updated.Replace($muiInstaller, $muiInstaller + "`n" + $muiUninstaller)
+  }
+
   if ($updated -ne $content) {
     [System.IO.File]::WriteAllText((Resolve-Path $path), $updated, (New-Object System.Text.UTF8Encoding($false)))
     $changed = $true
-    Write-Host "Normalized NSIS brand comment: $path"
+    Write-Host "Updated Handy Cloud NSIS icon wiring: $path"
   }
 }
 

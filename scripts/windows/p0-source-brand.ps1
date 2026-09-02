@@ -27,7 +27,14 @@ Replace-InFile "bun.lock" '"name": "handy-app"' '"name": "handy-cloud-app"'
 Replace-InFile "src-tauri/Cargo.toml" 'description = "Handy"' 'description = "Handy Cloud"'
 
 if (Test-Path "src-tauri/nsis/installer.nsi") {
-  Replace-InFile "src-tauri/nsis/installer.nsi" "Custom NSIS template for Handy" "Custom NSIS template for Handy Cloud"
+  $path = "src-tauri/nsis/installer.nsi"
+  $content = Get-Content $path -Raw
+  $updated = [regex]::Replace($content, 'Custom NSIS template for Handy(?: Cloud)*', 'Custom NSIS template for Handy Cloud')
+  if ($updated -ne $content) {
+    [System.IO.File]::WriteAllText((Resolve-Path $path), $updated, (New-Object System.Text.UTF8Encoding($false)))
+    $changed = $true
+    Write-Host "Normalized NSIS brand comment: $path"
+  }
 }
 
 $localeRoot = "src/i18n/locales"

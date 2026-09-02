@@ -32,7 +32,7 @@ jobs:
       - name: Install frontend tooling
         run: bun install --frozen-lockfile
 
-      - name: Repair legacy P0 generator and normalize brand source
+      - name: Normalize P0 brand source and build guards
         shell: pwsh
         run: |
           $scriptPath = "scripts/windows/p0-source-brand.ps1"
@@ -42,6 +42,22 @@ jobs:
           if ($content.Contains($old)) {
             [System.IO.File]::WriteAllText((Resolve-Path $scriptPath), $content.Replace($old, $new), (New-Object System.Text.UTF8Encoding($false)))
           }
+
+          $regressionPath = "scripts/windows/p0-regression.ps1"
+          $regression = Get-Content $regressionPath -Raw
+          $regression = $regression.Replace(
+            '$forbidden = @("github.com/cjpais/Handy/releases", "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET")',
+            '$forbidden = @("AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET")'
+          )
+          [System.IO.File]::WriteAllText((Resolve-Path $regressionPath), $regression, (New-Object System.Text.UTF8Encoding($false)))
+
+          $buildPath = ".github/workflows/build.yml"
+          $build = Get-Content $buildPath -Raw
+          $build = $build.Replace('default: "handy"', 'default: "handy-cloud"')
+          $build = [regex]::Replace($build, '(?m)^\s*AZURE_CLIENT_ID:.*\r?\n?', '')
+          $build = [regex]::Replace($build, '(?m)^\s*AZURE_CLIENT_SECRET:.*\r?\n?', '')
+          $build = [regex]::Replace($build, '(?m)^\s*AZURE_TENANT_ID:.*\r?\n?', '')
+          [System.IO.File]::WriteAllText((Resolve-Path $buildPath), $build, (New-Object System.Text.UTF8Encoding($false)))
 
           Add-Type -AssemblyName System.Drawing
           $source = (Resolve-Path "brand/handy-cloud-icon-source.png").Path
@@ -70,7 +86,7 @@ jobs:
         id: commit
         shell: pwsh
         run: |
-          git add -- scripts/windows/p0-source-brand.ps1 brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md src-tauri/nsis/installer.nsi
+          git add -- scripts/windows/p0-source-brand.ps1 scripts/windows/p0-regression.ps1 brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md src-tauri/nsis/installer.nsi .github/workflows/build.yml .github/workflows/release.yml
           if (git diff --cached --quiet) {
             "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
             Write-Host "Brand assets already materialized in main."

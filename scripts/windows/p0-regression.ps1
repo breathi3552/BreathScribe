@@ -16,6 +16,53 @@ function Assert-FileExists {
   Assert-True (Test-Path -LiteralPath $Path -PathType Leaf) "file exists: $Path"
 }
 
+function Test-BitmapPixelsEqual {
+  param(
+    [System.Drawing.Bitmap]$Actual,
+    [System.Drawing.Bitmap]$Expected
+  )
+  if ($Actual.Width -ne $Expected.Width -or $Actual.Height -ne $Expected.Height) { return $false }
+  for ($y = 0; $y -lt $Actual.Height; $y++) {
+    for ($x = 0; $x -lt $Actual.Width; $x++) {
+      if ($Actual.GetPixel($x, $y).ToArgb() -ne $Expected.GetPixel($x, $y).ToArgb()) { return $false }
+    }
+  }
+  return $true
+}
+
+function Assert-ExecutableIconMatchesBrand {
+  param([string]$ExecutablePath, [string]$Label)
+  Add-Type -AssemblyName System.Drawing
+  $resolvedExe = (Resolve-Path $ExecutablePath).Path
+  $resolvedBrand = (Resolve-Path "src-tauri/icons/icon.ico").Path
+  $actualIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($resolvedExe)
+  Assert-True ($null -ne $actualIcon) "$Label exposes an embedded Windows icon"
+  try {
+    $brandIcon = [System.Drawing.Icon]::new($resolvedBrand, $actualIcon.Width, $actualIcon.Height)
+    try {
+      $actualBitmap = $actualIcon.ToBitmap()
+      $brandBitmap = $brandIcon.ToBitmap()
+      try {
+        Assert-True (Test-BitmapPixelsEqual $actualBitmap $brandBitmap) "$Label embedded icon matches Handy Cloud icon.ico"
+      } finally {
+        $actualBitmap.Dispose()
+        $brandBitmap.Dispose()
+      }
+    } finally {
+      $brandIcon.Dispose()
+    }
+  } finally {
+    $actualIcon.Dispose()
+  }
+}
+
+function Assert-AppExecutableBranding {
+  param([System.IO.FileInfo]$Executable, [string]$Label)
+  $metadata = @($Executable.VersionInfo.ProductName, $Executable.VersionInfo.FileDescription) -join " | "
+  Assert-True ($metadata -match "Handy Cloud") "$Label app executable metadata contains Handy Cloud"
+  Assert-ExecutableIconMatchesBrand -ExecutablePath $Executable.FullName -Label "$Label app executable"
+}
+
 $configPath = "src-tauri/tauri.conf.json"
 Assert-FileExists $configPath
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
@@ -24,6 +71,8 @@ Assert-True ($config.identifier -eq "io.github.breathi3552.handycloud") "Tauri i
 $endpoint = [string]$config.plugins.updater.endpoints[0]
 Assert-True ($endpoint -like "*breathi3552/Handy-Cloud*") "updater points at Handy-Cloud fork"
 Assert-True ($endpoint -notlike "*cjpais/Handy*") "updater no longer points at upstream"
+Assert-True ([string]$config.bundle.windows.nsis.installerIcon -eq "icons/icon.ico") "NSIS installerIcon explicitly uses Handy Cloud icon.ico"
+Assert-True ([string]$config.bundle.windows.nsis.uninstallerIcon -eq "icons/icon.ico") "NSIS uninstallerIcon explicitly uses Handy Cloud icon.ico"
 
 $iconSource = "brand/handy-cloud-icon-source.png"
 $marker = "brand/P0_ICON_GENERATED.txt"
@@ -102,8 +151,7 @@ Assert-True ((Get-Content "src-tauri/src/tray.rs" -Raw) -match "Handy Cloud v") 
 Assert-True ((Get-Content "src-tauri/Cargo.toml" -Raw) -match 'handy-keys\s*=') "handy-keys dependency remains intact"
 Assert-True (Test-Path "LICENSE") "LICENSE/upstream attribution remains present"
 
-# Upstream attribution, technical dependency URLs and dormant reusable signing hooks may remain.
-# P0 product ownership is enforced through updater configuration and an explicitly unsigned fork release.
+# Upstream attribution and technical dependency URLs may remain. Product updater ownership is checked above.
 $scanTargets = @("src-tauri/tauri.conf.json", ".github/workflows/release.yml")
 $forbidden = @("AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET")
 foreach ($needle in $forbidden) {
@@ -144,6 +192,20 @@ if ($PackageDir) {
     $productName = if ($record) { [string]$record.StringData(1) } else { "" }
     $view.Close()
     Assert-True ($productName -eq "Handy Cloud") "MSI ProductName is Handy Cloud"
+
+    $extractDir = Join-Path ([System.IO.Path]::GetTempPath()) ("handy-cloud-msi-" + [System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Path $extractDir | Out-Null
+    try {
+      $logFile = Join-Path $extractDir "msi-admin-install.log"
+      $msiArgs = "/a `"$($msi.FullName)`" /qn /L*v `"$logFile`" TARGETDIR=`"$extractDir`""
+      $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
+      Assert-True ($proc.ExitCode -eq 0) "MSI administrative extraction succeeds"
+      $installedExe = Get-ChildItem $extractDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1
+      Assert-True ($null -ne $installedExe) "MSI payload contains handy.exe"
+      Assert-AppExecutableBranding -Executable $installedExe -Label "MSI payload"
+    } finally {
+      Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue
+    }
   }
 
   $setup = $packages | Where-Object Extension -eq ".exe" | Select-Object -First 1
@@ -151,6 +213,19 @@ if ($PackageDir) {
     $vi = $setup.VersionInfo
     $metadata = @($vi.ProductName, $vi.FileDescription) -join " | "
     Assert-True ($metadata -match "Handy Cloud") "NSIS EXE version metadata contains Handy Cloud"
+    Assert-ExecutableIconMatchesBrand -ExecutablePath $setup.FullName -Label "NSIS installer"
+
+    $portableDir = Join-Path ([System.IO.Path]::GetTempPath()) ("handy-cloud-nsis-" + [System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Path $portableDir | Out-Null
+    try {
+      $proc = Start-Process -FilePath $setup.FullName -ArgumentList @("/S", "/PORTABLE", "/D=$portableDir") -Wait -PassThru
+      Assert-True ($proc.ExitCode -eq 0) "NSIS silent portable extraction succeeds"
+      $installedExe = Get-ChildItem $portableDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1
+      Assert-True ($null -ne $installedExe) "NSIS payload contains handy.exe"
+      Assert-AppExecutableBranding -Executable $installedExe -Label "NSIS payload"
+    } finally {
+      Remove-Item -Recurse -Force $portableDir -ErrorAction SilentlyContinue
+    }
   }
 }
 

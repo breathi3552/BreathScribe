@@ -35,17 +35,6 @@ jobs:
       - name: Normalize P0 brand source and build guards
         shell: pwsh
         run: |
-          $regressionPath = "scripts/windows/p0-regression.ps1"
-          $regression = Get-Content $regressionPath -Raw
-
-          # Reusable upstream build support still contains dormant Azure variable names.
-          # P0 release.yml explicitly disables signing; do not let those unused technical
-          # hooks make source-brand validation fail.
-          $oldTargets = '$scanTargets = @("src-tauri/tauri.conf.json", ".github/workflows/build.yml", ".github/workflows/release.yml")'
-          $newTargets = '$scanTargets = @("src-tauri/tauri.conf.json", ".github/workflows/release.yml")'
-          $regression = $regression.Replace($oldTargets, $newTargets)
-          [System.IO.File]::WriteAllText((Resolve-Path $regressionPath), $regression, (New-Object System.Text.UTF8Encoding($false)))
-
           Add-Type -AssemblyName System.Drawing
           $source = (Resolve-Path "brand/handy-cloud-icon-source.png").Path
           $temp = Join-Path $env:RUNNER_TEMP "handy-cloud-icon-source.normalized.png"
@@ -69,14 +58,14 @@ jobs:
         shell: pwsh
         run: ./scripts/windows/p0-regression.ps1
 
-      - name: Commit generated brand assets when source changed
+      - name: Commit generated binary brand assets when source changed
         id: commit
         shell: pwsh
         run: |
-          git add -- brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md src-tauri/nsis/installer.nsi
+          git add -- brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md
           if (git diff --cached --quiet) {
             "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-            Write-Host "Brand assets already materialized in main."
+            Write-Host "Final brand assets are already committed in main."
             exit 0
           }
           git config user.name "github-actions[bot]"

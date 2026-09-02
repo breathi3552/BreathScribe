@@ -32,16 +32,31 @@ jobs:
       - name: Install frontend tooling
         run: bun install --frozen-lockfile
 
-      - name: Repair legacy P0 generator guard
+      - name: Repair legacy P0 generator and normalize brand source
         shell: pwsh
         run: |
-          $path = "scripts/windows/p0-source-brand.ps1"
-          $content = Get-Content $path -Raw
+          $scriptPath = "scripts/windows/p0-source-brand.ps1"
+          $content = Get-Content $scriptPath -Raw
           $old = '$criticalIconsPresent = ($criticalIcons | Where-Object { -not (Test-Path $_) }).Count -eq 0'
           $new = '$criticalIconsPresent = @($criticalIcons | Where-Object { -not (Test-Path $_) }).Count -eq 0'
           if ($content.Contains($old)) {
-            [System.IO.File]::WriteAllText((Resolve-Path $path), $content.Replace($old, $new), (New-Object System.Text.UTF8Encoding($false)))
+            [System.IO.File]::WriteAllText((Resolve-Path $scriptPath), $content.Replace($old, $new), (New-Object System.Text.UTF8Encoding($false)))
           }
+
+          Add-Type -AssemblyName System.Drawing
+          $source = (Resolve-Path "brand/handy-cloud-icon-source.png").Path
+          $temp = Join-Path $env:RUNNER_TEMP "handy-cloud-icon-source.normalized.png"
+          $image = [System.Drawing.Image]::FromFile($source)
+          try {
+            $bitmap = New-Object System.Drawing.Bitmap $image.Width, $image.Height
+            try {
+              $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+              try { $graphics.DrawImageUnscaled($image, 0, 0) } finally { $graphics.Dispose() }
+              $bitmap.Save($temp, [System.Drawing.Imaging.ImageFormat]::Png)
+            } finally { $bitmap.Dispose() }
+          } finally { $image.Dispose() }
+          Move-Item -Force $temp $source
+          Write-Host "Normalized approved brand source to a standards-compliant PNG without changing its rendered pixels."
 
       - name: Materialize Handy Cloud brand assets
         shell: pwsh
@@ -55,7 +70,7 @@ jobs:
         id: commit
         shell: pwsh
         run: |
-          git add -- scripts/windows/p0-source-brand.ps1 brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md src-tauri/nsis/installer.nsi
+          git add -- scripts/windows/p0-source-brand.ps1 brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md src-tauri/nsis/installer.nsi
           if (git diff --cached --quiet) {
             "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
             Write-Host "Brand assets already materialized in main."

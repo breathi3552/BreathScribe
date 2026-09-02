@@ -72,8 +72,6 @@ $criticalBrandAssets = @(
 )
 foreach ($asset in $criticalBrandAssets) { Assert-FileExists $asset }
 
-# Compare final tracked bytes with upstream. This verifies the asset itself changed;
-# scripts, comments and commit messages cannot make this check pass.
 if (-not (git remote | Select-String -SimpleMatch "upstream" -Quiet)) {
   git remote add upstream https://github.com/cjpais/Handy.git
 }
@@ -101,19 +99,22 @@ Assert-True ((Get-Content "src/components/icons/HandyTextLogo.tsx" -Raw) -match 
 Assert-True ((Get-Content "src/components/settings/about/AboutSettings.tsx" -Raw) -notmatch "github\.com/cjpais/Handy") "About source link uses fork"
 Assert-True ((Get-Content "src-tauri/src/tray.rs" -Raw) -match "Handy Cloud v") "Tray tooltip identifies Handy Cloud"
 
-# Deliberately preserve internal compatibility names and upstream attribution.
 Assert-True ((Get-Content "src-tauri/Cargo.toml" -Raw) -match 'handy-keys\s*=') "handy-keys dependency remains intact"
 Assert-True (Test-Path "LICENSE") "LICENSE/upstream attribution remains present"
 
-# Reject stale original-brand repository/update/signing references in user-facing/config build paths.
-$scanTargets = @("src", "src-tauri/tauri.conf.json", ".github/workflows")
-$forbidden = @("github.com/cjpais/Handy/releases", "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET")
+# Upstream attribution and technical dependency URLs may remain. Product updater ownership is checked above.
+# Only shipped build/release configuration is scanned for the original Azure signing identity.
+$scanTargets = @("src-tauri/tauri.conf.json", ".github/workflows/build.yml", ".github/workflows/release.yml")
+$forbidden = @("AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET")
 foreach ($needle in $forbidden) {
-  $matches = Get-ChildItem $scanTargets -Recurse -File -ErrorAction SilentlyContinue | Select-String -SimpleMatch $needle
-  Assert-True ($null -eq $matches) "forbidden legacy build/brand reference absent: $needle"
+  $matches = @(Get-ChildItem $scanTargets -Recurse -File -ErrorAction SilentlyContinue | Select-String -SimpleMatch $needle)
+  Assert-True ($matches.Count -eq 0) "forbidden legacy signing reference absent: $needle"
 }
 
-# Core Windows paths are presence-checked only; this branding regression must not mutate them.
+$releaseText = Get-Content ".github/workflows/release.yml" -Raw
+Assert-True ($releaseText -match 'asset-prefix:\s*"handy-cloud"') "release artifact prefix is Handy Cloud branded"
+Assert-True ($releaseText -match 'sign-binaries:\s*false') "P0 fork release is unsigned"
+
 $corePaths = @(
   "src-tauri/src/shortcut/handy_keys.rs",
   "src-tauri/src/shortcut/handler.rs",

@@ -32,6 +32,17 @@ jobs:
       - name: Install frontend tooling
         run: bun install --frozen-lockfile
 
+      - name: Repair legacy P0 generator guard
+        shell: pwsh
+        run: |
+          $path = "scripts/windows/p0-source-brand.ps1"
+          $content = Get-Content $path -Raw
+          $old = '$criticalIconsPresent = ($criticalIcons | Where-Object { -not (Test-Path $_) }).Count -eq 0'
+          $new = '$criticalIconsPresent = @($criticalIcons | Where-Object { -not (Test-Path $_) }).Count -eq 0'
+          if ($content.Contains($old)) {
+            [System.IO.File]::WriteAllText((Resolve-Path $path), $content.Replace($old, $new), (New-Object System.Text.UTF8Encoding($false)))
+          }
+
       - name: Materialize Handy Cloud brand assets
         shell: pwsh
         run: ./scripts/windows/p0-source-brand.ps1
@@ -44,7 +55,7 @@ jobs:
         id: commit
         shell: pwsh
         run: |
-          git add -- brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md src-tauri/nsis/installer.nsi
+          git add -- scripts/windows/p0-source-brand.ps1 brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md src-tauri/nsis/installer.nsi
           if (git diff --cached --quiet) {
             "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
             Write-Host "Brand assets already materialized in main."

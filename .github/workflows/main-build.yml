@@ -16,7 +16,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  materialize-brand-assets:
+    runs-on: windows-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend tooling
+        run: bun install --frozen-lockfile
+
+      - name: Materialize Handy Cloud brand assets
+        shell: pwsh
+        run: ./scripts/windows/p0-source-brand.ps1
+
+      - name: Verify final source branding
+        shell: pwsh
+        run: ./scripts/windows/p0-regression.ps1
+
+      - name: Commit generated brand assets when source changed
+        id: commit
+        shell: pwsh
+        run: |
+          git add -- brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md src-tauri/nsis/installer.nsi
+          if (git diff --cached --quiet) {
+            "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Host "Brand assets already materialized in main."
+            exit 0
+          }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: commit Handy Cloud platform icon assets"
+          git push origin HEAD:main
+          "changed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
   build-windows-x64:
+    needs: materialize-brand-assets
+    if: needs.materialize-brand-assets.outputs.changed != 'true'
     uses: ./.github/workflows/build.yml
     with:
       platform: windows-latest
@@ -28,9 +70,47 @@ jobs:
       no-cache: false
     secrets: inherit
 
-  publish-p0:
+  verify-windows-packages:
     needs: build-windows-x64
-    if: needs.build-windows-x64.result == 'success' && github.ref_name == 'main'
+    if: needs.build-windows-x64.result == 'success'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download Windows build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: handy-cloud-x86_64-pc-windows-msvc
+          path: artifacts
+
+      - name: Verify source and packaged branding
+        shell: pwsh
+        run: ./scripts/windows/p0-regression.ps1 -PackageDir artifacts
+
+      - name: Win+H source smoke guard
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $files = @(
+            "src-tauri/src/shortcut/handy_keys.rs",
+            "src-tauri/src/shortcut/handler.rs",
+            "src-tauri/src/shortcut/mod.rs",
+            "src-tauri/src/input.rs"
+          )
+          foreach ($file in $files) {
+            if (-not (Test-Path $file)) { throw "Missing Windows shortcut path: $file" }
+          }
+          $shortcutSource = (Get-Content "src-tauri/src/shortcut/handy_keys.rs" -Raw) + (Get-Content "src-tauri/src/shortcut/mod.rs" -Raw)
+          if ($shortcutSource -notmatch "blocking|block") { throw "Blocking hotkey path is no longer discoverable" }
+          if ($shortcutSource -notmatch "Windows|Meta|Super|Win") { throw "Windows modifier path is no longer discoverable" }
+          Write-Host "PASS - Win+H/blocking-hotkey source smoke guard"
+
+  publish-p0:
+    needs: [build-windows-x64, verify-windows-packages]
+    if: needs.build-windows-x64.result == 'success' && needs.verify-windows-packages.result == 'success' && github.ref_name == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -40,17 +120,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: Verify preserved P0 core source paths
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -F 'handy-keys = "0.3.4"' src-tauri/Cargo.toml
-          test -f src-tauri/src/shortcut/handy_keys.rs
-          test -f src-tauri/src/shortcut/handler.rs
-          test -f src-tauri/src/input.rs
-          test -d src-tauri/src/paste_tx
-          echo "Core shortcut and text-injection source paths are present."
 
       - name: Download Windows build artifact
         env:
@@ -100,10 +169,11 @@ jobs:
             echo
             echo "## Automated P0 verification"
             echo
-            echo "- PASS — Windows x64 Tauri build completed."
-            echo "- PASS — upstream Windows NSIS/MSI package runtime audit completed, including packaged executable launch via \`--list-devices\`."
-            echo "- PASS — \`handy-keys 0.3.4\` remained in the Windows build dependency chain and the existing shortcut/text-injection source paths remain present."
-            echo "- NOT INTERACTIVE-CI VERIFIED — physical global Win+H suppression, keydown/keyup delivery and end-to-end Push-To-Talk behavior require an interactive Windows desktop smoke test; GitHub-hosted runners cannot truthfully certify that shell-level behavior."
+            echo "- PASS — final tracked platform/tray icon assets differ byte-for-byte from cjpais/Handy and match the approved source marker."
+            echo "- PASS — Windows x64 Tauri build completed and EXE/MSI artifacts were produced."
+            echo "- PASS — MSI ProductName and NSIS executable version metadata were checked for Handy Cloud branding."
+            echo "- PASS — Win+H/blocking-hotkey source smoke guard and preserved core path checks completed without modifying core interaction logic."
+            echo "- NOT INTERACTIVE-CI VERIFIED — physical global Win+H suppression, keydown/keyup delivery and end-to-end Push-To-Talk behavior require an interactive Windows desktop smoke test."
             echo
             echo "## SHA-256"
             for file in "$out"/*.exe "$out"/*.msi; do

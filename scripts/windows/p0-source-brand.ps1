@@ -1,3 +1,7 @@
+param(
+  [switch]$ForceIcons
+)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -15,33 +19,23 @@ function Replace-InFile {
   }
 }
 
-# Tray tooltip/menu title is hardcoded in Rust, so change only the visible
-# product label. The tray state machine and click behavior remain untouched.
 Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{} (Dev)", env!("CARGO_PKG_VERSION"))' 'format!("Handy Cloud v{} (Dev)", env!("CARGO_PKG_VERSION"))'
 Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{}", env!("CARGO_PKG_VERSION"))' 'format!("Handy Cloud v{}", env!("CARGO_PKG_VERSION"))'
-
-# User-facing source link now points to the fork; upstream remains credited in README.
 Replace-InFile "src/components/settings/about/AboutSettings.tsx" 'https://github.com/cjpais/Handy' 'https://github.com/breathi3552/Handy-Cloud'
-
-# JS package metadata follows the new project name. Dependency versions and lock data stay unchanged.
 Replace-InFile "package.json" '"name": "handy-app"' '"name": "handy-cloud-app"'
 Replace-InFile "bun.lock" '"name": "handy-app"' '"name": "handy-cloud-app"'
-
-# Internal crate/binary names intentionally stay `handy` for compatibility with
-# established autostart/package/runtime checks; OS package identity is Tauri's identifier.
 Replace-InFile "src-tauri/Cargo.toml" 'description = "Handy"' 'description = "Handy Cloud"'
 
 if (Test-Path "src-tauri/nsis/installer.nsi") {
   Replace-InFile "src-tauri/nsis/installer.nsi" "Custom NSIS template for Handy" "Custom NSIS template for Handy Cloud"
 }
 
-# Brand-copy only: replace standalone Handy in locale JSON. This does not touch
-# HandyKeys or machine identifiers because the regex requires a standalone word.
-$localeRoot = "src/locales"
+# Brand-copy only. Keep technical identifiers such as HandyKeys/handy-keys intact.
+$localeRoot = "src/i18n/locales"
 if (Test-Path $localeRoot) {
   Get-ChildItem $localeRoot -Recurse -File -Filter "*.json" | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
-    $updated = [regex]::Replace($content, '(?<![\w-])Handy(?![\w-])', 'Handy Cloud')
+    $updated = [regex]::Replace($content, '(?<![\w-])Handy(?![\w-]| Cloud)', 'Handy Cloud')
     if ($updated -ne $content) {
       [System.IO.File]::WriteAllText($_.FullName, $updated, (New-Object System.Text.UTF8Encoding($false)))
       $changed = $true
@@ -50,7 +44,6 @@ if (Test-Path $localeRoot) {
   }
 }
 
-# README: mark the fork at the top while preserving upstream history/credit below.
 $readme = "README.md"
 $content = Get-Content $readme -Raw
 if ($content.StartsWith("# Handy`n") -or $content.StartsWith("# Handy`r`n")) {
@@ -64,15 +57,23 @@ if ($content.StartsWith("# Handy`n") -or $content.StartsWith("# Handy`r`n")) {
   $changed = $true
 }
 
-# Generate all official Tauri icon slots from the approved Handy Cloud C-hand
-# raster source. Tauri produces the Windows ICO plus the cross-platform PNG matrix.
 $iconSource = "brand/handy-cloud-icon-source.png"
 $iconMarker = "brand/P0_ICON_GENERATED.txt"
 if (-not (Test-Path $iconSource)) { throw "Missing approved brand icon source: $iconSource" }
 
 $sourceHash = (Get-FileHash $iconSource -Algorithm SHA256).Hash.ToLowerInvariant()
 $markerMatches = (Test-Path $iconMarker) -and ((Get-Content $iconMarker -Raw).Trim() -eq $sourceHash)
-if (-not $markerMatches) {
+$criticalIcons = @(
+  "src-tauri/icons/32x32.png",
+  "src-tauri/icons/128x128.png",
+  "src-tauri/icons/128x128@2x.png",
+  "src-tauri/icons/icon.ico",
+  "src-tauri/icons/icon.icns"
+)
+$criticalIconsPresent = ($criticalIcons | Where-Object { -not (Test-Path $_) }).Count -eq 0
+$needsIconGeneration = $ForceIcons -or (-not $markerMatches) -or (-not $criticalIconsPresent)
+
+if ($needsIconGeneration) {
   Write-Host "Generating Tauri icon matrix from approved Handy Cloud icon..."
   bun run tauri icon $iconSource
   if ($LASTEXITCODE -ne 0) { throw "tauri icon generation failed" }
@@ -97,8 +98,6 @@ if (-not $markerMatches) {
     } finally { $src.Dispose() }
   }
 
-  # Use Tauri's generated 256px raster for legacy icon files retained by the
-  # upstream tree, keeping all platform assets derived from the same source.
   $rasterSource = "src-tauri/icons/128x128@2x.png"
   Save-ResizedPng $rasterSource "src-tauri/icons/64x64.png" 64
   Save-ResizedPng $rasterSource "src-tauri/icons/icon.png" 512
@@ -155,7 +154,7 @@ if (-not $markerMatches) {
     Save-TrayVariant $entry.Key $entry.Value
   }
 
-  Set-Content -Path $iconMarker -Value $sourceHash -NoNewline
+  [System.IO.File]::WriteAllText((Join-Path (Get-Location) $iconMarker), $sourceHash, (New-Object System.Text.UTF8Encoding($false)))
   $changed = $true
   Write-Host "Generated Handy Cloud icon, installer, and tray asset matrix."
 }

@@ -57,6 +57,22 @@ jobs:
         shell: pwsh
         run: ./scripts/windows/p0-regression.ps1
 
+      - name: Verify NSIS icon placeholders are consumed
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $template = Get-Content "src-tauri/nsis/installer.nsi" -Raw
+          if ($template -notmatch '!define UNINSTALLERICON \"\{\{uninstaller_icon\}\}\"') {
+            throw "Custom NSIS template does not consume Tauri uninstaller_icon"
+          }
+          if ($template -notmatch '!define MUI_ICON \"\$\{INSTALLERICON\}\"') {
+            throw "Custom NSIS template does not wire installer icon into MUI_ICON"
+          }
+          if ($template -notmatch '!define MUI_UNICON \"\$\{UNINSTALLERICON\}\"') {
+            throw "Custom NSIS template does not wire uninstaller icon into MUI_UNICON"
+          }
+          Write-Host "PASS - custom NSIS template consumes installer and uninstaller Handy Cloud icon placeholders"
+
       - name: Commit generated binary brand assets when source changed
         id: commit
         shell: pwsh

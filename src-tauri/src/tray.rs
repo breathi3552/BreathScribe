@@ -697,6 +697,7 @@ pub fn copy_last_transcript(app: &AppHandle) {
 mod tests {
     use super::{last_transcript_text, load_tray_icon, MenuInputs, TrayDesired, TrayIconState};
     use crate::managers::history::HistoryEntry;
+    use crate::settings::TranscriptionMode;
 
     fn build_entry(transcription: &str, post_processed: Option<&str>) -> HistoryEntry {
         HistoryEntry {

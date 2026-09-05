@@ -546,7 +546,10 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
                 };
                 (model_id.as_str(), format!("☁️ {}", name))
             }
-            _ => (DEFAULT_CLOUD_STT_MODEL_ID, "☁️ Gemini 3.5 Transcribe".to_string()),
+            _ => (
+                DEFAULT_CLOUD_STT_MODEL_ID,
+                "☁️ Gemini 3.5 Transcribe".to_string(),
+            ),
         };
 
         let submenu_label = if is_cloud_active {

@@ -21,14 +21,9 @@ pub struct GeminiInteractionRequest {
 #[serde(tag = "type")]
 pub enum GeminiInteractionInput {
     #[serde(rename = "audio")]
-    Audio {
-        data: String,
-        mime_type: String,
-    },
+    Audio { data: String, mime_type: String },
     #[serde(rename = "text")]
-    Text {
-        text: String,
-    },
+    Text { text: String },
 }
 
 /// Interactions API 生成与转录配置
@@ -150,9 +145,7 @@ impl GeminiProvider {
     }
 
     /// 从 Interactions API 响应中提取转录结果
-    pub fn extract_text_from_response(
-        body: &GeminiInteractionResponse,
-    ) -> Result<String, String> {
+    pub fn extract_text_from_response(body: &GeminiInteractionResponse) -> Result<String, String> {
         if let Some(steps) = &body.steps {
             let mut extracted_texts = Vec::new();
             for step in steps {
@@ -379,13 +372,15 @@ mod tests {
             "https://custom-proxy.internal/v1beta/interactions?key=my-key"
         );
 
-        let url3 = GeminiProvider::build_request_url("https://custom-proxy.internal/v1beta", "my-key");
+        let url3 =
+            GeminiProvider::build_request_url("https://custom-proxy.internal/v1beta", "my-key");
         assert_eq!(
             url3,
             "https://custom-proxy.internal/v1beta/interactions?key=my-key"
         );
 
-        let url4 = GeminiProvider::build_request_url("https://custom-proxy.internal/v1beta/", "my-key");
+        let url4 =
+            GeminiProvider::build_request_url("https://custom-proxy.internal/v1beta/", "my-key");
         assert_eq!(
             url4,
             "https://custom-proxy.internal/v1beta/interactions?key=my-key"
@@ -473,7 +468,8 @@ mod tests {
             serde_json::from_str(json_str).expect("should deserialize response");
         assert_eq!(res.status.as_deref(), Some("completed"));
 
-        let extracted = GeminiProvider::extract_text_from_response(&res).expect("should extract text");
+        let extracted =
+            GeminiProvider::extract_text_from_response(&res).expect("should extract text");
         assert_eq!(
             extracted,
             "这是一段通过 Gemini 3.5 Transcribe 模型转写完成的高准确度文本。"
@@ -505,7 +501,8 @@ mod tests {
             ]),
         };
 
-        let extracted = GeminiProvider::extract_text_from_response(&res).expect("should extract text");
+        let extracted =
+            GeminiProvider::extract_text_from_response(&res).expect("should extract text");
         assert_eq!(extracted, "Hello World");
     }
 
@@ -517,7 +514,8 @@ mod tests {
             steps: Some(vec![]),
         };
 
-        let extracted = GeminiProvider::extract_text_from_response(&res).expect("empty completed should return empty string");
+        let extracted = GeminiProvider::extract_text_from_response(&res)
+            .expect("empty completed should return empty string");
         assert_eq!(extracted, "");
     }
 

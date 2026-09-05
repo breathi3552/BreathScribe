@@ -32,23 +32,6 @@ jobs:
       - name: Install frontend tooling
         run: bun install --frozen-lockfile
 
-      - name: Normalize P0 brand source
-        shell: pwsh
-        run: |
-          Add-Type -AssemblyName System.Drawing
-          $source = (Resolve-Path "brand/handy-cloud-icon-source.png").Path
-          $temp = Join-Path $env:RUNNER_TEMP "handy-cloud-icon-source.normalized.png"
-          $image = [System.Drawing.Image]::FromFile($source)
-          try {
-            $bitmap = New-Object System.Drawing.Bitmap $image.Width, $image.Height
-            try {
-              $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-              try { $graphics.DrawImageUnscaled($image, 0, 0) } finally { $graphics.Dispose() }
-              $bitmap.Save($temp, [System.Drawing.Imaging.ImageFormat]::Png)
-            } finally { $bitmap.Dispose() }
-          } finally { $image.Dispose() }
-          Move-Item -Force $temp $source
-
       - name: Materialize Handy Cloud brand assets
         shell: pwsh
         run: ./scripts/windows/p0-source-brand.ps1

@@ -124,56 +124,8 @@ if ($needsIconGeneration) {
   Save-ResizedPng $rasterSource "src-tauri/icons/icon.png" 512
   Save-ResizedPng $rasterSource "src-tauri/icons/logo.png" 512
 
-  function Save-TrayVariant {
-    param([string]$Destination, [string]$Badge)
-    $src = [System.Drawing.Image]::FromFile((Resolve-Path "src-tauri/icons/32x32.png"))
-    try {
-      $bmp = New-Object System.Drawing.Bitmap 32, 32
-      try {
-        $g = [System.Drawing.Graphics]::FromImage($bmp)
-        try {
-          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-          $g.DrawImage($src, 0, 0, 32, 32)
-          if ($Badge) {
-            $badgeColor = switch ($Badge) {
-              "warning" { [System.Drawing.Color]::FromArgb(255, 245, 158, 11) }
-              "recording" { [System.Drawing.Color]::FromArgb(255, 239, 68, 68) }
-              "transcribing" { [System.Drawing.Color]::FromArgb(255, 59, 130, 246) }
-              default { throw "Unknown tray badge: $Badge" }
-            }
-            $white = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::White)
-            $brush = New-Object System.Drawing.SolidBrush $badgeColor
-            try {
-              $g.FillEllipse($white, 20, 20, 12, 12)
-              $g.FillEllipse($brush, 22, 22, 8, 8)
-            } finally {
-              $white.Dispose()
-              $brush.Dispose()
-            }
-          }
-        } finally { $g.Dispose() }
-        $bmp.Save($Destination, [System.Drawing.Imaging.ImageFormat]::Png)
-      } finally { $bmp.Dispose() }
-    } finally { $src.Dispose() }
-  }
-
-  $trayVariants = @{
-    "src-tauri/resources/handy.png" = ""
-    "src-tauri/resources/handy_warning.png" = "warning"
-    "src-tauri/resources/recording.png" = "recording"
-    "src-tauri/resources/transcribing.png" = "transcribing"
-    "src-tauri/resources/tray_idle.png" = ""
-    "src-tauri/resources/tray_idle_dark.png" = ""
-    "src-tauri/resources/tray_idle_warning.png" = "warning"
-    "src-tauri/resources/tray_idle_warning_dark.png" = "warning"
-    "src-tauri/resources/tray_recording.png" = "recording"
-    "src-tauri/resources/tray_recording_dark.png" = "recording"
-    "src-tauri/resources/tray_transcribing.png" = "transcribing"
-    "src-tauri/resources/tray_transcribing_dark.png" = "transcribing"
-  }
-  foreach ($entry in $trayVariants.GetEnumerator()) {
-    Save-TrayVariant $entry.Key $entry.Value
-  }
+  python scripts/windows/generate-tray-icons.py
+  if ($LASTEXITCODE -ne 0) { throw "Failed to generate tray icon matrix" }
 
   [System.IO.File]::WriteAllText((Join-Path (Get-Location) $iconMarker), $sourceHash, (New-Object System.Text.UTF8Encoding($false)))
   $changed = $true

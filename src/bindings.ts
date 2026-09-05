@@ -920,8 +920,24 @@ async isLaptop() : Promise<Result<boolean, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async testProxyConnectivity(settings: ProxySettings | null) : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("test_proxy_connectivity", { settings }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: String(e) };
+}
+},
+async updateProxySettings(settings: ProxySettings) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_proxy_settings", { settings }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: String(e) };
 }
 }
+};
 
 /** user-defined events **/
 
@@ -1004,7 +1020,19 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle }
+overlay_style?: OverlayStyle; proxy?: ProxySettings }
+export type ProxyMode = "system" | "manual" | "direct"
+export type ProxyProtocol = "http" | "socks5"
+export type ProxySettings = { mode: ProxyMode; protocol: ProxyProtocol; host: string; port: number; auth_enabled: boolean; username: string | null; password: string | null }
+export const DEFAULT_PROXY_SETTINGS: ProxySettings = {
+  mode: "system",
+  protocol: "http",
+  host: "127.0.0.1",
+  port: 7890,
+  auth_enabled: false,
+  username: null,
+  password: null,
+};
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }

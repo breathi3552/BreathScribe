@@ -264,7 +264,8 @@
         "output": "输出",
         "transcription": "转录",
         "history": "历史",
-        "experimental": "实验性"
+        "experimental": "实验性",
+        "network": "网络与代理"
       },
       "experimentalToggle": {
         "label": "实验性功能",
@@ -398,6 +399,49 @@
       "fillerWordRemoval": {
         "title": "移除语气词",
         "description": "从转录中移除常见的语气词。关闭此选项即可保留这些词。"
+      },
+      "proxy": {
+        "title": "网络与代理",
+        "description": "配置全局网络代理策略并测试外部连通性。",
+        "mode": {
+          "title": "代理模式",
+          "description": "选择向外部云服务发起网络请求时的路由策略。",
+          "system": "跟随系统代理（默认）",
+          "manual": "手动配置代理",
+          "direct": "强制直连"
+        },
+        "protocol": {
+          "title": "协议",
+          "http": "HTTP",
+          "socks5": "SOCKS5"
+        },
+        "host": {
+          "label": "服务器地址",
+          "placeholder": "127.0.0.1"
+        },
+        "port": {
+          "label": "端口",
+          "placeholder": "7890"
+        },
+        "auth": {
+          "label": "开启身份验证",
+          "username": "用户名",
+          "password": "密码",
+          "usernamePlaceholder": "可选用户名",
+          "passwordPlaceholder": "可选密码"
+        },
+        "test": {
+          "button": "测试连通性",
+          "testing": "正在探测...",
+          "success": "网络连通正常（往返延迟: {{ms}}ms）",
+          "failed": "连通性测试失败: {{error}}"
+        },
+        "save": {
+          "button": "保存代理设置",
+          "saved": "代理设置已保存生效",
+          "invalidPort": "端口号必须在 1 到 65535 之间",
+          "emptyHost": "服务器地址不能为空"
+        }
       }
     },
     "postProcessing": {

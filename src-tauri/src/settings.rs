@@ -353,6 +353,62 @@ impl std::ops::DerefMut for SecretMap {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyMode {
+    /// 自动跟随操作系统代理（默认策略）
+    System,
+    /// 用户自定义代理服务器
+    Manual,
+    /// 强制不使用任何代理（直连）
+    Direct,
+}
+
+impl Default for ProxyMode {
+    fn default() -> Self {
+        ProxyMode::System
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyProtocol {
+    Http,
+    Socks5,
+}
+
+impl Default for ProxyProtocol {
+    fn default() -> Self {
+        ProxyProtocol::Http
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[serde(default)]
+pub struct ProxySettings {
+    pub mode: ProxyMode,
+    pub protocol: ProxyProtocol,
+    pub host: String,
+    pub port: u16,
+    pub auth_enabled: bool,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+impl Default for ProxySettings {
+    fn default() -> Self {
+        Self {
+            mode: ProxyMode::System,
+            protocol: ProxyProtocol::Http,
+            host: "127.0.0.1".to_string(),
+            port: 7890,
+            auth_enabled: false,
+            username: None,
+            password: None,
+        }
+    }
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 /// The container-level `serde(default)` (backed by the `Default` impl below)
 /// guarantees every field — including ones added in the future — falls back to
@@ -514,6 +570,9 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
+    /// 全局网络代理配置
+    #[serde(default)]
+    pub proxy: ProxySettings,
 }
 
 fn default_model() -> String {
@@ -970,6 +1029,7 @@ pub fn get_default_settings() -> AppSettings {
         vad_enabled: default_vad_enabled(),
         vad_backend: VadBackend::default(),
         overlay_style: default_overlay_style(),
+        proxy: ProxySettings::default(),
     }
 }
 

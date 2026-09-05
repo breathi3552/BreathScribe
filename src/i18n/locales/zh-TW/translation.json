@@ -264,7 +264,8 @@
         "output": "輸出",
         "transcription": "轉錄",
         "history": "歷史",
-        "experimental": "實驗性"
+        "experimental": "實驗性",
+        "network": "網路與代理"
       },
       "experimentalToggle": {
         "label": "實驗性功能",
@@ -398,6 +399,49 @@
       "fillerWordRemoval": {
         "title": "移除語助詞",
         "description": "從轉錄中移除常見的語助詞。關閉此選項即可保留這些詞。"
+      },
+      "proxy": {
+        "title": "網路與代理",
+        "description": "設定全域網路代理策略並測試外部連通性。",
+        "mode": {
+          "title": "代理模式",
+          "description": "選擇向外部雲端服務發起網路請求時的路由策略。",
+          "system": "跟隨系統代理（預設）",
+          "manual": "手動設定代理",
+          "direct": "強制直連"
+        },
+        "protocol": {
+          "title": "通訊協定",
+          "http": "HTTP",
+          "socks5": "SOCKS5"
+        },
+        "host": {
+          "label": "伺服器位址",
+          "placeholder": "127.0.0.1"
+        },
+        "port": {
+          "label": "連接埠",
+          "placeholder": "7890"
+        },
+        "auth": {
+          "label": "啟用身份驗證",
+          "username": "使用者名稱",
+          "password": "密碼",
+          "usernamePlaceholder": "可選使用者名稱",
+          "passwordPlaceholder": "可選密碼"
+        },
+        "test": {
+          "button": "測試連通性",
+          "testing": "正在探測...",
+          "success": "網路連通正常（往返延遲: {{ms}}ms）",
+          "failed": "連通性測試失敗: {{error}}"
+        },
+        "save": {
+          "button": "儲存代理設定",
+          "saved": "代理設定已儲存生效",
+          "invalidPort": "連接埠必須介於 1 到 65535 之間",
+          "emptyHost": "伺服器位址不可為空"
+        }
       }
     },
     "postProcessing": {

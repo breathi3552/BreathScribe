@@ -264,7 +264,8 @@
         "output": "Đầu ra",
         "transcription": "Chuyển đổi",
         "history": "Lịch sử",
-        "experimental": "Thử nghiệm"
+        "experimental": "Thử nghiệm",
+        "network": "Network & Proxy"
       },
       "experimentalToggle": {
         "label": "Tính năng thử nghiệm",
@@ -398,6 +399,49 @@
       "fillerWordRemoval": {
         "title": "Loại bỏ từ đệm",
         "description": "Loại bỏ các từ ngập ngừng phổ biến khỏi bản chép lời. Tắt để giữ lại các từ này."
+      },
+      "proxy": {
+        "title": "Network & Proxy",
+        "description": "Configure global proxy settings and test external connectivity.",
+        "mode": {
+          "title": "Proxy Mode",
+          "description": "Choose how network requests are routed to external cloud services.",
+          "system": "System Proxy (Default)",
+          "manual": "Manual Proxy",
+          "direct": "Direct Connection"
+        },
+        "protocol": {
+          "title": "Protocol",
+          "http": "HTTP",
+          "socks5": "SOCKS5"
+        },
+        "host": {
+          "label": "Server Host",
+          "placeholder": "127.0.0.1"
+        },
+        "port": {
+          "label": "Port",
+          "placeholder": "7890"
+        },
+        "auth": {
+          "label": "Enable Authentication",
+          "username": "Username",
+          "password": "Password",
+          "usernamePlaceholder": "Optional username",
+          "passwordPlaceholder": "Optional password"
+        },
+        "test": {
+          "button": "Test Connectivity",
+          "testing": "Testing...",
+          "success": "Connected successfully (RTT: {{ms}}ms)",
+          "failed": "Connection test failed: {{error}}"
+        },
+        "save": {
+          "button": "Save Proxy Settings",
+          "saved": "Proxy settings saved successfully",
+          "invalidPort": "Port must be between 1 and 65535",
+          "emptyHost": "Server host cannot be empty"
+        }
       }
     },
     "postProcessing": {

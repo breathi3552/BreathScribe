@@ -8,8 +8,9 @@ import type {
   OrtAcceleratorSetting,
   ShortcutActivation,
   VadBackend,
+  ProxySettings,
 } from "@/bindings";
-import { commands } from "@/bindings";
+import { commands, DEFAULT_PROXY_SETTINGS } from "@/bindings";
 import { toast } from "sonner";
 
 interface SettingsStore {
@@ -59,6 +60,8 @@ interface SettingsStore {
   updatePostProcessModel: (providerId: string, model: string) => Promise<void>;
   fetchPostProcessModels: (providerId: string) => Promise<string[]>;
   setPostProcessModelOptions: (providerId: string, models: string[]) => void;
+  updateProxySettings: (proxy: ProxySettings) => Promise<void>;
+  testProxyConnectivity: (proxy?: ProxySettings) => Promise<number>;
 
   // Internal state setters
   setSettings: (settings: Settings | null) => void;
@@ -194,6 +197,14 @@ const settingUpdaters: {
     commands.changeTranscribeGpuDevice(value as string | null),
   extra_recording_buffer_ms: (value) =>
     commands.changeExtraRecordingBufferSetting(value as number),
+  proxy: async (value) => {
+    if (value) {
+      const result = await commands.updateProxySettings(value as ProxySettings);
+      if (result.status === "error") {
+        throw new Error(result.error);
+      }
+    }
+  },
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -237,6 +248,7 @@ export const useSettingsStore = create<SettingsStore>()(
             clamshell_microphone: settings.clamshell_microphone ?? "Default",
             selected_output_device:
               settings.selected_output_device ?? "Default",
+            proxy: settings.proxy ?? DEFAULT_PROXY_SETTINGS,
           };
           set({ settings: normalizedSettings, isLoading: false });
         } else {
@@ -657,6 +669,32 @@ export const useSettingsStore = create<SettingsStore>()(
           get().refreshAudioDevices();
         }
       });
+    },
+    updateProxySettings: async (proxy: ProxySettings) => {
+      const { settings } = get();
+      const originalProxy = settings?.proxy;
+      set((state) => ({
+        settings: state.settings ? { ...state.settings, proxy } : null,
+      }));
+      try {
+        const result = await commands.updateProxySettings(proxy);
+        if (result.status === "error") {
+          throw new Error(result.error);
+        }
+      } catch (error) {
+        console.error("Failed to update proxy settings:", error);
+        if (originalProxy && settings) {
+          set({ settings: { ...settings, proxy: originalProxy } });
+        }
+        throw error;
+      }
+    },
+    testProxyConnectivity: async (proxy?: ProxySettings) => {
+      const result = await commands.testProxyConnectivity(proxy ?? null);
+      if (result.status === "ok") {
+        return result.data;
+      }
+      throw new Error(result.error);
     },
   })),
 );

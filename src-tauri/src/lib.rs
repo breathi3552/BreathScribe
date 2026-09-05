@@ -13,6 +13,7 @@ mod input;
 mod llm_client;
 mod managers;
 mod memory;
+pub mod network;
 mod overlay;
 mod paste_tx;
 pub mod portable;
@@ -181,6 +182,21 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
     app_handle.manage(tray::TrayState::new());
+    let settings = settings::get_settings(app_handle);
+    let network_manager = Arc::new(
+        network::NetworkManager::new(settings.proxy.clone()).unwrap_or_else(|e| {
+            log::error!(
+                "Failed to initialize network manager with saved proxy, falling back to direct: {}",
+                e
+            );
+            network::NetworkManager::new(settings::ProxySettings {
+                mode: settings::ProxyMode::Direct,
+                ..Default::default()
+            })
+            .expect("Failed to initialize fallback network manager")
+        }),
+    );
+    app_handle.manage(network_manager);
 
     // Note: Shortcuts are NOT initialized here.
     // The frontend is responsible for calling the `initialize_shortcuts` command
@@ -731,6 +747,8 @@ pub fn run(cli_args: CliArgs) {
             commands::history::update_history_limit,
             commands::history::update_recording_retention_period,
             helpers::clamshell::is_laptop,
+            commands::network::test_proxy_connectivity,
+            commands::network::update_proxy_settings,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,

@@ -85,6 +85,43 @@ pub struct GeminiLiveServerMessage {
     pub error: Option<GeminiLiveError>,
 }
 
+impl GeminiLiveServerMessage {
+    /// 统一解析 WebSocket 文本与二进制 JSON 报文
+    pub fn parse(msg: &tokio_tungstenite::tungstenite::Message) -> Option<Self> {
+        match msg {
+            tokio_tungstenite::tungstenite::Message::Text(text) => {
+                match serde_json::from_str(text.as_str()) {
+                    Ok(parsed) => Some(parsed),
+                    Err(e) => {
+                        log::warn!(
+                            "解析 Gemini Live 文本报文失败: {}, 原始报文: {}",
+                            e,
+                            text.as_str()
+                        );
+                        None
+                    }
+                }
+            }
+            tokio_tungstenite::tungstenite::Message::Binary(bytes) => {
+                match serde_json::from_slice(bytes.as_ref()) {
+                    Ok(parsed) => Some(parsed),
+                    Err(e) => {
+                        let text_preview =
+                            std::str::from_utf8(bytes.as_ref()).unwrap_or("<invalid utf-8>");
+                        log::warn!(
+                            "解析 Gemini Live 二进制报文失败: {}, 原始报文: {}",
+                            e,
+                            text_preview
+                        );
+                        None
+                    }
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
 #[derive(serde::Deserialize, Debug, Clone)]
 pub struct GeminiLiveServerContent {
     #[serde(rename = "interimInputTranscription")]
@@ -565,55 +602,57 @@ async fn run_gemini_live_worker<S>(
     let receiver_handle = tokio::spawn(async move {
         while let Some(msg_res) = ws_stream.next().await {
             match msg_res {
-                Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
-                    if let Ok(server_msg) = serde_json::from_str::<GeminiLiveServerMessage>(&text) {
-                        if let Some(err) = server_msg.error {
-                            let err_text =
-                                err.message.unwrap_or_else(|| "未知服务端错误".to_string());
-                            log::warn!("Gemini Live 服务端返回错误: {}", err_text);
-                            state_receiver.lock().session_error = Some(err_text);
-                            turn_notify_receiver.notify_waiters();
-                        }
-                        if let Some(content) = server_msg.server_content {
-                            if let Some(interim) = content.interim_input_transcription {
-                                if let Some(t) = interim.text {
-                                    let (committed, tentative) = {
-                                        let mut s = state_receiver.lock();
-                                        s.tentative_text = t.clone();
-                                        (s.committed_text.clone(), t)
-                                    };
-                                    text_sink_receiver.emit_text(committed, tentative);
-                                }
-                            }
-                            if let Some(input) = content.input_transcription {
-                                if let Some(c) = input.text {
-                                    let committed = {
-                                        let mut s = state_receiver.lock();
-                                        s.committed_text.push_str(&c);
-                                        s.tentative_text.clear();
-                                        s.committed_text.clone()
-                                    };
-                                    text_sink_receiver.emit_text(committed, String::new());
-                                }
-                            }
-                            if content.turn_complete.unwrap_or(false) {
-                                state_receiver.lock().turn_completed = true;
+                Ok(msg) => match msg {
+                    tokio_tungstenite::tungstenite::Message::Ping(data) => {
+                        let _ = sink_tx_receiver
+                            .send(tokio_tungstenite::tungstenite::Message::Pong(data))
+                            .await;
+                    }
+                    tokio_tungstenite::tungstenite::Message::Close(_) => {
+                        log::info!("Gemini Live 服务端关闭长连接");
+                        turn_notify_receiver.notify_waiters();
+                        break;
+                    }
+                    other => {
+                        if let Some(server_msg) = GeminiLiveServerMessage::parse(&other) {
+                            if let Some(err) = server_msg.error {
+                                let err_text =
+                                    err.message.unwrap_or_else(|| "未知服务端错误".to_string());
+                                log::warn!("Gemini Live 服务端返回错误: {}", err_text);
+                                state_receiver.lock().session_error = Some(err_text);
                                 turn_notify_receiver.notify_waiters();
-                                break;
+                            }
+                            if let Some(content) = server_msg.server_content {
+                                if let Some(interim) = content.interim_input_transcription {
+                                    if let Some(t) = interim.text {
+                                        let (committed, tentative) = {
+                                            let mut s = state_receiver.lock();
+                                            s.tentative_text = t.clone();
+                                            (s.committed_text.clone(), t)
+                                        };
+                                        text_sink_receiver.emit_text(committed, tentative);
+                                    }
+                                }
+                                if let Some(input) = content.input_transcription {
+                                    if let Some(c) = input.text {
+                                        let committed = {
+                                            let mut s = state_receiver.lock();
+                                            s.committed_text.push_str(&c);
+                                            s.tentative_text.clear();
+                                            s.committed_text.clone()
+                                        };
+                                        text_sink_receiver.emit_text(committed, String::new());
+                                    }
+                                }
+                                if content.turn_complete.unwrap_or(false) {
+                                    state_receiver.lock().turn_completed = true;
+                                    turn_notify_receiver.notify_waiters();
+                                    break;
+                                }
                             }
                         }
                     }
-                }
-                Ok(tokio_tungstenite::tungstenite::Message::Ping(data)) => {
-                    let _ = sink_tx_receiver
-                        .send(tokio_tungstenite::tungstenite::Message::Pong(data))
-                        .await;
-                }
-                Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
-                    log::info!("Gemini Live 服务端关闭长连接");
-                    turn_notify_receiver.notify_waiters();
-                    break;
-                }
+                },
                 Err(e) => {
                     log::warn!("Gemini Live WebSocket 接收异常: {}", e);
                     state_receiver.lock().session_error =
@@ -621,7 +660,6 @@ async fn run_gemini_live_worker<S>(
                     turn_notify_receiver.notify_waiters();
                     break;
                 }
-                _ => {}
             }
         }
         turn_notify_receiver.notify_waiters();
@@ -831,28 +869,32 @@ impl StreamingTranscriptionProvider for GeminiProvider {
         let setup_result = tokio::time::timeout(setup_timeout, async {
             while let Some(msg_res) = ws.next().await {
                 match msg_res {
-                    Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
-                        if let Ok(server_msg) =
-                            serde_json::from_str::<GeminiLiveServerMessage>(&text)
-                        {
-                            if let Some(err) = server_msg.error {
-                                return Err(format!(
-                                    "Gemini Live Setup 握手失败: {}",
-                                    err.message.unwrap_or_else(|| "未知错误".to_string())
-                                ));
-                            }
-                            if server_msg.setup_complete.is_some() {
-                                return Ok(());
+                    Ok(msg) => match msg {
+                        tokio_tungstenite::tungstenite::Message::Close(frame) => {
+                            return Err(format!("Gemini Live 服务端关闭连接: {:?}", frame));
+                        }
+                        tokio_tungstenite::tungstenite::Message::Ping(data) => {
+                            let _ = ws
+                                .send(tokio_tungstenite::tungstenite::Message::Pong(data))
+                                .await;
+                        }
+                        other => {
+                            if let Some(server_msg) = GeminiLiveServerMessage::parse(&other) {
+                                if let Some(err) = server_msg.error {
+                                    return Err(format!(
+                                        "Gemini Live Setup 握手失败: {}",
+                                        err.message.unwrap_or_else(|| "未知错误".to_string())
+                                    ));
+                                }
+                                if server_msg.setup_complete.is_some() {
+                                    return Ok(());
+                                }
                             }
                         }
-                    }
-                    Ok(tokio_tungstenite::tungstenite::Message::Close(frame)) => {
-                        return Err(format!("Gemini Live 服务端关闭连接: {:?}", frame));
-                    }
+                    },
                     Err(e) => {
                         return Err(format!("Gemini Live 接收握手响应失败: {}", e));
                     }
-                    _ => {}
                 }
             }
             Err("Gemini Live 服务端在握手完成前断开连接".to_string())
@@ -1310,7 +1352,7 @@ mod tests {
         // 3. 服务端并发推送 interim 和 committed 消息
         let interim_json = r#"{"serverContent":{"interimInputTranscription":{"text":"你好"}}}"#;
         server_ws
-            .send(Message::Text(interim_json.into()))
+            .send(Message::Binary(interim_json.as_bytes().to_vec().into()))
             .await
             .unwrap();
 
@@ -1350,7 +1392,9 @@ mod tests {
         // 6. 服务端响应 turnComplete
         let turn_complete_json = r#"{"serverContent":{"turnComplete":true}}"#;
         server_ws
-            .send(Message::Text(turn_complete_json.into()))
+            .send(Message::Binary(
+                turn_complete_json.as_bytes().to_vec().into(),
+            ))
             .await
             .unwrap();
 
@@ -1366,5 +1410,41 @@ mod tests {
         let json_setup = r#"{"setupComplete":{}}"#;
         let msg: GeminiLiveServerMessage = serde_json::from_str(json_setup).unwrap();
         assert!(msg.setup_complete.is_some());
+    }
+
+    #[test]
+    fn test_gemini_live_server_message_parse_text_and_binary() {
+        use tokio_tungstenite::tungstenite::Message;
+
+        // 1. 测试 Text 报文解析
+        let text_msg = Message::Text(r#"{"setupComplete":{}}"#.into());
+        let parsed_text = GeminiLiveServerMessage::parse(&text_msg);
+        assert!(parsed_text.is_some());
+        assert!(parsed_text.unwrap().setup_complete.is_some());
+
+        // 2. 测试 Binary 报文解析（Google 真实环境发送的是二进制 UTF-8 JSON 帧）
+        let bin_msg = Message::Binary(b"{\n  \"setupComplete\": {}\n}\n".to_vec().into());
+        let parsed_bin = GeminiLiveServerMessage::parse(&bin_msg);
+        assert!(parsed_bin.is_some());
+        assert!(parsed_bin.unwrap().setup_complete.is_some());
+
+        // 3. 测试二进制流式暂态文本（interimInputTranscription）
+        let bin_interim = Message::Binary(
+            r#"{"serverContent":{"interimInputTranscription":{"text":"实际使用"}}}"#
+                .as_bytes()
+                .to_vec()
+                .into(),
+        );
+        let parsed_interim = GeminiLiveServerMessage::parse(&bin_interim);
+        assert!(parsed_interim.is_some());
+        let content = parsed_interim.unwrap().server_content.unwrap();
+        assert_eq!(
+            content.interim_input_transcription.unwrap().text.unwrap(),
+            "实际使用"
+        );
+
+        // 4. 非文本/二进制报文（如 Ping）应返回 None
+        let ping_msg = Message::Ping(vec![1, 2, 3].into());
+        assert!(GeminiLiveServerMessage::parse(&ping_msg).is_none());
     }
 }

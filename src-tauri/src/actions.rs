@@ -657,7 +657,9 @@ impl ShortcutAction for TranscribeAction {
     fn stop(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let rm = Arc::clone(&app.state::<Arc<AudioRecordingManager>>());
         if !rm.is_recording() {
-            debug!("TranscribeAction::stop called but recording manager is not recording; ignoring");
+            debug!(
+                "TranscribeAction::stop called but recording manager is not recording; ignoring"
+            );
             return;
         }
 

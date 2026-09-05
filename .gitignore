@@ -45,3 +45,9 @@ result
 
 # Python bytecode (scripts/)
 __pycache__/
+
+# Temporary and local scratch files
+.scratch/
+
+# Extracted portable test build
+release-builds/portable/

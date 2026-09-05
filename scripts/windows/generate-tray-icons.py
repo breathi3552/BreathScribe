@@ -1,108 +1,119 @@
 import os
-import subprocess
-import shutil
-from PIL import Image
+from PIL import Image, ImageDraw
 
-CLOUD = 'M 18 44 C 11 44 8 38 8 33 C 8 28 12 24 17 23 C 18 16 25 12 33 12 C 40 12 46 16 48 22 C 53 22 57 26 57 31 C 57 36 53 44 46 44 Z'
-
-def make_svg(cloud_color, content):
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <path d="{CLOUD}" fill="{cloud_color}"/>
-  {content}
-</svg>'''
-
-# 1. Idle Dark (white cloud, dark cut bars)
-idle_bars_dark = '''
-  <rect x="25" y="26" width="3" height="12" rx="1.5" fill="#0f172a"/>
-  <rect x="30.5" y="21" width="3" height="18" rx="1.5" fill="#0f172a"/>
-  <rect x="36" y="26" width="3" height="12" rx="1.5" fill="#0f172a"/>
-'''
-# 2. Idle Light (dark cloud, white bars)
-idle_bars_light = '''
-  <rect x="25" y="26" width="3" height="12" rx="1.5" fill="#ffffff"/>
-  <rect x="30.5" y="21" width="3" height="18" rx="1.5" fill="#ffffff"/>
-  <rect x="36" y="26" width="3" height="12" rx="1.5" fill="#ffffff"/>
-'''
-
-# 3. Recording (red dot + ring)
-rec_dark = '''
-  <circle cx="32" cy="30" r="10" fill="none" stroke="#ef4444" stroke-width="2" stroke-opacity="0.6"/>
-  <circle cx="32" cy="30" r="6.5" fill="#ef4444"/>
-'''
-rec_colored = '''
-  <circle cx="32" cy="30" r="10" fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.9"/>
-  <circle cx="32" cy="30" r="6.5" fill="#ef4444"/>
-'''
-
-# 4. Transcribing (5 bars)
-trans_dark = '''
-  <rect x="21" y="27" width="3" height="9" rx="1.5" fill="#0284c7"/>
-  <rect x="25.5" y="22" width="3" height="16" rx="1.5" fill="#0284c7"/>
-  <rect x="30.5" y="18" width="3" height="22" rx="1.5" fill="#0284c7"/>
-  <rect x="35.5" y="22" width="3" height="16" rx="1.5" fill="#0284c7"/>
-  <rect x="40" y="27" width="3" height="9" rx="1.5" fill="#0284c7"/>
-'''
-trans_light = '''
-  <rect x="21" y="27" width="3" height="9" rx="1.5" fill="#38bdf8"/>
-  <rect x="25.5" y="22" width="3" height="16" rx="1.5" fill="#38bdf8"/>
-  <rect x="30.5" y="18" width="3" height="22" rx="1.5" fill="#38bdf8"/>
-  <rect x="35.5" y="22" width="3" height="16" rx="1.5" fill="#38bdf8"/>
-  <rect x="40" y="27" width="3" height="9" rx="1.5" fill="#38bdf8"/>
-'''
-trans_colored = '''
-  <rect x="21" y="27" width="3" height="9" rx="1.5" fill="#ffffff"/>
-  <rect x="25.5" y="22" width="3" height="16" rx="1.5" fill="#ffffff"/>
-  <rect x="30.5" y="18" width="3" height="22" rx="1.5" fill="#ffffff"/>
-  <rect x="35.5" y="22" width="3" height="16" rx="1.5" fill="#ffffff"/>
-  <rect x="40" y="27" width="3" height="9" rx="1.5" fill="#ffffff"/>
-'''
-
-# 5. Warning badge
-def warning_badge(backing):
-    return f'''
-  <circle cx="48" cy="40" r="9.5" fill="{backing}"/>
-  <circle cx="48" cy="40" r="8" fill="#f59e0b"/>
-  <line x1="48" y1="35.5" x2="48" y2="40.5" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
-  <circle cx="48" cy="44" r="1.2" fill="#ffffff"/>
-'''
-
-specs = {
-    'tray_idle.png': make_svg('#ffffff', idle_bars_dark),
-    'tray_idle_dark.png': make_svg('#1e293b', idle_bars_light),
-    'tray_recording.png': make_svg('#ffffff', rec_dark),
-    'tray_recording_dark.png': make_svg('#1e293b', rec_dark),
-    'tray_transcribing.png': make_svg('#ffffff', trans_dark),
-    'tray_transcribing_dark.png': make_svg('#1e293b', trans_light),
-    'tray_idle_warning.png': make_svg('#ffffff', idle_bars_dark + warning_badge('#0f172a')),
-    'tray_idle_warning_dark.png': make_svg('#1e293b', idle_bars_light + warning_badge('#ffffff')),
-    'handy.png': make_svg('#0ea5e9', idle_bars_light),
-    'recording.png': make_svg('#0ea5e9', rec_colored),
-    'transcribing.png': make_svg('#0ea5e9', trans_colored),
-    'handy_warning.png': make_svg('#0ea5e9', idle_bars_light + warning_badge('#0f172a')),
-}
-
-def main():
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    tmp_build = os.path.join(repo_root, 'tmp_tray_build')
-    resources_dir = os.path.join(repo_root, 'src-tauri', 'resources')
-    os.makedirs(tmp_build, exist_ok=True)
+def generate_tray_icons():
+    resources_dir = 'src-tauri/resources'
     os.makedirs(resources_dir, exist_ok=True)
 
-    try:
-        for name, svg_content in specs.items():
-            svg_path = os.path.join(tmp_build, name.replace('.png', '.svg'))
-            with open(svg_path, 'w', encoding='utf-8') as f:
-                f.write(svg_content)
+    # 1. Load the exact upstream hollow hand baseline (64x64)
+    orig_path = 'brand/upstream-tray_idle.png'
+    if not os.path.exists(orig_path):
+        import subprocess, io
+        data = subprocess.check_output(['git', 'show', '00d2554:src-tauri/resources/tray_idle.png'])
+        orig = Image.open(io.BytesIO(data)).convert('RGBA')
+        orig.save(orig_path)
+    else:
+        orig = Image.open(orig_path).convert('RGBA')
 
-            out_dir = os.path.join(tmp_build, 'out_' + name)
-            cmd = ['bun', 'run', 'tauri', 'icon', svg_path, '--png', '64', '-o', out_dir]
-            subprocess.check_call(cmd, cwd=repo_root, stdout=subprocess.DEVNULL)
-            src_png = os.path.join(out_dir, '64x64.png')
-            dst_png = os.path.join(resources_dir, name)
-            shutil.copyfile(src_png, dst_png)
-        print('Successfully generated all 12 tray icon assets in src-tauri/resources/')
-    finally:
-        shutil.rmtree(tmp_build, ignore_errors=True)
+    w, h = orig.size  # 64, 64
+
+    # -------------------------------------------------------------
+    # Option 1-B: Exact Upstream Hollow Hand + Floating Cloud Cradle
+    # -------------------------------------------------------------
+    # In Option 1-B, the upstream hand and flat wrist block remain 100% intact.
+    # Beneath the wrist (y=48~61, x=13~53), a soft, puffy 3-lobe cloud cradle supports it.
+    
+    def make_base_cradle(fg_color):
+        base = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        # Draw the hand in fg_color
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = orig.getpixel((x, y))
+                if a > 0:
+                    base.putpixel((x, y), (fg_color[0], fg_color[1], fg_color[2], a))
+
+        # Add the cloud cradle beneath the wrist base (y=48 to 61)
+        draw = ImageDraw.Draw(base)
+        # Left cloud lobe
+        draw.ellipse([13, 49, 29, 61], fill=fg_color)
+        # Center cloud lobe (largest)
+        draw.ellipse([25, 47, 43, 62], fill=fg_color)
+        # Right cloud lobe
+        draw.ellipse([39, 49, 53, 61], fill=fg_color)
+        return base
+
+    white = (255, 255, 255, 255)
+    dark_gray = (30, 41, 59, 255) # #1e293b for light taskbar
+
+    base_dark = make_base_cradle(white)      # for dark taskbars (white icons)
+    base_light = make_base_cradle(dark_gray) # for light taskbars (dark icons)
+
+    # 1. Idle States
+    base_dark.save(os.path.join(resources_dir, 'tray_idle.png'))
+    base_light.save(os.path.join(resources_dir, 'tray_idle_dark.png'))
+
+    # 2. Recording States (Vivid red dot & glow at fingertips: x=33, y=8)
+    def apply_recording(base_img, is_dark):
+        img = base_img.copy()
+        draw = ImageDraw.Draw(img)
+        # Red aura
+        aura_col = (239, 68, 68, 90) if is_dark else (220, 38, 38, 90)
+        dot_col = (239, 68, 68, 255) if is_dark else (220, 38, 38, 255)
+        draw.ellipse([27, 2, 39, 14], fill=aura_col)
+        draw.ellipse([29, 4, 37, 12], fill=dot_col)
+        draw.ellipse([32, 7, 34, 9], fill=(255, 255, 255, 255))
+        return img
+
+    apply_recording(base_dark, True).save(os.path.join(resources_dir, 'tray_recording.png'))
+    apply_recording(base_light, False).save(os.path.join(resources_dir, 'tray_recording_dark.png'))
+
+    # 3. Transcribing States (Electric sky-blue voice waves above fingertips)
+    def apply_transcribing(base_img, is_dark):
+        img = base_img.copy()
+        draw = ImageDraw.Draw(img)
+        arc_col1 = (56, 189, 248, 255) if is_dark else (2, 132, 199, 255) # #38bdf8 / #0284c7
+        arc_col2 = (14, 165, 233, 255) if is_dark else (3, 105, 161, 255) # #0ea5e9 / #0369a1
+        # Two clean arc waves centered over the dual fingertips
+        draw.arc([23, 2, 43, 14], start=200, end=340, fill=arc_col1, width=3)
+        draw.arc([20, -3, 46, 11], start=200, end=340, fill=arc_col2, width=2)
+        return img
+
+    apply_transcribing(base_dark, True).save(os.path.join(resources_dir, 'tray_transcribing.png'))
+    apply_transcribing(base_light, False).save(os.path.join(resources_dir, 'tray_transcribing_dark.png'))
+
+    # 4. Warning States (Amber badge at bottom right)
+    def apply_warning(base_img):
+        img = base_img.copy()
+        draw = ImageDraw.Draw(img)
+        # Amber badge (circle with exclamation point)
+        draw.ellipse([44, 43, 58, 57], fill=(245, 158, 11, 255))
+        draw.rectangle([50, 46, 52, 51], fill=(255, 255, 255, 255))
+        draw.rectangle([50, 53, 52, 54], fill=(255, 255, 255, 255))
+        return img
+
+    apply_warning(base_dark).save(os.path.join(resources_dir, 'tray_idle_warning.png'))
+    apply_warning(base_light).save(os.path.join(resources_dir, 'tray_idle_warning_dark.png'))
+
+    # 5. Linux Colored Icons (handy.png, recording.png, transcribing.png)
+    # Using classic candy pink hand outline with white cloud cradle
+    pink = (250, 162, 202, 255)
+    linux_base = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = orig.getpixel((x, y))
+            if a > 0:
+                linux_base.putpixel((x, y), (pink[0], pink[1], pink[2], a))
+
+    draw_linux = ImageDraw.Draw(linux_base)
+    draw_linux.ellipse([13, 49, 29, 61], fill=white)
+    draw_linux.ellipse([25, 47, 43, 62], fill=white)
+    draw_linux.ellipse([39, 49, 53, 61], fill=white)
+
+    linux_base.save(os.path.join(resources_dir, 'handy.png'))
+    apply_recording(linux_base, True).save(os.path.join(resources_dir, 'recording.png'))
+    apply_transcribing(linux_base, True).save(os.path.join(resources_dir, 'transcribing.png'))
+
+    print("Option 1-B tray icons successfully generated in src-tauri/resources/")
 
 if __name__ == '__main__':
-    main()
+    generate_tray_icons()

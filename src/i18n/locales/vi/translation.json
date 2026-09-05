@@ -232,7 +232,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "Mô hình nhận dạng giọng nói chuyên dụng với bộ lọc từ đệm thông minh và định dạng dấu câu (Khuyên dùng)",
           "flash36Desc": "Mô hình đa phương thức tổng quát thế hệ mới nhất với khả năng suy luận vượt trội",
-          "flash35Desc": "Mô hình tổng quát nhẹ, hiệu quả cao với độ trễ thấp"
+          "flash35Desc": "Mô hình tổng quát nhẹ, hiệu quả cao với độ trễ thấp",
+          "transcribeLiveDesc": "Mô hình nhận dạng giọng nói phát trực tiếp theo thời gian thực chuyên dụng với phản hồi gõ tức thì (Khuyên dùng)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

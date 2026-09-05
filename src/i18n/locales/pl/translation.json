@@ -232,7 +232,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "Dedykowany model rozpoznawania mowy z inteligentnym filtrowaniem przerywników i interpunkcją (Zalecane)",
           "flash36Desc": "Uniwersalny model multimodalny najnowszej generacji z doskonałym wnioskowaniem",
-          "flash35Desc": "Lekki i wysoce wydajny model uniwersalny o niskim opóźnieniu"
+          "flash35Desc": "Lekki i wysoce wydajny model uniwersalny o niskim opóźnieniu",
+          "transcribeLiveDesc": "Dedykowany model rozpoznawania mowy w czasie rzeczywistym z natychmiastowym wpisywaniem (Zalecane)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

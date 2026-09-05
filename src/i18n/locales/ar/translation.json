@@ -727,7 +727,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "نموذج مخصص للتعرف على الكلام مع تصفية ذكية لكلمات الحشو وتنسيق علامات الترقيم (موصى به)",
           "flash36Desc": "أحدث جيل من النماذج متعددة الوسائط العامة مع قدرات استدلال فائقة",
-          "flash35Desc": "نموذج عام خفيف الوزن وعالي الكفاءة مع زمن انتقال منخفض"
+          "flash35Desc": "نموذج عام خفيف الوزن وعالي الكفاءة مع زمن انتقال منخفض",
+          "transcribeLiveDesc": "نموذج مخصص للتعرف على الكلام في الوقت الفعلي عبر البث المباشر مع استجابة فورية (موصى به)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

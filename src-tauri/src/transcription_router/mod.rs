@@ -2,6 +2,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 
+use crate::managers::model::ModelManager;
 use crate::managers::transcription::StreamTextEvent;
 use crate::providers::gemini::GeminiProvider;
 use crate::providers::local::LocalTranscriptionProvider;
@@ -141,7 +142,7 @@ impl TranscriptionRouter {
             },
             TranscriptionMode::Local => self
                 .app_handle
-                .try_state::<Arc<crate::managers::ModelManager>>()
+                .try_state::<Arc<ModelManager>>()
                 .and_then(|mm| mm.get_model_info(&settings.selected_model))
                 .map(|m| m.supports_streaming)
                 .unwrap_or(false),

@@ -232,7 +232,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "Akıllı dolgu sözcük filtreleme ve noktalama biçimlendirmesine sahip özel konuşma tanıma modeli (Önerilen)",
           "flash36Desc": "Üstün akıl yürütme yeteneğine sahip en yeni nesil genel çok modlu model",
-          "flash35Desc": "Düşük gecikmeli, hafif ve yüksek verimli genel model"
+          "flash35Desc": "Düşük gecikmeli, hafif ve yüksek verimli genel model",
+          "transcribeLiveDesc": "Anında yazma çıktısı sağlayan özel gerçek zamanlı akış konuşma tanıma modeli (Önerilen)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

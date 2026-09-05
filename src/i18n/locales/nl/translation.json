@@ -283,7 +283,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "Toegewijd spraakherkenningsmodel met slimme stopwoordfiltering en interpunctie (Aanbevolen)",
           "flash36Desc": "Nieuwste generatie algemeen multimodaal model met superieur redeneervermogen",
-          "flash35Desc": "Lichtgewicht, zeer efficiënt algemeen model met lage latentie"
+          "flash35Desc": "Lichtgewicht, zeer efficiënt algemeen model met lage latentie",
+          "transcribeLiveDesc": "Toegewijd real-time streaming spraakherkenningsmodel met directe type-uitvoer (Aanbevolen)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

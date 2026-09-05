@@ -283,7 +283,8 @@
           "proDesc": "超強大腦、複雜語境與專業術語更強",
           "transcribeDesc": "專用語音識別模型，智慧過濾語氣詞與標點符號規範化（推薦）",
           "flash36Desc": "最新一代通用多模態大模型，複雜語境與推理能力出色",
-          "flash35Desc": "輕量高性價比通用大模型，低延遲響應"
+          "flash35Desc": "輕量高性價比通用大模型，低延遲響應",
+          "transcribeLiveDesc": "專用即時串流語音辨識大模型，邊說邊出字，毫秒級極速打字（推薦）"
         },
         "warnings": {
           "keyFormatHint": "提示：標準的 Google Gemini API Key 通常以 'AIzaSy' 開頭（長度 39 位）",

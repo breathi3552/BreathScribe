@@ -232,7 +232,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "専用音声認識モデル、フィラー音の自動除去と句読点の自動整形（推奨）",
           "flash36Desc": "最新世代の汎用マルチモーダルモデル、高度な推論と複雑な文脈に対応",
-          "flash35Desc": "低遅延で高効率な軽量汎用モデル"
+          "flash35Desc": "低遅延で高効率な軽量汎用モデル",
+          "transcribeLiveDesc": "専用リアルタイムストリーミング音声認識モデル、即時タイピング出力、超低遅延（推奨）"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

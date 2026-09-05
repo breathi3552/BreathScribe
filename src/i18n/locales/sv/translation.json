@@ -283,7 +283,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "Dedikerad taligenkänningsmodell med intelligent fyllnadsordsfiltrering och interpunktion (Rekommenderas)",
           "flash36Desc": "Senaste generationens generella multimodala modell med överlägsen resonemangsförmåga",
-          "flash35Desc": "Lätt och högeffektiv generell modell med låg latens"
+          "flash35Desc": "Lätt och högeffektiv generell modell med låg latens",
+          "transcribeLiveDesc": "Dedikerad röstigenkänningsmodell i realtid med omedelbar skriftlig återkoppling (Rekommenderas)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

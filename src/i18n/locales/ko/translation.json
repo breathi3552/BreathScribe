@@ -312,7 +312,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "전용 음성 인식 모델, 추임새 자동 필터링 및 문장 부호 자동 서식화 (권장)",
           "flash36Desc": "최신 세대 범용 멀티모달 모델, 뛰어난 추론 및 복잡한 문맥 처리",
-          "flash35Desc": "저지연 및 고효율 경량 범용 모델"
+          "flash35Desc": "저지연 및 고효율 경량 범용 모델",
+          "transcribeLiveDesc": "전용 실시간 스트리밍 음성 인식 모델, 말하는 즉시 타이핑 출력, 초저지연 (권장)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

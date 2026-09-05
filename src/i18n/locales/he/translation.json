@@ -283,7 +283,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "מודל זיהוי דיבור ייעודי עם סינון חכם של מילות מילוי ועיצוב פיסוק (מומלץ)",
           "flash36Desc": "מודל רב-מודאלי כללי מהדור האחרון עם יכולות הסקה מעולות",
-          "flash35Desc": "מודל כללי קל משקל ויעיל ביותר עם שיהוי נמוך"
+          "flash35Desc": "מודל כללי קל משקל ויעיל ביותר עם שיהוי נמוך",
+          "transcribeLiveDesc": "מודל זיהוי דיבור ייעודי בהזרמה בזמן אמת עם פלט הקלדה מיידי (מומלץ)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

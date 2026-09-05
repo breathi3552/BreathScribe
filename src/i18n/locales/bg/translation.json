@@ -283,7 +283,8 @@
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
           "transcribeDesc": "Dedicated speech recognition model with smart filler word filtering and punctuation formatting (Recommended)",
           "flash36Desc": "Latest generation general multimodal model with superior reasoning and complex context handling",
-          "flash35Desc": "Lightweight high-efficiency general model with low latency"
+          "flash35Desc": "Lightweight high-efficiency general model with low latency",
+          "transcribeLiveDesc": "Специализиран модел за разпознаване на реч в реално време с мигновено въвеждане (Препоръчително)"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",

@@ -69,7 +69,11 @@ pub async fn test_cloud_stt_connection(
     custom_base_url: Option<String>,
 ) -> Result<(), String> {
     let settings = get_settings(&app);
-    let key = match api_key.as_deref().map(|k| k.trim()).filter(|k| !k.is_empty()) {
+    let key = match api_key
+        .as_deref()
+        .map(|k| k.trim())
+        .filter(|k| !k.is_empty())
+    {
         Some(k) => k.to_string(),
         None => settings
             .cloud_stt_api_keys
@@ -99,12 +103,8 @@ pub async fn test_cloud_stt_connection(
 
     match provider_id.as_str() {
         "gemini" => {
-            crate::providers::gemini::GeminiProvider::test_connection(
-                &client,
-                &key,
-                custom_base,
-            )
-            .await
+            crate::providers::gemini::GeminiProvider::test_connection(&client, &key, custom_base)
+                .await
         }
         unknown => Err(format!("未知的云端转写提供商: {}", unknown)),
     }
@@ -159,7 +159,10 @@ mod tests {
         assert!(settings.onboarding_completed);
         assert_eq!(settings.selected_model, "");
         match settings.transcription_mode {
-            TranscriptionMode::Cloud { provider_id, model_id } => {
+            TranscriptionMode::Cloud {
+                provider_id,
+                model_id,
+            } => {
                 assert_eq!(provider_id, "gemini");
                 assert_eq!(model_id, "gemini-2.5-flash");
             }
@@ -182,7 +185,10 @@ mod tests {
         assert!(settings.onboarding_completed);
         assert_eq!(settings.selected_model, "");
         match settings.transcription_mode {
-            TranscriptionMode::Cloud { provider_id, model_id } => {
+            TranscriptionMode::Cloud {
+                provider_id,
+                model_id,
+            } => {
                 assert_eq!(provider_id, "gemini");
                 assert_eq!(model_id, "gemini-2.5-pro");
             }

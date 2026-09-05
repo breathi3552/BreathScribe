@@ -568,7 +568,8 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         for (id, name) in &inputs.downloaded_models {
             let is_local_active = !is_cloud_active && (*id == inputs.selected_model);
             let item_id = format!("model_select:{}", id);
-            let item = CheckMenuItem::with_id(app, &item_id, name, true, is_local_active, None::<&str>)?;
+            let item =
+                CheckMenuItem::with_id(app, &item_id, name, true, is_local_active, None::<&str>)?;
             model_submenu.append(&item)?;
         }
 

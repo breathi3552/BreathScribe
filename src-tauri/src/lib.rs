@@ -18,12 +18,12 @@ mod overlay;
 mod paste_tx;
 pub mod portable;
 pub mod providers;
-pub mod transcription_router;
 mod secure_input;
 mod settings;
 mod shortcut;
 mod signal_handle;
 mod transcription_coordinator;
+pub mod transcription_router;
 mod tray;
 mod tray_i18n;
 mod utils;
@@ -337,7 +337,8 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             id if id.starts_with("model_select:") => {
                 let model_id = id.strip_prefix("model_select:").unwrap().to_string();
                 let mut settings = get_settings(app);
-                let is_cloud = matches!(settings.transcription_mode, TranscriptionMode::Cloud { .. });
+                let is_cloud =
+                    matches!(settings.transcription_mode, TranscriptionMode::Cloud { .. });
                 if !is_cloud && model_id == settings.selected_model {
                     return;
                 }

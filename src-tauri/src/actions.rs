@@ -11,8 +11,8 @@ use crate::providers::TranscriptionOptions;
 use crate::settings::{
     get_settings, AppSettings, OverlayStyle, TranscriptionMode, APPLE_INTELLIGENCE_PROVIDER_ID,
 };
-use crate::transcription_router::TranscriptionRouter;
 use crate::shortcut;
+use crate::transcription_router::TranscriptionRouter;
 use crate::tray::{set_tray_state, TrayIconState};
 use crate::utils::{
     self, show_processing_overlay, show_recording_overlay, show_transcribing_overlay,
@@ -475,7 +475,10 @@ impl ShortcutAction for TranscribeAction {
         debug!("TranscribeAction::start called for binding: {}", binding_id);
 
         let settings = get_settings(app);
-        if let TranscriptionMode::Cloud { ref provider_id, .. } = settings.transcription_mode {
+        if let TranscriptionMode::Cloud {
+            ref provider_id, ..
+        } = settings.transcription_mode
+        {
             let has_key = settings
                 .cloud_stt_api_keys
                 .get(provider_id)

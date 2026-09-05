@@ -79,8 +79,8 @@ pub fn build_reqwest_client(settings: &ProxySettings) -> Result<Client, String> 
             } else {
                 format!("{}://{}:{}", scheme, settings.host, settings.port)
             };
-            let proxy = Proxy::all(&proxy_url)
-                .map_err(|e| format!("Invalid manual proxy: {}", e))?;
+            let proxy =
+                Proxy::all(&proxy_url).map_err(|e| format!("Invalid manual proxy: {}", e))?;
             builder = builder.proxy(proxy);
         }
     }

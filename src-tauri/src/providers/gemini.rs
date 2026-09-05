@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
+use std::sync::Arc;
 use tauri::AppHandle;
 
 use crate::network::NetworkManager;
@@ -271,10 +271,12 @@ mod tests {
     fn test_encode_wav_in_memory_format_and_clamping() {
         // 包含正常值、0值、以及超过 [-1.0, 1.0] 的极值
         let samples = vec![0.0f32, 0.5f32, -0.5f32, 1.5f32, -2.0f32];
-        let wav_bytes = GeminiProvider::encode_wav_in_memory(&samples, 16000).expect("encoding should succeed");
+        let wav_bytes =
+            GeminiProvider::encode_wav_in_memory(&samples, 16000).expect("encoding should succeed");
 
         // 验证生成的 WAV 二进制数据合法性
-        let mut reader = hound::WavReader::new(Cursor::new(wav_bytes)).expect("WAV reader should parse output");
+        let mut reader =
+            hound::WavReader::new(Cursor::new(wav_bytes)).expect("WAV reader should parse output");
         let spec = reader.spec();
         assert_eq!(spec.channels, 1);
         assert_eq!(spec.sample_rate, 16000);
@@ -293,8 +295,10 @@ mod tests {
     #[test]
     fn test_encode_wav_in_memory_empty() {
         let samples: Vec<f32> = Vec::new();
-        let wav_bytes = GeminiProvider::encode_wav_in_memory(&samples, 16000).expect("empty encoding should succeed");
-        let mut reader = hound::WavReader::new(Cursor::new(wav_bytes)).expect("WAV reader should parse empty WAV");
+        let wav_bytes = GeminiProvider::encode_wav_in_memory(&samples, 16000)
+            .expect("empty encoding should succeed");
+        let mut reader = hound::WavReader::new(Cursor::new(wav_bytes))
+            .expect("WAV reader should parse empty WAV");
         assert_eq!(reader.samples::<i16>().count(), 0);
     }
 
@@ -306,7 +310,11 @@ mod tests {
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=my-key"
         );
 
-        let url2 = GeminiProvider::build_request_url("https://custom-proxy.internal", "gemini-2.5-pro", "my-key");
+        let url2 = GeminiProvider::build_request_url(
+            "https://custom-proxy.internal",
+            "gemini-2.5-pro",
+            "my-key",
+        );
         assert_eq!(
             url2,
             "https://custom-proxy.internal/v1beta/models/gemini-2.5-pro:generateContent?key=my-key"

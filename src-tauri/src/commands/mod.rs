@@ -1,8 +1,8 @@
 pub mod audio;
 pub mod history;
 pub mod models;
-pub mod transcription;
 pub mod network;
+pub mod transcription;
 pub mod transcription_mode;
 
 use crate::settings::{

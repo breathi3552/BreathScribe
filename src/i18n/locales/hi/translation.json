@@ -280,12 +280,16 @@
         "providerSelectDesc": "Select cloud speech recognition service provider (Google Gemini supported in Phase 1)",
         "models": {
           "flashDesc": "Fast response, high accuracy, recommended for speech recognition",
-          "proDesc": "Superior reasoning capability, best for complex context and specialized terms"
+          "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
+          "transcribeDesc": "स्मार्ट फिलर शब्द फ़िल्टरिंग और विराम चिह्न स्वरूपण के साथ समर्पित वाक पहचान मॉडल (अनुशंसित)",
+          "flash36Desc": "उत्कृष्ट तर्क और जटिल संदर्भ प्रबंधन के साथ नवीनतम पीढ़ी का सामान्य मल्टीमॉडल मॉडल",
+          "flash35Desc": "कम विलंबता के साथ हल्का उच्च दक्षता वाला सामान्य मॉडल"
         },
         "warnings": {
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",
           "keyFormatNote": "Format hint: Standard Google Gemini API Keys are typically 39 characters starting with 'AIzaSy'"
-        }
+        },
+        "providerGoogleDesc": "Google Gemini 3.5 Transcribe & Flash"
       }
     },
     "sound": {

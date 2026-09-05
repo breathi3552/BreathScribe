@@ -176,7 +176,7 @@ mod tests {
                 model_id,
             } => {
                 assert_eq!(provider_id, "gemini");
-                assert_eq!(model_id, "gemini-2.5-flash");
+                assert_eq!(model_id, "gemini-3.5-transcribe");
             }
             _ => panic!("Expected Cloud transcription mode"),
         }

@@ -1,7 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud } from "lucide-react";
-import type { ModelInfo } from "@/bindings";
+import { DEFAULT_CLOUD_MODEL_ID, type ModelInfo } from "@/bindings";
 import {
   getTranslatedModelName,
   getTranslatedModelDescription,
@@ -54,7 +54,7 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
             <Cloud className="w-4 h-4 text-sky-400 shrink-0" />
             <div>
               <div className="text-sm font-medium text-text/80">
-                {cloudModelName || formatCloudModelName("gemini-2.5-flash")}
+                {cloudModelName || formatCloudModelName(DEFAULT_CLOUD_MODEL_ID)}
               </div>
               <div className="text-xs text-text/40 italic pe-4">
                 {t(

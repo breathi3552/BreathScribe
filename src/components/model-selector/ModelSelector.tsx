@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
-import { commands } from "@/bindings";
+import { commands, DEFAULT_CLOUD_MODEL_ID } from "@/bindings";
 import {
   getTranslatedModelName,
   formatCloudModelName,
@@ -48,8 +48,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
     settings?.transcription_mode?.type === "cloud"
       ? settings.transcription_mode.config.model_id
       : (settings?.cloud_stt_providers?.["gemini"]?.model_id ??
-        "gemini-2.5-flash");
-
+        DEFAULT_CLOUD_MODEL_ID);
   const [modelStatus, setModelStatus] = useState<ModelStatus>("unloaded");
   const [modelError, setModelError] = useState<string | null>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);

@@ -21,7 +21,7 @@ import {
   MODEL_CAPABILITY_LANGUAGES,
   supportsLanguageCode,
 } from "@/lib/constants/languages.ts";
-import type { ModelInfo } from "@/bindings";
+import { DEFAULT_CLOUD_MODEL_ID, type ModelInfo } from "@/bindings";
 
 // check if model supports a language based on its supported_languages list
 const modelSupportsLanguage = (model: ModelInfo, langCode: string): boolean => {
@@ -277,7 +277,7 @@ export const ModelsSettings: React.FC = () => {
               type: "cloud",
               config: {
                 provider_id: "gemini",
-                model_id: providerConfig?.model_id || "gemini-2.5-flash",
+                model_id: providerConfig?.model_id || DEFAULT_CLOUD_MODEL_ID,
               },
             });
           }}

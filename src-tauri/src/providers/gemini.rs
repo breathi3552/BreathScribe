@@ -5,25 +5,82 @@ use tauri::AppHandle;
 
 use crate::network::NetworkManager;
 use crate::providers::{BatchTranscriptionProvider, TranscriptionOptions};
-#[derive(serde::Deserialize, Debug)]
-pub struct GeminiResponse {
-    pub candidates: Option<Vec<GeminiCandidate>>,
+use crate::settings::DEFAULT_CLOUD_STT_MODEL_ID;
+
+/// Interactions API 请求体契约
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiInteractionRequest {
+    pub model: String,
+    pub input: Vec<GeminiInteractionInput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generation_config: Option<GeminiInteractionGenerationConfig>,
 }
 
-#[derive(serde::Deserialize, Debug)]
-pub struct GeminiCandidate {
-    pub content: Option<GeminiContent>,
-    #[serde(rename = "finishReason")]
-    pub finish_reason: Option<String>,
+/// Interactions API 多模态输入单元
+#[derive(serde::Serialize, Debug, Clone)]
+#[serde(tag = "type")]
+pub enum GeminiInteractionInput {
+    #[serde(rename = "audio")]
+    Audio {
+        data: String,
+        mime_type: String,
+    },
+    #[serde(rename = "text")]
+    Text {
+        text: String,
+    },
 }
 
-#[derive(serde::Deserialize, Debug)]
-pub struct GeminiContent {
-    pub parts: Option<Vec<GeminiPart>>,
+/// Interactions API 生成与转录配置
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiInteractionGenerationConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transcription_config: Option<GeminiTranscriptionConfig>,
 }
 
-#[derive(serde::Deserialize, Debug)]
-pub struct GeminiPart {
+/// Interactions API 转录模式
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GeminiTranscriptionMode {
+    /// 智能听写模式：自动过滤语气助词、口误修正与标点规整化（推荐）
+    Smart,
+    /// 原始逐字稿模式
+    Verbatim,
+}
+
+impl Default for GeminiTranscriptionMode {
+    fn default() -> Self {
+        Self::Smart
+    }
+}
+
+/// 专用于语音转录的 transcription_config
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiTranscriptionConfig {
+    pub language_codes: Vec<String>,
+    pub mode: GeminiTranscriptionMode,
+}
+
+/// Interactions API 响应契约
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct GeminiInteractionResponse {
+    pub id: Option<String>,
+    pub status: Option<String>,
+    pub steps: Option<Vec<GeminiInteractionStep>>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct GeminiInteractionStep {
+    pub id: Option<String>,
+    #[serde(rename = "type")]
+    pub step_type: Option<String>,
+    pub content: Option<Vec<GeminiInteractionContent>>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct GeminiInteractionContent {
+    #[serde(rename = "type")]
+    pub content_type: Option<String>,
     pub text: Option<String>,
 }
 
@@ -76,8 +133,8 @@ impl GeminiProvider {
         Ok(cursor.into_inner())
     }
 
-    /// 根据 Base URL、模型 ID 与 API Key 构造请求端点 URL
-    pub fn build_request_url(base_url: &str, model: &str, api_key: &str) -> String {
+    /// 根据 Base URL 与 API Key 构造 Interactions API 请求端点 URL
+    pub fn build_request_url(base_url: &str, api_key: &str) -> String {
         let trimmed_base = base_url.trim().trim_end_matches('/');
         let base = if trimmed_base.is_empty() {
             "https://generativelanguage.googleapis.com"
@@ -86,13 +143,43 @@ impl GeminiProvider {
         };
 
         if base.ends_with("/v1beta") {
-            format!("{}/models/{}:generateContent?key={}", base, model, api_key)
+            format!("{}/interactions?key={}", base, api_key)
         } else {
-            format!(
-                "{}/v1beta/models/{}:generateContent?key={}",
-                base, model, api_key
-            )
+            format!("{}/v1beta/interactions?key={}", base, api_key)
         }
+    }
+
+    /// 从 Interactions API 响应中提取转录结果
+    pub fn extract_text_from_response(
+        body: &GeminiInteractionResponse,
+    ) -> Result<String, String> {
+        if let Some(steps) = &body.steps {
+            let mut extracted_texts = Vec::new();
+            for step in steps {
+                if let Some(contents) = &step.content {
+                    for content in contents {
+                        if let Some(text) = &content.text {
+                            let trimmed = text.trim();
+                            if !trimmed.is_empty() {
+                                extracted_texts.push(trimmed.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !extracted_texts.is_empty() {
+                return Ok(extracted_texts.join(" "));
+            }
+        }
+
+        if let Some(status) = &body.status {
+            if status == "completed" {
+                return Ok(String::new());
+            }
+        }
+
+        Err("Gemini Interactions API 未返回有效的转写文本".to_string())
     }
 
     /// 统一解析 Gemini API 的错误响应文本
@@ -124,6 +211,7 @@ impl GeminiProvider {
 
         let response = client
             .get(&test_url)
+            .header("x-goog-api-key", api_key)
             .send()
             .await
             .map_err(|e| format!("网络请求发送失败: {}", e))?;
@@ -160,7 +248,7 @@ impl BatchTranscriptionProvider for GeminiProvider {
             .unwrap_or_default();
 
         let model = if provider_config.model_id.trim().is_empty() {
-            "gemini-2.5-flash"
+            DEFAULT_CLOUD_STT_MODEL_ID
         } else {
             provider_config.model_id.trim()
         };
@@ -174,51 +262,44 @@ impl BatchTranscriptionProvider for GeminiProvider {
         let wav_bytes = Self::encode_wav_in_memory(&audio, 16000)?;
         let base64_audio = BASE64.encode(&wav_bytes);
 
-        // 2. 构造 REST 请求 URL
-        let request_url = Self::build_request_url(custom_base, model, api_key);
+        // 2. 构造 REST 请求 URL 与请求载荷
+        let request_url = Self::build_request_url(custom_base, api_key);
 
-        let system_instruction = "You are an expert speech recognition engine. Your ONLY task is to transcribe the spoken words in the provided audio file with extreme accuracy. Output verbatim text without commentary, pleasantries, or explanations. If speech is in a specific language, transcribe in that language unless instructed otherwise.";
+        let mut inputs = vec![GeminiInteractionInput::Audio {
+            data: base64_audio,
+            mime_type: "audio/wav".to_string(),
+        }];
 
-        let user_prompt = match &options.prompt {
-            Some(p) if !p.trim().is_empty() => p.clone(),
-            _ => {
-                if options.language != "auto" && !options.language.trim().is_empty() {
-                    format!(
-                        "Transcribe the speech in the audio verbatim. The spoken language is {}.",
-                        options.language
-                    )
-                } else {
-                    "Transcribe the speech in the audio verbatim.".to_string()
-                }
+        if let Some(prompt) = &options.prompt {
+            let trimmed_prompt = prompt.trim();
+            if !trimmed_prompt.is_empty() {
+                inputs.push(GeminiInteractionInput::Text {
+                    text: trimmed_prompt.to_string(),
+                });
             }
+        }
+
+        let mut language_codes = Vec::new();
+        if options.language != "auto" && !options.language.trim().is_empty() {
+            language_codes.push(options.language.trim().to_string());
+        }
+
+        let payload = GeminiInteractionRequest {
+            model: model.to_string(),
+            input: inputs,
+            generation_config: Some(GeminiInteractionGenerationConfig {
+                transcription_config: Some(GeminiTranscriptionConfig {
+                    language_codes,
+                    mode: GeminiTranscriptionMode::Smart,
+                }),
+            }),
         };
-
-        let payload = serde_json::json!({
-            "system_instruction": {
-                "parts": [{ "text": system_instruction }]
-            },
-            "contents": [{
-                "parts": [
-                    {
-                        "inline_data": {
-                            "mime_type": "audio/wav",
-                            "data": base64_audio
-                        }
-                    },
-                    {
-                        "text": user_prompt
-                    }
-                ]
-            }],
-            "generationConfig": {
-                "temperature": 0.0
-            }
-        });
 
         // 3. 复用全局网络管理器的共享连接池客户端
         let client = self.network_manager.client().await;
         let response = client
             .post(&request_url)
+            .header("x-goog-api-key", api_key)
             .json(&payload)
             .send()
             .await
@@ -230,31 +311,13 @@ impl BatchTranscriptionProvider for GeminiProvider {
             return Err(Self::parse_api_error(status, &error_text));
         }
 
-        let body: GeminiResponse = response
+        let body: GeminiInteractionResponse = response
             .json()
             .await
             .map_err(|e| format!("解析 Gemini 响应 JSON 失败: {}", e))?;
 
         // 4. 提取输出文本
-        if let Some(candidate) = body.candidates.as_deref().and_then(|c| c.first()) {
-            if let Some(text) = candidate
-                .content
-                .as_ref()
-                .and_then(|c| c.parts.as_deref())
-                .and_then(|p| p.first())
-                .and_then(|part| part.text.as_deref())
-            {
-                return Ok(text.trim().to_string());
-            }
-
-            if let Some(finish_reason) = candidate.finish_reason.as_deref() {
-                if finish_reason == "STOP" || finish_reason == "MAX_TOKENS" {
-                    return Ok(String::new());
-                }
-            }
-        }
-
-        Err("Gemini 未返回有效的转写文本".to_string())
+        Self::extract_text_from_response(&body)
     }
 
     fn provider_id(&self) -> &'static str {
@@ -304,30 +367,28 @@ mod tests {
 
     #[test]
     fn test_build_request_url() {
-        let url1 = GeminiProvider::build_request_url("", "gemini-2.5-flash", "my-key");
+        let url1 = GeminiProvider::build_request_url("", "my-key");
         assert_eq!(
             url1,
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=my-key"
+            "https://generativelanguage.googleapis.com/v1beta/interactions?key=my-key"
         );
 
-        let url2 = GeminiProvider::build_request_url(
-            "https://custom-proxy.internal",
-            "gemini-2.5-pro",
-            "my-key",
-        );
+        let url2 = GeminiProvider::build_request_url("https://custom-proxy.internal", "my-key");
         assert_eq!(
             url2,
-            "https://custom-proxy.internal/v1beta/models/gemini-2.5-pro:generateContent?key=my-key"
+            "https://custom-proxy.internal/v1beta/interactions?key=my-key"
         );
 
-        let url3 = GeminiProvider::build_request_url(
-            "https://custom-proxy.internal/v1beta/",
-            "gemini-2.5-flash",
-            "my-key",
-        );
+        let url3 = GeminiProvider::build_request_url("https://custom-proxy.internal/v1beta", "my-key");
         assert_eq!(
             url3,
-            "https://custom-proxy.internal/v1beta/models/gemini-2.5-flash:generateContent?key=my-key"
+            "https://custom-proxy.internal/v1beta/interactions?key=my-key"
+        );
+
+        let url4 = GeminiProvider::build_request_url("https://custom-proxy.internal/v1beta/", "my-key");
+        assert_eq!(
+            url4,
+            "https://custom-proxy.internal/v1beta/interactions?key=my-key"
         );
     }
 
@@ -347,32 +408,128 @@ mod tests {
     }
 
     #[test]
-    fn test_gemini_response_deserialization() {
-        let json = r#"{
-            "candidates": [
-                {
-                    "content": {
-                        "parts": [
-                            { "text": "This is a transcribed test." }
-                        ]
-                    },
-                    "finishReason": "STOP"
-                }
-            ]
-        }"#;
-        let res: GeminiResponse = serde_json::from_str(json).unwrap();
+    fn test_interaction_request_serialization() {
+        let req = GeminiInteractionRequest {
+            model: "gemini-3.5-transcribe".to_string(),
+            input: vec![
+                GeminiInteractionInput::Audio {
+                    data: "base64audio".to_string(),
+                    mime_type: "audio/wav".to_string(),
+                },
+                GeminiInteractionInput::Text {
+                    text: "Speech prompt".to_string(),
+                },
+            ],
+            generation_config: Some(GeminiInteractionGenerationConfig {
+                transcription_config: Some(GeminiTranscriptionConfig {
+                    language_codes: vec!["zh-CN".to_string()],
+                    mode: GeminiTranscriptionMode::Smart,
+                }),
+            }),
+        };
+
+        let json_val = serde_json::to_value(&req).expect("should serialize request");
+        assert_eq!(json_val["model"], "gemini-3.5-transcribe");
+        assert_eq!(json_val["input"][0]["type"], "audio");
+        assert_eq!(json_val["input"][0]["data"], "base64audio");
+        assert_eq!(json_val["input"][0]["mime_type"], "audio/wav");
+        assert_eq!(json_val["input"][1]["type"], "text");
+        assert_eq!(json_val["input"][1]["text"], "Speech prompt");
         assert_eq!(
-            res.candidates.as_ref().unwrap()[0]
-                .content
-                .as_ref()
-                .unwrap()
-                .parts
-                .as_ref()
-                .unwrap()[0]
-                .text
-                .as_deref()
-                .unwrap(),
-            "This is a transcribed test."
+            json_val["generation_config"]["transcription_config"]["mode"],
+            "smart"
         );
+        assert_eq!(
+            json_val["generation_config"]["transcription_config"]["language_codes"][0],
+            "zh-CN"
+        );
+    }
+
+    #[test]
+    fn test_interaction_response_deserialization_and_text_extraction() {
+        let json_str = r#"{
+            "id": "interactions/int-20260905-xyz891",
+            "status": "completed",
+            "steps": [
+                {
+                    "id": "step_001",
+                    "type": "model_output",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "这是一段通过 Gemini 3.5 Transcribe 模型转写完成的高准确度文本。"
+                        }
+                    ]
+                }
+            ],
+            "usage": {
+                "total_input_tokens": 128,
+                "total_output_tokens": 32,
+                "total_tokens": 160
+            }
+        }"#;
+
+        let res: GeminiInteractionResponse =
+            serde_json::from_str(json_str).expect("should deserialize response");
+        assert_eq!(res.status.as_deref(), Some("completed"));
+
+        let extracted = GeminiProvider::extract_text_from_response(&res).expect("should extract text");
+        assert_eq!(
+            extracted,
+            "这是一段通过 Gemini 3.5 Transcribe 模型转写完成的高准确度文本。"
+        );
+    }
+
+    #[test]
+    fn test_extract_text_multiple_steps_and_contents() {
+        let res = GeminiInteractionResponse {
+            id: Some("int-test".to_string()),
+            status: Some("completed".to_string()),
+            steps: Some(vec![
+                GeminiInteractionStep {
+                    id: Some("s1".to_string()),
+                    step_type: Some("model_output".to_string()),
+                    content: Some(vec![GeminiInteractionContent {
+                        content_type: Some("text".to_string()),
+                        text: Some("Hello".to_string()),
+                    }]),
+                },
+                GeminiInteractionStep {
+                    id: Some("s2".to_string()),
+                    step_type: Some("model_output".to_string()),
+                    content: Some(vec![GeminiInteractionContent {
+                        content_type: Some("text".to_string()),
+                        text: Some("World".to_string()),
+                    }]),
+                },
+            ]),
+        };
+
+        let extracted = GeminiProvider::extract_text_from_response(&res).expect("should extract text");
+        assert_eq!(extracted, "Hello World");
+    }
+
+    #[test]
+    fn test_extract_text_completed_empty() {
+        let res = GeminiInteractionResponse {
+            id: Some("int-empty".to_string()),
+            status: Some("completed".to_string()),
+            steps: Some(vec![]),
+        };
+
+        let extracted = GeminiProvider::extract_text_from_response(&res).expect("empty completed should return empty string");
+        assert_eq!(extracted, "");
+    }
+
+    #[test]
+    fn test_transcription_mode_serialization() {
+        let smart_json = serde_json::to_string(&GeminiTranscriptionMode::Smart).unwrap();
+        assert_eq!(smart_json, "\"smart\"");
+
+        let verbatim_json = serde_json::to_string(&GeminiTranscriptionMode::Verbatim).unwrap();
+        assert_eq!(verbatim_json, "\"verbatim\"");
+
+        let default_mode: GeminiTranscriptionMode = Default::default();
+        assert_eq!(default_mode, GeminiTranscriptionMode::Smart);
     }
 }

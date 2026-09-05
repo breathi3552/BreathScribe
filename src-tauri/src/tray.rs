@@ -23,7 +23,7 @@
 use crate::managers::history::{HistoryEntry, HistoryManager};
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{self, TranscriptionMode};
+use crate::settings::{self, TranscriptionMode, DEFAULT_CLOUD_STT_MODEL_ID};
 use crate::tray_i18n::get_tray_translations;
 use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
@@ -537,13 +537,16 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         let (cloud_model_id, cloud_display_name) = match &inputs.transcription_mode {
             TranscriptionMode::Cloud { model_id, .. } => {
                 let name = match model_id.as_str() {
+                    "gemini-3.5-transcribe" => "Gemini 3.5 Transcribe",
+                    "gemini-3.6-flash" => "Gemini 3.6 Flash",
+                    "gemini-3.5-flash" => "Gemini 3.5 Flash",
                     "gemini-2.5-flash" => "Gemini 2.5 Flash",
                     "gemini-2.5-pro" => "Gemini 2.5 Pro",
                     other => other,
                 };
                 (model_id.as_str(), format!("☁️ {}", name))
             }
-            _ => ("gemini-2.5-flash", "☁️ Gemini 2.5 Flash".to_string()),
+            _ => (DEFAULT_CLOUD_STT_MODEL_ID, "☁️ Gemini 3.5 Transcribe".to_string()),
         };
 
         let submenu_label = if is_cloud_active {
@@ -751,7 +754,7 @@ mod tests {
         let mut input_cloud = inputs(false);
         input_cloud.transcription_mode = TranscriptionMode::Cloud {
             provider_id: "gemini".to_string(),
-            model_id: "gemini-2.5-flash".to_string(),
+            model_id: "gemini-3.5-transcribe".to_string(),
         };
         assert_ne!(input_local, input_cloud);
     }
@@ -791,16 +794,16 @@ mod tests {
 
     #[test]
     fn tray_menu_inputs_differ_between_cloud_models() {
+        let mut input_transcribe = inputs(false);
+        input_transcribe.transcription_mode = TranscriptionMode::Cloud {
+            provider_id: "gemini".to_string(),
+            model_id: "gemini-3.5-transcribe".to_string(),
+        };
         let mut input_flash = inputs(false);
         input_flash.transcription_mode = TranscriptionMode::Cloud {
             provider_id: "gemini".to_string(),
-            model_id: "gemini-2.5-flash".to_string(),
+            model_id: "gemini-3.6-flash".to_string(),
         };
-        let mut input_pro = inputs(false);
-        input_pro.transcription_mode = TranscriptionMode::Cloud {
-            provider_id: "gemini".to_string(),
-            model_id: "gemini-2.5-pro".to_string(),
-        };
-        assert_ne!(input_flash, input_pro);
+        assert_ne!(input_transcribe, input_flash);
     }
 }

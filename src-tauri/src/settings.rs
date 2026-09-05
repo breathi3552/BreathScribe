@@ -438,7 +438,7 @@ impl Default for CloudSttProviderSettings {
     fn default() -> Self {
         Self {
             provider_id: "gemini".to_string(),
-            model_id: "gemini-2.5-flash".to_string(),
+            model_id: "gemini-3.5-transcribe".to_string(),
             custom_base_url: None,
         }
     }
@@ -620,6 +620,7 @@ pub struct AppSettings {
 }
 
 pub const DEFAULT_CLOUD_STT_PROVIDER_ID: &str = "gemini";
+pub const DEFAULT_CLOUD_STT_MODEL_ID: &str = "gemini-3.5-transcribe";
 
 impl AppSettings {
     /// 解析默认或当前激活的云端转写模式配置
@@ -638,7 +639,7 @@ impl AppSettings {
                     .cloud_stt_providers
                     .get(&provider_id)
                     .map(|p| p.model_id.clone())
-                    .unwrap_or_else(|| "gemini-2.5-flash".to_string());
+                    .unwrap_or_else(|| DEFAULT_CLOUD_STT_MODEL_ID.to_string());
                 TranscriptionMode::Cloud {
                     provider_id,
                     model_id,
@@ -1897,12 +1898,12 @@ mod tests {
 
         let cloud_mode = TranscriptionMode::Cloud {
             provider_id: "gemini".to_string(),
-            model_id: "gemini-2.5-flash".to_string(),
+            model_id: "gemini-3.5-transcribe".to_string(),
         };
         let json = serde_json::to_string(&cloud_mode).unwrap();
         assert_eq!(
             json,
-            "{\"type\":\"cloud\",\"config\":{\"provider_id\":\"gemini\",\"model_id\":\"gemini-2.5-flash\"}}"
+            "{\"type\":\"cloud\",\"config\":{\"provider_id\":\"gemini\",\"model_id\":\"gemini-3.5-transcribe\"}}"
         );
 
         let parsed: TranscriptionMode = serde_json::from_str(&json).unwrap();

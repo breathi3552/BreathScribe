@@ -14,13 +14,16 @@
 ## 一、现状与报错溯源（Root Cause）
 
 ### 1. 运行时错误重现
+
 在 Handy-Cloud 实机运行转录时，前端弹出错误通知：
+
 ```text
 转录失败
 Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.6-flash for the latest features and improvements. We recommend you to use the Interactions API.
 ```
 
 ### 2. 根因分析
+
 1. **旧模型下线**：Google 已在 2026 年将 `gemini-2.5-flash` 标记为废弃（Deprecated），并彻底对新 API Key / 新用户关闭访问权限，旧端点直接返回 HTTP 404；
 2. **端点体系迭代**：Handy-Cloud 当前在 `src-tauri/src/providers/gemini.rs` 中调用的旧版端点是：
    `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}`
@@ -35,18 +38,19 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
 
 ### 1. 核心事实：`gemini-3.5-transcribe` 与 `gemini-3.5-transcribe-live` 属于两套截然不同的架构与协议
 
-| 维度 | `gemini-3.5-transcribe` (批处理 / 非 Live) | `gemini-3.5-transcribe-live` (Live API) |
-|---|---|---|
-| **协议类型** | **HTTP REST (一元请求-响应)** | **WebSocket (双向全双工长连接)** |
-| **API 入口** | **Interactions API** (`POST /v1beta/interactions`) | **Gemini Live API** (`wss://.../BidiGenerateContent`) |
-| **工作时序** | 用户录音结束 $\to$ 一次性上传完整音频 $\to$ 接收完整转录文本 | 用户说话过程中 $\to$ 边录音边持续推送音频切片 $\to$ 实时推回流式字幕 |
-| **输入数据** | 完整音频（支持内存 Base64 内联 WAV/MP3/FLAC，最长 1 小时） | 音频数据流（必须分片推送 Raw 16-bit Mono 16kHz PCM，通常每片 100ms） |
-| **输出事件** | 单次返回最终文本，支持结构化解析 | 实时返回两级事件：<br>1. `interim_input_transcription` (极低延迟推测字幕)<br>2. `input_transcription` (停顿/分句权威确认文本) |
-| **单会话上限** | 最长 1 小时（开启时间戳/声纹分离时限 30 分钟） | 单会话最长 10 分钟 |
-| **核心特性** | 自动语言检测 (85+ 语言)、`smart` 模式 (去语气词/自动纠错/标点数字排版)、说话人分离、词级时间戳、自定义词汇表 | 实时极低延迟听写、`smart` 模式、实时推测字幕、自定义词汇表 |
-| **与 Handy 现有架构匹配度** | **100% 契合**。Handy 当前的 `BatchTranscriptionProvider` 接口契约即为整段音频输入与单次文本输出。 | **不兼容现有批处理接口**。需要为 Handy 新增流式音频采集管道与实时悬浮窗显示。 |
+| 维度                        | `gemini-3.5-transcribe` (批处理 / 非 Live)                                                                   | `gemini-3.5-transcribe-live` (Live API)                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **协议类型**                | **HTTP REST (一元请求-响应)**                                                                                | **WebSocket (双向全双工长连接)**                                                                                              |
+| **API 入口**                | **Interactions API** (`POST /v1beta/interactions`)                                                           | **Gemini Live API** (`wss://.../BidiGenerateContent`)                                                                         |
+| **工作时序**                | 用户录音结束 $\to$ 一次性上传完整音频 $\to$ 接收完整转录文本                                                 | 用户说话过程中 $\to$ 边录音边持续推送音频切片 $\to$ 实时推回流式字幕                                                          |
+| **输入数据**                | 完整音频（支持内存 Base64 内联 WAV/MP3/FLAC，最长 1 小时）                                                   | 音频数据流（必须分片推送 Raw 16-bit Mono 16kHz PCM，通常每片 100ms）                                                          |
+| **输出事件**                | 单次返回最终文本，支持结构化解析                                                                             | 实时返回两级事件：<br>1. `interim_input_transcription` (极低延迟推测字幕)<br>2. `input_transcription` (停顿/分句权威确认文本) |
+| **单会话上限**              | 最长 1 小时（开启时间戳/声纹分离时限 30 分钟）                                                               | 单会话最长 10 分钟                                                                                                            |
+| **核心特性**                | 自动语言检测 (85+ 语言)、`smart` 模式 (去语气词/自动纠错/标点数字排版)、说话人分离、词级时间戳、自定义词汇表 | 实时极低延迟听写、`smart` 模式、实时推测字幕、自定义词汇表                                                                    |
+| **与 Handy 现有架构匹配度** | **100% 契合**。Handy 当前的 `BatchTranscriptionProvider` 接口契约即为整段音频输入与单次文本输出。            | **不兼容现有批处理接口**。需要为 Handy 新增流式音频采集管道与实时悬浮窗显示。                                                 |
 
 ### 2. SDK 现状事实：Google 官方没有 Rust SDK
+
 - Google 官方发布的 GenAI SDK 矩阵仅涵盖：
   - Python (`google-genai`)
   - TypeScript / Node.js (`@google/genai`)
@@ -63,6 +67,7 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
 ### 1. Interactions API (`gemini-3.5-transcribe`)
 
 #### 请求规范
+
 - **URL**: `https://generativelanguage.googleapis.com/v1beta/interactions`
 - **Method**: `POST`
 - **Headers**:
@@ -70,6 +75,7 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
   - `Content-Type: application/json`
 
 #### 请求报文（Payload）
+
 ```json
 {
   "model": "gemini-3.5-transcribe",
@@ -94,6 +100,7 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
 - `mode`: `"smart"` 启用智能听写（自动移除 “嗯/啊/这个” 等语气助词、修正口误并自动进行标点符号与阿拉伯数字/货币单位规整化）。若需要原始逐字稿，可设为 `{"type": "verbatim"}`。
 
 #### 响应报文（Response）
+
 ```json
 {
   "id": "interactions/int-20260905-xyz891",
@@ -125,11 +132,14 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
 ### 2. Live API (`gemini-3.5-transcribe-live`)
 
 #### 连接规范
+
 - **URL**: `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=<API_KEY>`
 - **协议**: WebSocket 双向流
 
 #### 握手配置帧（Client -> Server）
+
 连接建立后，客户端必须发送的第一条消息：
+
 ```json
 {
   "setup": {
@@ -145,6 +155,7 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
 ```
 
 #### 实时推流帧（Client -> Server，每 100ms 持续发送）
+
 ```json
 {
   "realtimeInput": {
@@ -157,6 +168,7 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
 ```
 
 #### 结束流帧（Client -> Server，按键释放停止录音时发送）
+
 ```json
 {
   "realtimeInput": {
@@ -166,6 +178,7 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
 ```
 
 #### 服务端事件帧（Server -> Client）
+
 ```json
 {
   "serverContent": {
@@ -214,6 +227,7 @@ Gemini API 错误 (HTTP 404 Not Found): This model models/gemini-2.5-flash is no
 **目标**：突破传统“按键录音 $\to$ 释放 $\to$ 等待上传 $\to$ 粘贴”的固有延迟，实现用户边说话、屏幕边实时出字的沉浸式打字体验。
 
 1. **抽象流式接口契约（`StreamingTranscriptionProvider`）**：
+
    ```rust
    #[async_trait]
    pub trait StreamingTranscriptionProvider: Send + Sync {

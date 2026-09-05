@@ -22,7 +22,10 @@ import { SettingsGroup } from "../ui/SettingsGroup";
 import { Dropdown, type DropdownOption } from "../ui/Dropdown";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
-import { DEFAULT_CLOUD_STT_PROVIDER_SETTINGS } from "@/bindings";
+import {
+  DEFAULT_CLOUD_MODEL_ID,
+  DEFAULT_CLOUD_STT_PROVIDER_SETTINGS,
+} from "@/bindings";
 
 interface CloudSTTSettingsProps {
   grouped?: boolean;
@@ -54,7 +57,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   const [apiKeyDraft, setApiKeyDraft] = useState(storedApiKey);
   const [showApiKey, setShowApiKey] = useState(false);
   const [selectedModel, setSelectedModel] = useState(
-    storedProviderConfig.model_id || "gemini-2.5-flash",
+    storedProviderConfig.model_id || DEFAULT_CLOUD_MODEL_ID,
   );
   const [customBaseUrlDraft, setCustomBaseUrlDraft] = useState(
     storedProviderConfig.custom_base_url ?? "",
@@ -66,19 +69,27 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   const modelOptions: DropdownOption[] = useMemo(
     () => [
       {
-        value: "gemini-2.5-flash",
-        label: "Gemini 2.5 Flash",
+        value: "gemini-3.5-transcribe",
+        label: "Gemini 3.5 Transcribe",
         description: t(
-          "settings.models.cloud.models.flashDesc",
-          "极速响应、高准确率，语音转写推荐基准",
+          "settings.models.cloud.models.transcribeDesc",
+          "专用语音识别模型，智能过滤语气词与标点规整化（推荐）",
         ),
       },
       {
-        value: "gemini-2.5-pro",
-        label: "Gemini 2.5 Pro",
+        value: "gemini-3.6-flash",
+        label: "Gemini 3.6 Flash",
         description: t(
-          "settings.models.cloud.models.proDesc",
-          "超强大脑、复杂语境与专业术语更强",
+          "settings.models.cloud.models.flash36Desc",
+          "最新一代通用多模态大模型，复杂语境与推理能力出色",
+        ),
+      },
+      {
+        value: "gemini-3.5-flash",
+        label: "Gemini 3.5 Flash",
+        description: t(
+          "settings.models.cloud.models.flash35Desc",
+          "轻量高性价比通用大模型，低延迟响应",
         ),
       },
     ],
@@ -90,10 +101,13 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
       {
         value: "gemini",
         label: "Google Gemini",
-        description: "Google Gemini 2.5 Flash & Pro",
+        description: t(
+          "settings.models.cloud.providerGoogleDesc",
+          "Google Gemini 3.5 Transcribe & Flash",
+        ),
       },
     ],
-    [],
+    [t],
   );
 
   const isKeyFormatValid = (key: string): boolean => {
@@ -118,7 +132,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
 
   useEffect(() => {
     if (storedProviderConfig) {
-      setSelectedModel(storedProviderConfig.model_id || "gemini-2.5-flash");
+      setSelectedModel(storedProviderConfig.model_id || DEFAULT_CLOUD_MODEL_ID);
       setCustomBaseUrlDraft(storedProviderConfig.custom_base_url ?? "");
     }
   }, [storedProviderConfig]);

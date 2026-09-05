@@ -1075,9 +1075,10 @@ export const DEFAULT_PROXY_SETTINGS: ProxySettings = {
 };
 export type TranscriptionMode = { type: "local" } | { type: "cloud"; config: { provider_id: string; model_id: string } }
 export type CloudSttProviderSettings = { provider_id: string; model_id: string; custom_base_url: string | null }
+export const DEFAULT_CLOUD_MODEL_ID = "gemini-3.5-transcribe";
 export const DEFAULT_CLOUD_STT_PROVIDER_SETTINGS: CloudSttProviderSettings = {
   provider_id: "gemini",
-  model_id: "gemini-2.5-flash",
+  model_id: DEFAULT_CLOUD_MODEL_ID,
   custom_base_url: null,
 };
 export type AudioDevice = { index: string; name: string; is_default: boolean }

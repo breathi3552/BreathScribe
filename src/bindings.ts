@@ -936,6 +936,38 @@ async updateProxySettings(settings: ProxySettings) : Promise<Result<null, string
     if(e instanceof Error) throw e;
     else return { status: "error", error: String(e) };
 }
+},
+async setTranscriptionMode(mode: TranscriptionMode) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_transcription_mode", { mode }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: String(e) };
+}
+},
+async setCloudSttApiKey(providerId: string, apiKey: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_cloud_stt_api_key", { providerId, apiKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: String(e) };
+}
+},
+async setCloudSttProviderSettings(settingsInput: CloudSttProviderSettings) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_cloud_stt_provider_settings", { settingsInput }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: String(e) };
+}
+},
+async testCloudSttConnection(providerId: string, apiKey: string | null, customBaseUrl: string | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("test_cloud_stt_connection", { providerId, apiKey, customBaseUrl }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: String(e) };
+}
 }
 };
 
@@ -1020,7 +1052,7 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle; proxy?: ProxySettings }
+overlay_style?: OverlayStyle; proxy?: ProxySettings; transcription_mode?: TranscriptionMode; cloud_stt_api_keys?: Record<string, string>; cloud_stt_providers?: Record<string, CloudSttProviderSettings> }
 export type ProxyMode = "system" | "manual" | "direct"
 export type ProxyProtocol = "http" | "socks5"
 export type ProxySettings = { mode: ProxyMode; protocol: ProxyProtocol; host: string; port: number; auth_enabled: boolean; username: string | null; password: string | null }
@@ -1032,6 +1064,13 @@ export const DEFAULT_PROXY_SETTINGS: ProxySettings = {
   auth_enabled: false,
   username: null,
   password: null,
+};
+export type TranscriptionMode = { type: "local" } | { type: "cloud"; config: { provider_id: string; model_id: string } }
+export type CloudSttProviderSettings = { provider_id: string; model_id: string; custom_base_url: string | null }
+export const DEFAULT_CLOUD_STT_PROVIDER_SETTINGS: CloudSttProviderSettings = {
+  provider_id: "gemini",
+  model_id: "gemini-2.5-flash",
+  custom_base_url: null,
 };
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"

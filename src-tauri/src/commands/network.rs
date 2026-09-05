@@ -33,7 +33,7 @@ pub async fn update_proxy_settings(app: AppHandle, settings: ProxySettings) -> R
 
     let mut current = get_settings(&app);
     current.proxy = settings;
-    write_settings(&app, current)?;
+    write_settings(&app, current);
 
     Ok(())
 }

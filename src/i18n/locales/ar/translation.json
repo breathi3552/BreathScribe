@@ -671,6 +671,48 @@
       "rescan": {
         "label": "إعادة الفحص",
         "tooltip": "إعادة الفحص بحثًا عن النماذج المضافة إلى مجلد النماذج أو ذاكرة Hugging Face التخزينية المؤقتة خارج Handy Cloud"
+      },
+      "modes": {
+        "local": "Local Offline Models",
+        "cloud": "Cloud API (Gemini)"
+      },
+      "cloud": {
+        "groupTitle": "Cloud Speech Recognition",
+        "groupDescription": "Configure cloud speech recognition providers, models, and credentials",
+        "modelUpdated": "Switched cloud model: {{model}}",
+        "keySaved": "Gemini API Key saved",
+        "baseUrlSaved": "Custom API Base URL updated",
+        "cloudSttBadge": "Cloud LLM",
+        "providerDescription": "High-accuracy real-time speech recognition powered by global network connection pool without needing local GPU",
+        "getApiKey": "Get Free API Key",
+        "modelSelectTitle": "Cloud Model Version",
+        "modelSelectDesc": "Recommended 2.5 Flash for fast response; Pro is recommended for complex reasoning or specialized terminology",
+        "apiKeyTitle": "Google Gemini API Key",
+        "apiKeyDesc": "Stored securely in local configuration with automatic redaction, never uploaded to third-party servers",
+        "hideKey": "Hide key",
+        "showKey": "Show key",
+        "validating": "Validating...",
+        "validateAndSave": "Validate & Save",
+        "saving": "Saving...",
+        "saveOnly": "Save",
+        "connectSuccess": "Connectivity validation succeeded",
+        "connectSuccessDesc": "Gemini REST API and credentials verified, ready for transcription",
+        "connectFailed": "Validation failed",
+        "advancedCustomUrl": "Advanced: Custom API Proxy URL (Optional)",
+        "defaultOfficialUrl": "Official Default URL",
+        "customBaseUrlTitle": "API Base URL",
+        "customBaseUrlDesc": "For reverse proxies, Cloudflare AI Gateway, or relay services. Leave empty for official API",
+        "saveBaseUrl": "Update URL",
+        "resetBaseUrl": "Reset",
+        "failSafeTitle": "Deterministic Expectations & Audio Safety",
+        "failSafeDesc": "Immediate explicit error notification upon network timeout or credential issues, never silent fallback to local models. All original audio is safely retained in history for one-click retry.",
+        "errors": {
+          "modelUpdateFailed": "Failed to switch model, please try again",
+          "saveFailed": "Failed to save, please check your settings",
+          "emptyKey": "Please enter a Gemini API Key first",
+          "validationFailed": "Validation failed: {{error}}",
+          "baseUrlSaveFailed": "Failed to save custom API URL"
+        }
       }
     }
   },

@@ -6,17 +6,17 @@ Handy 原生是纯离线优先应用，首次启动时若未下载任何本地�
 
 1. **开屏引导醒目横幅与零破坏放行（Banner in Onboarding & Skip Logic）**：
    - 在 `src/components/onboarding/Onboarding.tsx` 的模型列表顶部插入醒目的【云端优先】横幅卡片：
-     *“⚡ 云端优先模式：无需下载数百 MB 本地模型，直接启用云端 API 转写 [跳过下载并配置 →]”*；
+     _“⚡ 云端优先模式：无需下载数百 MB 本地模型，直接启用云端 API 转写 [跳过下载并配置 →]”_；
    - 零破坏原生状态机：完全沿用原生的 `onboarding_completed: true` 作为放行进入主程序的唯一标识，不重构 `App.tsx` 的引导流程与步骤枚举；
    - 原子化持久化：用户点击跳过后，通过后端命令原子更新设置，将 `onboarding_completed` 置为 `true`、`transcription_mode` 置为 `Cloud`，`selected_model` 保持为空字符串 `""`。
 
 2. **主界面落地聚焦与轻量引导（Post-Skip Landing & Guidance）**：
    - 点击跳过进入主界面后，`App.tsx` 将侧边栏激活项自动聚焦至【转录模型 (Models)】页面；
-   - 若检测到选定云端 Provider 尚未配置有效 API Key，前端弹出轻量 Toast 提示：*“已切换为云端模式，请配置 API Key 开始使用”*；
+   - 若检测到选定云端 Provider 尚未配置有效 API Key，前端弹出轻量 Toast 提示：_“已切换为云端模式，请配置 API Key 开始使用”_；
    - 用户可直达配置面板完成 API Key 填写与连通性测试；若后续需要本地模型，随时可在同页面的本地模型列表中启动下载并切换，两套引擎互不干扰。
 
 3. **快捷键按键空凭据防御与空模型守卫（Pre-recording Guard in actions.rs）**：
-   - **前置快速失败（Fail-Fast）**：在 `src-tauri/src/actions.rs` 的 `TranscribeAction::start` 流程中加入云端凭据前置守卫。若 `transcription_mode == Cloud` 且当前云端 Provider 的 API Key 为空，立即发出 `transcription-error` 事件通知前端弹出警示（*“请先在设置中填写云端 API Key”*），直接阻断并返回，不启动麦克风录音、不播放启动音效、不启动实时音频流，避免浪费系统资源与用户发音；
+   - **前置快速失败（Fail-Fast）**：在 `src-tauri/src/actions.rs` 的 `TranscribeAction::start` 流程中加入云端凭据前置守卫。若 `transcription_mode == Cloud` 且当前云端 Provider 的 API Key 为空，立即发出 `transcription-error` 事件通知前端弹出警示（_“请先在设置中填写云端 API Key”_），直接阻断并返回，不启动麦克风录音、不播放启动音效、不启动实时音频流，避免浪费系统资源与用户发音；
    - **空模型加载放行**：当 `transcription_mode == Cloud` 时，在 `actions.rs` 中跳过 `tm.initiate_model_load()`，彻底规避因 `selected_model` 为空而抛出 `Model not found` 错误的假性崩溃。
 
 4. **托盘菜单多引擎同层互斥单选（Tray Submenu Multi-Engine Selection）**：

@@ -227,6 +227,48 @@
       "rescan": {
         "label": "重新掃描",
         "tooltip": "重新掃描在 Handy Cloud 之外新增到模型資料夾或 Hugging Face 快取中的模型"
+      },
+      "modes": {
+        "local": "本機離線模型",
+        "cloud": "雲端 API (Gemini)"
+      },
+      "cloud": {
+        "groupTitle": "雲端語音識別設定",
+        "groupDescription": "設定雲端大模型語音識別服務商、模型與鑑權憑據",
+        "modelUpdated": "已切換雲端模型: {{model}}",
+        "keySaved": "Gemini API Key 已儲存",
+        "baseUrlSaved": "自訂 API 位址已更新",
+        "cloudSttBadge": "雲端大模型",
+        "providerDescription": "無需本機顯示卡，依託全球網絡連接池提供高準確率實時語音識別",
+        "getApiKey": "取得免費 API Key",
+        "modelSelectTitle": "雲端模型版本",
+        "modelSelectDesc": "推薦使用 2.5 Flash 取得毫秒級轉寫回應；需要強推理或罕見專有名詞建議選用 Pro",
+        "apiKeyTitle": "Google Gemini API Key",
+        "apiKeyDesc": "在本機設定檔中安全儲存並自動脫敏，絕不上傳第三方伺服器",
+        "hideKey": "隱藏明文",
+        "showKey": "顯示明文",
+        "validating": "驗證中...",
+        "validateAndSave": "驗證並儲存",
+        "saving": "儲存中...",
+        "saveOnly": "儲存",
+        "connectSuccess": "連通性驗證成功",
+        "connectSuccessDesc": "Gemini REST 介面與憑據握手正常，已就緒供轉寫調用",
+        "connectFailed": "驗證未通過",
+        "advancedCustomUrl": "進階設定：自訂 API 代理位址 (可選)",
+        "defaultOfficialUrl": "官方預設位址",
+        "customBaseUrlTitle": "API Base URL",
+        "customBaseUrlDesc": "適用於自建反代閘道、Cloudflare AI Gateway 或特定中轉路由。留空則直連官方介面",
+        "saveBaseUrl": "更新位址",
+        "resetBaseUrl": "重設",
+        "failSafeTitle": "確定性預期與錄音安全保證",
+        "failSafeDesc": "雲端識別遇網絡逾時或憑據錯誤時立即快顯明確提示，絕不無提示降級至本機模型造成卡頓。所有原始錄音完整保留在歷史記錄中，設定好網絡後可隨時在歷史介面一鍵重試。",
+        "errors": {
+          "modelUpdateFailed": "切換模型失敗，請重試",
+          "saveFailed": "儲存失敗，請檢查設定",
+          "emptyKey": "請先填寫 Gemini API Key",
+          "validationFailed": "驗證失敗: {{error}}",
+          "baseUrlSaveFailed": "儲存自訂位址失敗"
+        }
       }
     },
     "sound": {

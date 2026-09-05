@@ -408,6 +408,41 @@ impl Default for ProxySettings {
         }
     }
 }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[serde(tag = "type", content = "config", rename_all = "snake_case")]
+pub enum TranscriptionMode {
+    /// 使用本地离线模型（Whisper / Parakeet 等）
+    Local,
+    /// 使用云端 API 转写
+    Cloud {
+        provider_id: String, // 例如 "gemini"
+        model_id: String,    // 例如 "gemini-2.5-flash"
+    },
+}
+
+impl Default for TranscriptionMode {
+    fn default() -> Self {
+        TranscriptionMode::Local
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[serde(default)]
+pub struct CloudSttProviderSettings {
+    pub provider_id: String,
+    pub model_id: String,
+    pub custom_base_url: Option<String>,
+}
+
+impl Default for CloudSttProviderSettings {
+    fn default() -> Self {
+        Self {
+            provider_id: "gemini".to_string(),
+            model_id: "gemini-2.5-flash".to_string(),
+            custom_base_url: None,
+        }
+    }
+}
 
 /* still handy for composing the initial JSON in the store ------------- */
 /// The container-level `serde(default)` (backed by the `Default` impl below)
@@ -573,6 +608,15 @@ pub struct AppSettings {
     /// 全局网络代理配置
     #[serde(default)]
     pub proxy: ProxySettings,
+    /// 当前激活的转写引擎模式（本地离线 / 云端 API）
+    #[serde(default)]
+    pub transcription_mode: TranscriptionMode,
+    /// 云端 STT 凭据字典 (provider_id -> api_key)，继承 SecretMap 自动 Debug 脱敏机制
+    #[serde(default = "default_cloud_stt_api_keys")]
+    pub cloud_stt_api_keys: SecretMap,
+    /// 云端提供商参数配置 (provider_id -> CloudSttProviderSettings)
+    #[serde(default = "default_cloud_stt_providers")]
+    pub cloud_stt_providers: HashMap<String, CloudSttProviderSettings>,
 }
 
 fn default_model() -> String {
@@ -911,6 +955,35 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
 
     changed
 }
+fn default_cloud_stt_api_keys() -> SecretMap {
+    let mut map = HashMap::new();
+    map.insert("gemini".to_string(), String::new());
+    SecretMap(map)
+}
+
+fn default_cloud_stt_providers() -> HashMap<String, CloudSttProviderSettings> {
+    let mut map = HashMap::new();
+    map.insert("gemini".to_string(), CloudSttProviderSettings::default());
+    map
+}
+
+fn ensure_cloud_stt_defaults(settings: &mut AppSettings) -> bool {
+    let mut changed = false;
+    if !settings.cloud_stt_providers.contains_key("gemini") {
+        settings
+            .cloud_stt_providers
+            .insert("gemini".to_string(), CloudSttProviderSettings::default());
+        changed = true;
+    }
+    if !settings.cloud_stt_api_keys.contains_key("gemini") {
+        settings
+            .cloud_stt_api_keys
+            .insert("gemini".to_string(), String::new());
+        changed = true;
+    }
+    changed
+}
+
 
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
@@ -1030,6 +1103,9 @@ pub fn get_default_settings() -> AppSettings {
         vad_backend: VadBackend::default(),
         overlay_style: default_overlay_style(),
         proxy: ProxySettings::default(),
+        transcription_mode: TranscriptionMode::default(),
+        cloud_stt_api_keys: default_cloud_stt_api_keys(),
+        cloud_stt_providers: default_cloud_stt_providers(),
     }
 }
 
@@ -1112,7 +1188,11 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         default_settings
     };
 
-    if ensure_post_process_defaults(&mut settings) {
+    let mut updated = ensure_post_process_defaults(&mut settings);
+    if ensure_cloud_stt_defaults(&mut settings) {
+        updated = true;
+    }
+    if updated {
         store.set("settings", serde_json::to_value(&settings).unwrap());
     }
 
@@ -1764,6 +1844,65 @@ mod tests {
         assert!(!debug_output.contains("sk-proj-secret-key-12345"));
         assert!(!debug_output.contains("sk-ant-secret-key-67890"));
         assert!(debug_output.contains("[REDACTED]"));
+    }
+    #[test]
+    fn debug_output_redacts_cloud_stt_api_keys() {
+        let mut settings = get_default_settings();
+        settings
+            .cloud_stt_api_keys
+            .insert("gemini".to_string(), "AIzaSySecretGeminiKey123456".to_string());
+
+        let debug_output = format!("{:?}", settings);
+        assert!(!debug_output.contains("AIzaSySecretGeminiKey123456"));
+        assert!(debug_output.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_transcription_mode_serialization() {
+        let local_mode = TranscriptionMode::Local;
+        let json = serde_json::to_string(&local_mode).unwrap();
+        assert_eq!(json, "{\"type\":\"local\"}");
+
+        let parsed: TranscriptionMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, local_mode);
+
+        let cloud_mode = TranscriptionMode::Cloud {
+            provider_id: "gemini".to_string(),
+            model_id: "gemini-2.5-flash".to_string(),
+        };
+        let json = serde_json::to_string(&cloud_mode).unwrap();
+        assert_eq!(
+            json,
+            "{\"type\":\"cloud\",\"config\":{\"provider_id\":\"gemini\",\"model_id\":\"gemini-2.5-flash\"}}"
+        );
+
+        let parsed: TranscriptionMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, cloud_mode);
+    }
+
+    #[test]
+    fn test_settings_backward_compatibility_without_cloud_stt() {
+        let old_json = serde_json::json!({
+            "settings_schema_version": 2,
+            "selected_model": "parakeet-tdt-1.1b"
+        });
+        let settings: AppSettings = serde_json::from_value(old_json).unwrap();
+        assert_eq!(settings.transcription_mode, TranscriptionMode::Local);
+        assert!(settings.cloud_stt_providers.contains_key("gemini"));
+        assert!(settings.cloud_stt_api_keys.contains_key("gemini"));
+    }
+
+    #[test]
+    fn test_ensure_cloud_stt_defaults() {
+        let mut settings = get_default_settings();
+        settings.cloud_stt_providers.clear();
+        settings.cloud_stt_api_keys.clear();
+
+        assert!(ensure_cloud_stt_defaults(&mut settings));
+        assert!(settings.cloud_stt_providers.contains_key("gemini"));
+        assert!(settings.cloud_stt_api_keys.contains_key("gemini"));
+        // Second invocation should make no changes
+        assert!(!ensure_cloud_stt_defaults(&mut settings));
     }
 
     #[test]

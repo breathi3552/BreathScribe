@@ -34,3 +34,4 @@ export { AutostartToggle } from "./AutostartToggle";
 export { UpdateChecksToggle } from "./UpdateChecksToggle";
 export { ShowWhatsNewOnUpdate } from "./ShowWhatsNewOnUpdate";
 export { ProxySettings } from "./ProxySettings";
+export { CloudSTTSettings } from "./CloudSTTSettings";

@@ -9,8 +9,14 @@ import type {
   ShortcutActivation,
   VadBackend,
   ProxySettings,
+  TranscriptionMode,
+  CloudSttProviderSettings,
 } from "@/bindings";
-import { commands, DEFAULT_PROXY_SETTINGS } from "@/bindings";
+import {
+  commands,
+  DEFAULT_PROXY_SETTINGS,
+  DEFAULT_CLOUD_STT_PROVIDER_SETTINGS,
+} from "@/bindings";
 import { toast } from "sonner";
 
 interface SettingsStore {
@@ -62,6 +68,16 @@ interface SettingsStore {
   setPostProcessModelOptions: (providerId: string, models: string[]) => void;
   updateProxySettings: (proxy: ProxySettings) => Promise<void>;
   testProxyConnectivity: (proxy?: ProxySettings) => Promise<number>;
+  setTranscriptionMode: (mode: TranscriptionMode) => Promise<void>;
+  setCloudSttApiKey: (providerId: string, apiKey: string) => Promise<void>;
+  setCloudSttProviderSettings: (
+    providerSettings: CloudSttProviderSettings,
+  ) => Promise<void>;
+  testCloudSttConnection: (
+    providerId: string,
+    apiKey?: string,
+    customBaseUrl?: string,
+  ) => Promise<void>;
 
   // Internal state setters
   setSettings: (settings: Settings | null) => void;
@@ -205,6 +221,16 @@ const settingUpdaters: {
       }
     }
   },
+  transcription_mode: async (value) => {
+    if (value) {
+      const result = await commands.setTranscriptionMode(
+        value as TranscriptionMode,
+      );
+      if (result.status === "error") {
+        throw new Error(result.error);
+      }
+    }
+  },
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -249,6 +275,13 @@ export const useSettingsStore = create<SettingsStore>()(
             selected_output_device:
               settings.selected_output_device ?? "Default",
             proxy: settings.proxy ?? DEFAULT_PROXY_SETTINGS,
+            transcription_mode: settings.transcription_mode ?? {
+              type: "local",
+            },
+            cloud_stt_api_keys: settings.cloud_stt_api_keys ?? {},
+            cloud_stt_providers: settings.cloud_stt_providers ?? {
+              gemini: DEFAULT_CLOUD_STT_PROVIDER_SETTINGS,
+            },
           };
           set({ settings: normalizedSettings, isLoading: false });
         } else {
@@ -695,6 +728,101 @@ export const useSettingsStore = create<SettingsStore>()(
         return result.data;
       }
       throw new Error(result.error);
+    },
+    setTranscriptionMode: async (mode: TranscriptionMode) => {
+      const { settings } = get();
+      const originalMode = settings?.transcription_mode;
+      set((state) => ({
+        settings: state.settings
+          ? { ...state.settings, transcription_mode: mode }
+          : null,
+      }));
+      try {
+        const result = await commands.setTranscriptionMode(mode);
+        if (result.status === "error") {
+          throw new Error(result.error);
+        }
+      } catch (error) {
+        console.error("Failed to set transcription mode:", error);
+        if (originalMode && settings) {
+          set({ settings: { ...settings, transcription_mode: originalMode } });
+        }
+        throw error;
+      }
+    },
+    setCloudSttApiKey: async (providerId: string, apiKey: string) => {
+      const { settings } = get();
+      const originalKeys = settings?.cloud_stt_api_keys;
+      set((state) => {
+        if (!state.settings) return { settings: null };
+        const updatedKeys = {
+          ...(state.settings.cloud_stt_api_keys ?? {}),
+          [providerId]: apiKey,
+        };
+        return {
+          settings: { ...state.settings, cloud_stt_api_keys: updatedKeys },
+        };
+      });
+      try {
+        const result = await commands.setCloudSttApiKey(providerId, apiKey);
+        if (result.status === "error") {
+          throw new Error(result.error);
+        }
+      } catch (error) {
+        console.error("Failed to set cloud STT API key:", error);
+        if (originalKeys && settings) {
+          set({ settings: { ...settings, cloud_stt_api_keys: originalKeys } });
+        }
+        throw error;
+      }
+    },
+    setCloudSttProviderSettings: async (
+      providerSettings: CloudSttProviderSettings,
+    ) => {
+      const { settings } = get();
+      const originalProviders = settings?.cloud_stt_providers;
+      set((state) => {
+        if (!state.settings) return { settings: null };
+        const updatedProviders = {
+          ...(state.settings.cloud_stt_providers ?? {}),
+          [providerSettings.provider_id]: providerSettings,
+        };
+        return {
+          settings: {
+            ...state.settings,
+            cloud_stt_providers: updatedProviders,
+          },
+        };
+      });
+      try {
+        const result =
+          await commands.setCloudSttProviderSettings(providerSettings);
+        if (result.status === "error") {
+          throw new Error(result.error);
+        }
+      } catch (error) {
+        console.error("Failed to set cloud STT provider settings:", error);
+        if (originalProviders && settings) {
+          set({
+            settings: { ...settings, cloud_stt_providers: originalProviders },
+          });
+        }
+        throw error;
+      }
+    },
+    testCloudSttConnection: async (
+      providerId: string,
+      apiKey?: string,
+      customBaseUrl?: string,
+    ) => {
+      const result = await commands.testCloudSttConnection(
+        providerId,
+        apiKey ?? null,
+        customBaseUrl ?? null,
+      );
+      if (result.status === "error") {
+        throw new Error(result.error);
+      }
     },
   })),
 );

@@ -17,6 +17,8 @@ pub mod network;
 mod overlay;
 mod paste_tx;
 pub mod portable;
+pub mod providers;
+pub mod transcription_router;
 mod secure_input;
 mod settings;
 mod shortcut;
@@ -197,6 +199,21 @@ fn initialize_core_logic(app_handle: &AppHandle) {
         }),
     );
     app_handle.manage(network_manager);
+    let local_provider = Arc::new(providers::local::LocalTranscriptionProvider::new(
+        transcription_manager.clone(),
+    ));
+    let gemini_provider = Arc::new(providers::gemini::GeminiProvider::new(
+        network_manager.clone(),
+        app_handle.clone(),
+    ));
+    let transcription_router = Arc::new(transcription_router::TranscriptionRouter::new(
+        app_handle.clone(),
+        local_provider.clone(),
+        gemini_provider.clone(),
+    ));
+    app_handle.manage(local_provider);
+    app_handle.manage(gemini_provider);
+    app_handle.manage(transcription_router);
 
     // Note: Shortcuts are NOT initialized here.
     // The frontend is responsible for calling the `initialize_shortcuts` command
@@ -749,6 +766,10 @@ pub fn run(cli_args: CliArgs) {
             helpers::clamshell::is_laptop,
             commands::network::test_proxy_connectivity,
             commands::network::update_proxy_settings,
+            commands::transcription_mode::set_transcription_mode,
+            commands::transcription_mode::set_cloud_stt_api_key,
+            commands::transcription_mode::set_cloud_stt_provider_settings,
+            commands::transcription_mode::test_cloud_stt_connection,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,

@@ -1,4 +1,5 @@
 # Handy-Cloud 第一阶段实施规格说明书
+
 # Phase 1 Implementation Specification: Batch Cloud STT & Global Proxy
 
 **文件版本**：1.0.0  
@@ -95,7 +96,7 @@ sequenceDiagram
 
     User->>Act: 按下全局热键 (Shortcut Pressed)
     Act->>Set: 读取当前设置 (transcription_mode, cloud_stt_api_keys)
-    
+
     alt 云端模式 (Cloud Mode)
         alt API Key 为空 (Empty Key)
             Act->>UI: emit("transcription-error", "请先在设置中填写云端 API Key")
@@ -319,6 +320,7 @@ fn default_cloud_stt_providers() -> HashMap<String, CloudSttProviderSettings> {
 ```
 
 #### 兼容性保证
+
 `AppSettings` 容器级带有 `#[serde(default)]`。新增字段具备明确的 `Default` 实现。当旧版本配置文件读取时，缺失字段自动使用默认值展开，无需破坏现有 `settings_schema_version` 迁移体系。
 
 ---
@@ -328,6 +330,7 @@ fn default_cloud_stt_providers() -> HashMap<String, CloudSttProviderSettings> {
 新建 `src-tauri/src/network/mod.rs` 与 `src-tauri/src/network/system_proxy.rs`。
 
 #### 3.2.1 系统代理探测（`system_proxy.rs`）
+
 利用现有的 `winreg` 读取 Windows 系统注册表：
 
 ```rust
@@ -418,7 +421,7 @@ fn build_reqwest_client(settings: &ProxySettings) -> Result<Client, String> {
         }
         ProxyMode::System => {
             if let Some(detected) = system_proxy::get_system_proxy() {
-                let proxy_url = format!("{}://{}:{}", 
+                let proxy_url = format!("{}://{}:{}",
                     match detected.protocol {
                         ProxyProtocol::Http => "http",
                         ProxyProtocol::Socks5 => "socks5h",
@@ -586,7 +589,7 @@ impl BatchTranscriptionProvider for GeminiProvider {
         let base64_audio = BASE64.encode(&wav_bytes);
 
         // 2. 构造 REST 请求载荷
-        let request_url = format!("{}/v1beta/models/{}:generateContent?key={}", 
+        let request_url = format!("{}/v1beta/models/{}:generateContent?key={}",
             base_url.trim_end_matches('/'), model, api_key);
 
         let system_instruction = "You are an expert speech recognition engine. Your ONLY task is to transcribe the spoken words in the provided audio file with extreme accuracy. Output verbatim text without commentary, pleasantries, or explanations. If speech is in a specific language, transcribe in that language unless instructed otherwise.";
@@ -701,6 +704,7 @@ impl TranscriptionRouter {
 
 1. **守卫 1：按键空凭据前置拦截（Fail-Fast）**：
    在 `TranscribeAction::start` 入口执行：
+
    ```rust
    let settings = get_settings(app);
    if let TranscriptionMode::Cloud { ref provider_id, .. } = settings.transcription_mode {
@@ -718,6 +722,7 @@ impl TranscriptionRouter {
 
 2. **守卫 2：空模型加载跳过（Guard Model Loading）**：
    原有第 479 行代码：
+
    ```rust
    // 改造前：
    tm.initiate_model_load();
@@ -727,10 +732,12 @@ impl TranscriptionRouter {
        tm.initiate_model_load();
    }
    ```
+
    彻底规避纯云端用户在未下载本地模型时由于 `selected_model == ""` 触发的假性 `Model not found` 崩溃。
 
 3. **出字点路由器切流**：
    原有第 727 行代码：
+
    ```rust
    // 改造前：
    Ok(_) => tm.transcribe(samples),
@@ -789,6 +796,7 @@ for (id, name) in &inputs.downloaded_models {
 ```
 
 在托盘菜单点击事件分发器中：
+
 - 命中 `transcription_mode:cloud:...` 时：原子更新设置 `transcription_mode = Cloud { provider: "gemini", model: "gemini-2.5-flash" }`，重新渲染托盘；
 - 命中 `model_select:...` 时：原子更新设置 `transcription_mode = Local` 并调用 `switch_active_model`。
 
@@ -796,13 +804,13 @@ for (id, name) in &inputs.downloaded_models {
 
 ### 3.7 新增 Tauri 命令清单
 
-| 命令名称 | 参数 | 返回值 | 说明 |
-|---|---|---|---|
-| `test_proxy_connectivity` | `settings: Option<ProxySettings>` | `Result<u64, String>` | 测试代理连通性并返回 RTT 往返毫秒数 |
-| `update_proxy_settings` | `settings: ProxySettings` | `Result<(), String>` | 更新代理配置并即刻热重载 Client |
-| `set_transcription_mode` | `mode: TranscriptionMode` | `Result<(), String>` | 切换本地与云端引擎模式 |
-| `set_cloud_stt_api_key` | `provider_id: String, api_key: String` | `Result<(), String>` | 设置指定服务商的 API Key 并持久化 |
-| `complete_onboarding_cloud` | 无 | `Result<(), String>` | 开屏跳过专用：原子更新 `onboarding_completed=true`、`mode=Cloud`、`model=""` |
+| 命令名称                    | 参数                                   | 返回值                | 说明                                                                         |
+| --------------------------- | -------------------------------------- | --------------------- | ---------------------------------------------------------------------------- |
+| `test_proxy_connectivity`   | `settings: Option<ProxySettings>`      | `Result<u64, String>` | 测试代理连通性并返回 RTT 往返毫秒数                                          |
+| `update_proxy_settings`     | `settings: ProxySettings`              | `Result<(), String>`  | 更新代理配置并即刻热重载 Client                                              |
+| `set_transcription_mode`    | `mode: TranscriptionMode`              | `Result<(), String>`  | 切换本地与云端引擎模式                                                       |
+| `set_cloud_stt_api_key`     | `provider_id: String, api_key: String` | `Result<(), String>`  | 设置指定服务商的 API Key 并持久化                                            |
+| `complete_onboarding_cloud` | 无                                     | `Result<(), String>`  | 开屏跳过专用：原子更新 `onboarding_completed=true`、`mode=Cloud`、`model=""` |
 
 ---
 
@@ -825,13 +833,14 @@ interface ExtendedSettingsStore {
 ```
 
 在 `completeOnboardingWithCloud` 实现中：
+
 ```typescript
 completeOnboardingWithCloud: async () => {
   const result = await commands.completeOnboardingCloud();
   if (result.status === "ok") {
     await get().refreshSettings();
   }
-}
+};
 ```
 
 ---
@@ -847,11 +856,17 @@ completeOnboardingWithCloud: async () => {
       <div className="flex items-center gap-2">
         <span className="text-base">⚡</span>
         <span className="font-semibold text-sm text-text">
-          {t("onboarding.cloudBannerTitle", "云端优先模式（推荐轻薄本/无显卡用户）")}
+          {t(
+            "onboarding.cloudBannerTitle",
+            "云端优先模式（推荐轻薄本/无显卡用户）",
+          )}
         </span>
       </div>
       <p className="text-xs text-text/70">
-        {t("onboarding.cloudBannerDescription", "无需下载数百 MB 本地模型文件，直接使用 Google Gemini 高准确率转写。")}
+        {t(
+          "onboarding.cloudBannerDescription",
+          "无需下载数百 MB 本地模型文件，直接使用 Google Gemini 高准确率转写。",
+        )}
       </p>
     </div>
     <button
@@ -866,6 +881,7 @@ completeOnboardingWithCloud: async () => {
 ```
 
 处理函数：
+
 ```typescript
 const handleSkipToCloud = async () => {
   try {
@@ -882,6 +898,7 @@ const handleSkipToCloud = async () => {
 ### 4.3 落地接管与引导（`src/App.tsx`）
 
 在 `App.tsx` 中，监听引导完成事件或检测状态：当用户跳过放行后：
+
 1. `setCurrentSection("models")`：自动将侧边栏激活项定位于【转录模型】；
 2. 校验 `settings.cloud_stt_api_keys["gemini"]`：若为空，调用 `toast.info(t("onboarding.cloudGuidanceToast"), { description: t("onboarding.cloudGuidanceDesc") })`。
 
@@ -890,13 +907,17 @@ const handleSkipToCloud = async () => {
 ### 4.4 设置页面深度整合（变体 A）
 
 #### 4.4.1 【高级设置】`ProxySettings` 卡片
+
 作为 `AdvancedSettings` 顶部首个 `SettingsGroup` 卡片：
+
 - **模式单选**：`跟随系统代理 (System)`（默认）、`手动配置代理 (Manual)`、`强制直连 (Direct)`；
 - **手动表单折叠展开**：协议（HTTP / SOCKS5）、地址（默认 127.0.0.1）、端口（默认 7890）、身份验证复选框及用户名/密码输入；
 - **操作按钮**：“测试连通性” —— 点击后调用 `test_proxy_connectivity`，展示连通成功（附 RTT 毫秒）或错误原因。
 
 #### 4.4.2 【转录模型】`CloudSTTSettings` 分段开关与面板
+
 在 `Models.tsx` 页面顶部新增分段选择器（Segmented Control）：
+
 - `[ 本地离线模型 ]` / `[ 云端 API (Gemini) ]`；
 - 处于“本地离线模型”时，展示原有的模型卡片列表与管理操作；
 - 处于“云端 API (Gemini)”时：
@@ -906,6 +927,7 @@ const handleSkipToCloud = async () => {
   - 自定义 API Base URL：折叠高级项，允许反向代理用户自定义。
 
 #### 4.4.3 底部状态栏胶囊指示
+
 - 左侧模型胶囊：
   - 本地模式：`● Qwen3-ASR 0.6B ⌵`；
   - 云端模式：`☁️ Gemini 2.5 Flash ⌵`；
@@ -931,6 +953,7 @@ PR 4 (前端 UI / Store / i18n)
 ```
 
 ### PR 1：全局网络代理层与云端凭据基础配置
+
 - **范围**：新增网络模块、系统代理注册表探测、连接池生命周期管理、`AppSettings` 增量字段。
 - **新增文件**：
   - `src-tauri/src/network/mod.rs`
@@ -942,6 +965,7 @@ PR 4 (前端 UI / Store / i18n)
   - `src-tauri/src/lib.rs`（注册 `Arc<NetworkManager>` 状态与网络 commands）
 
 ### PR 2：转写抽象 Provider Trait 与 TranscriptionRouter 分流门面
+
 - **范围**：定义 `BatchTranscriptionProvider` Trait、实现 `GeminiProvider`（内存 WAV 编码与 REST 请求）与 `LocalTranscriptionProvider` 薄包装、实现 `TranscriptionRouter`。
 - **新增文件**：
   - `src-tauri/src/providers/mod.rs`
@@ -954,6 +978,7 @@ PR 4 (前端 UI / Store / i18n)
   - `src-tauri/src/lib.rs`（注册 Provider 与 Router 状态及 commands）
 
 ### PR 3：快捷键动作守卫、托盘同层互斥与开屏引导解耦接驳
+
 - **范围**：在现有业务切入点注入守卫与路由分流；改造托盘子菜单单选机制；增加开屏跳过命令。
 - **修改文件**：
   - `src-tauri/src/actions.rs`（前置空 Key 拦截、跳过 `initiate_model_load`、出字点转写路由分流）
@@ -962,6 +987,7 @@ PR 4 (前端 UI / Store / i18n)
   - `src-tauri/src/commands/settings.rs`（新增 `complete_onboarding_cloud` 命令）
 
 ### PR 4：前端设置界面整合、Zustand Store 与国际化
+
 - **范围**：前端状态订阅、高级设置中的代理卡片、转录模型中的云端 STT 面板、开屏横幅与落地聚焦、多语言文案。
 - **新增文件**：
   - `src/components/settings/ProxySettings.tsx`
@@ -991,15 +1017,16 @@ PR 4 (前端 UI / Store / i18n)
 
 ### 6.2 Windows 实机端到端全链路验收矩阵
 
-| 序号 | 场景 | 操作步骤 | 预期结果 |
-|---|---|---|---|
-| **TC-01** | **全新冷启动免本地模型** | 1. 清空本地用户配置与模型缓存；<br/>2. 启动 Handy-Cloud；<br/>3. 在开屏引导点击【跳过下载并配置云端】。 | 1. 成功关闭开屏向导；<br/>2. 主窗口侧边栏自动聚焦【转录模型】；<br/>3. 弹出 Toast 提示配置 API Key；<br/>4. 磁盘无本地大模型下载。 |
-| **TC-02** | **空凭据防录音守卫** | 1. 保持 API Key 为空；<br/>2. 按下录音全局热键。 | 1. 立即弹出错误 Toast；<br/>2. 麦克风未启动，无启动提示音；<br/>3. 未触发模型加载报错。 |
-| **TC-03** | **云端正常识别全链路** | 1. 填写有效 Gemini API Key；<br/>2. 按住热键录制一段 5 秒中文语音；<br/>3. 松开热键。 | 1. 录音波形与结束音正常；<br/>2. 顺利发起 Gemini POST 请求；<br/>3. 准确文本自动粘贴至焦点窗口；<br/>4. 历史记录正常存盘。 |
-| **TC-04** | **全局代理免重启热重载** | 1. 启动本地代理软件（如 Clash 7890 端口）；<br/>2. 设置中切换代理为 Manual 并保存；<br/>3. 点击“测试连通性”；<br/>4. 再次发起云端录音识别。 | 1. 连通性测试报告低延迟 RTT；<br/>2. 代理软件日志中即时观察到来自 Handy-Cloud 的请求连接；<br/>3. 全过程无需重启应用。 |
-| **TC-05** | **断网与快速失败机制** | 1. 拔出网线或故意填错 API Key；<br/>2. 按下热键录音。 | 1. 录音结束立即弹出明确错误描述；<br/>2. 不发生数秒卡顿，不触发本地模型突发加载；<br/>3. 录音 WAV 保留在历史列表中。 |
-| **TC-06** | **系统托盘同层互斥切换** | 1. 本地已下载一个小模型；<br/>2. 右键系统托盘图标查看【模型】子菜单；<br/>3. 点击云端选项或本地模型相互切换。 | 1. 云端选项置顶，与本地模型互斥勾选；<br/>2. 托盘父菜单文字动态同步反映当前选中项；<br/>3. 切换至本地时触发模型加载，切换至云端时放行。 |
+| 序号      | 场景                     | 操作步骤                                                                                                                                    | 预期结果                                                                                                                                |
+| --------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **TC-01** | **全新冷启动免本地模型** | 1. 清空本地用户配置与模型缓存；<br/>2. 启动 Handy-Cloud；<br/>3. 在开屏引导点击【跳过下载并配置云端】。                                     | 1. 成功关闭开屏向导；<br/>2. 主窗口侧边栏自动聚焦【转录模型】；<br/>3. 弹出 Toast 提示配置 API Key；<br/>4. 磁盘无本地大模型下载。      |
+| **TC-02** | **空凭据防录音守卫**     | 1. 保持 API Key 为空；<br/>2. 按下录音全局热键。                                                                                            | 1. 立即弹出错误 Toast；<br/>2. 麦克风未启动，无启动提示音；<br/>3. 未触发模型加载报错。                                                 |
+| **TC-03** | **云端正常识别全链路**   | 1. 填写有效 Gemini API Key；<br/>2. 按住热键录制一段 5 秒中文语音；<br/>3. 松开热键。                                                       | 1. 录音波形与结束音正常；<br/>2. 顺利发起 Gemini POST 请求；<br/>3. 准确文本自动粘贴至焦点窗口；<br/>4. 历史记录正常存盘。              |
+| **TC-04** | **全局代理免重启热重载** | 1. 启动本地代理软件（如 Clash 7890 端口）；<br/>2. 设置中切换代理为 Manual 并保存；<br/>3. 点击“测试连通性”；<br/>4. 再次发起云端录音识别。 | 1. 连通性测试报告低延迟 RTT；<br/>2. 代理软件日志中即时观察到来自 Handy-Cloud 的请求连接；<br/>3. 全过程无需重启应用。                  |
+| **TC-05** | **断网与快速失败机制**   | 1. 拔出网线或故意填错 API Key；<br/>2. 按下热键录音。                                                                                       | 1. 录音结束立即弹出明确错误描述；<br/>2. 不发生数秒卡顿，不触发本地模型突发加载；<br/>3. 录音 WAV 保留在历史列表中。                    |
+| **TC-06** | **系统托盘同层互斥切换** | 1. 本地已下载一个小模型；<br/>2. 右键系统托盘图标查看【模型】子菜单；<br/>3. 点击云端选项或本地模型相互切换。                               | 1. 云端选项置顶，与本地模型互斥勾选；<br/>2. 托盘父菜单文字动态同步反映当前选中项；<br/>3. 切换至本地时触发模型加载，切换至云端时放行。 |
 
 ### 6.3 跨平台编译级保证（macOS / Linux）
+
 - 非 Windows 平台不引入 `winreg` 依赖；
 - 平台分支下 `get_system_proxy()` 采用环境变量探测与编译存根，确保 `cargo check --target x86_64-apple-darwin` 与 `cargo check --target x86_64-unknown-linux-gnu` 无警告无报错通过。

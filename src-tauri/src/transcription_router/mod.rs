@@ -99,8 +99,7 @@ impl TranscriptionRouter {
                             let _ = session.feed_audio(&samples);
                         }
                     }
-                    crate::managers::transcription::StreamCmd::Finalize(_)
-                    | crate::managers::transcription::StreamCmd::Cancel => {
+                    _ => {
                         break;
                     }
                 }

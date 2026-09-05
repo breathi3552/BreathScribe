@@ -106,7 +106,7 @@ pub(crate) enum StreamCmd {
     Cancel,
 }
 
-struct FinalizedStreamText {
+pub(crate) struct FinalizedStreamText {
     text: String,
     output_language: OutputLanguageEvidence,
     /// The streaming model's supported languages, for text-based detection.

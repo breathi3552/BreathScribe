@@ -51,3 +51,6 @@ __pycache__/
 
 # Extracted portable test build
 release-builds/portable/
+
+# Agent runtime artifacts
+.agents/

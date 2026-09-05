@@ -295,9 +295,13 @@ impl GeminiProvider {
             format!("{}/v1beta/models?key={}", clean_base, api_key)
         };
 
-        let response = client
-            .get(&test_url)
-            .header("x-goog-api-key", api_key)
+        let mut req = client.get(&test_url);
+        if api_key.starts_with("AQ.") || api_key.starts_with("ya29.") {
+            req = req.header("Authorization", format!("Bearer {}", api_key));
+        } else {
+            req = req.header("x-goog-api-key", api_key);
+        }
+        let response = req
             .send()
             .await
             .map_err(|e| format!("网络请求发送失败: {}", e))?;
@@ -372,10 +376,11 @@ impl BatchTranscriptionProvider for GeminiProvider {
             .cloned()
             .unwrap_or_default();
 
-        let model = if provider_config.model_id.trim().is_empty() {
+        let raw_model = provider_config.model_id.trim();
+        let model = if raw_model.is_empty() || raw_model.contains("transcribe-live") {
             DEFAULT_CLOUD_STT_MODEL_ID
         } else {
-            provider_config.model_id.trim()
+            raw_model
         };
 
         let custom_base = provider_config
@@ -422,9 +427,13 @@ impl BatchTranscriptionProvider for GeminiProvider {
 
         // 3. 复用全局网络管理器的共享连接池客户端
         let client = self.network_manager.client().await;
-        let response = client
-            .post(&request_url)
-            .header("x-goog-api-key", api_key)
+        let mut req = client.post(&request_url);
+        if api_key.starts_with("AQ.") || api_key.starts_with("ya29.") {
+            req = req.header("Authorization", format!("Bearer {}", api_key));
+        } else {
+            req = req.header("x-goog-api-key", api_key);
+        }
+        let response = req
             .json(&payload)
             .send()
             .await

@@ -61,7 +61,21 @@ pub fn set_cloud_stt_provider_settings(
     let mut settings = get_settings(&app);
     settings
         .cloud_stt_providers
-        .insert(settings_input.provider_id.clone(), settings_input);
+        .insert(settings_input.provider_id.clone(), settings_input.clone());
+
+    let mut mode_changed = false;
+    if let crate::settings::TranscriptionMode::Cloud { provider_id, .. } =
+        &settings.transcription_mode
+    {
+        if provider_id == &settings_input.provider_id {
+            settings.transcription_mode = crate::settings::TranscriptionMode::Cloud {
+                provider_id: settings_input.provider_id.clone(),
+                model_id: settings_input.model_id.clone(),
+            };
+            mode_changed = true;
+        }
+    }
+
     write_settings(&app, settings);
     let _ = app.emit(
         "settings-changed",
@@ -69,6 +83,14 @@ pub fn set_cloud_stt_provider_settings(
             "setting": "cloud_stt_providers",
         }),
     );
+    if mode_changed {
+        let _ = app.emit(
+            "settings-changed",
+            serde_json::json!({
+                "setting": "transcription_mode",
+            }),
+        );
+    }
     Ok(())
 }
 

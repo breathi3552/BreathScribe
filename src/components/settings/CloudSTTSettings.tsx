@@ -44,6 +44,9 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   const setCloudSttProviderSettings = useSettingsStore(
     (state) => state.setCloudSttProviderSettings,
   );
+  const setTranscriptionMode = useSettingsStore(
+    (state) => state.setTranscriptionMode,
+  );
   const testCloudSttConnection = useSettingsStore(
     (state) => state.testCloudSttConnection,
   );
@@ -121,7 +124,12 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   const isKeyFormatValid = (key: string): boolean => {
     const trimmed = key.trim();
     if (!trimmed) return true;
-    return /^AIzaSy[A-Za-z0-9_-]{33}$/.test(trimmed);
+    return (
+      /^AIzaSy[A-Za-z0-9_-]{33}$/.test(trimmed) ||
+      trimmed.startsWith("AQ.") ||
+      trimmed.startsWith("ya29.") ||
+      trimmed.length >= 20
+    );
   };
 
   const [isValidating, setIsValidating] = useState(false);
@@ -154,6 +162,15 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
           provider_id: providerId,
           model_id: modelId,
         });
+        if (settings?.transcription_mode?.type === "cloud") {
+          await setTranscriptionMode({
+            type: "cloud",
+            config: {
+              provider_id: providerId,
+              model_id: modelId,
+            },
+          });
+        }
         toast.success(
           t("settings.models.cloud.modelUpdated", "已切换云端模型: {{model}}", {
             model: modelId,
@@ -169,7 +186,13 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
         );
       }
     },
-    [setCloudSttProviderSettings, storedProviderConfig, t],
+    [
+      setCloudSttProviderSettings,
+      setTranscriptionMode,
+      settings?.transcription_mode,
+      storedProviderConfig,
+      t,
+    ],
   );
 
   const handleSaveApiKey = useCallback(async () => {
@@ -291,7 +314,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm">Google Gemini 2.5</span>
+                <span className="font-semibold text-sm">Google Gemini 3.5</span>
                 <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-logo-primary/15 text-text border border-logo-primary/30">
                   {t("settings.models.cloud.cloudSttBadge", "云端大模型")}
                 </span>

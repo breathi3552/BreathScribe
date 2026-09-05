@@ -105,7 +105,7 @@
             };
 
             postPatch = ''
-              ${pkgs.jq}/bin/jq '.bundle.createUpdaterArtifacts = false' \
+              ${pkgs.jq}/bin/jq '.bundle.createUpdaterArtifacts = false | del(.bundle.windows)' \
                 src-tauri/tauri.conf.json > $TMPDIR/tauri.conf.json
               cp $TMPDIR/tauri.conf.json src-tauri/tauri.conf.json
 

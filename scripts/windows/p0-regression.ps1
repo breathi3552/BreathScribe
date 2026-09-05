@@ -71,8 +71,8 @@ Assert-True ($config.identifier -eq "io.github.breathi3552.handycloud") "Tauri i
 $endpoint = [string]$config.plugins.updater.endpoints[0]
 Assert-True ($endpoint -like "*breathi3552/Handy-Cloud*") "updater points at Handy-Cloud fork"
 Assert-True ($endpoint -notlike "*cjpais/Handy*") "updater no longer points at upstream"
-Assert-True ([string]$config.bundle.windows.nsis.template -eq "nsis/installer.nsi") "NSIS template is configured"
-Assert-True (@($config.bundle.icon) -contains "icons/icon.ico") "Bundle icons explicitly include icons/icon.ico"
+Assert-True ([string]$config.bundle.windows.nsis.installerIcon -eq "icons/icon.ico") "NSIS installerIcon explicitly uses Handy Cloud icon.ico"
+Assert-True ([string]$config.bundle.windows.nsis.uninstallerIcon -eq "icons/icon.ico") "NSIS uninstallerIcon explicitly uses Handy Cloud icon.ico"
 
 $iconSource = "brand/handy-cloud-icon-source.png"
 $marker = "brand/P0_ICON_GENERATED.txt"

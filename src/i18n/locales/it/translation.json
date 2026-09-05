@@ -158,7 +158,8 @@
     },
     "cancel": "Annulla",
     "cancelDownload": "Annulla download",
-    "legacy": "Obsoleto"
+    "legacy": "Obsoleto",
+    "cloudProviderGoogle": "Riconoscimento vocale cloud Google Gemini"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Le installazioni portatili non possono essere aggiornate automaticamente. Scarica qui sotto il programma di installazione per il tuo sistema, eseguilo e installalo nella stessa cartella: la cartella Data/ (impostazioni, modelli, registrazioni) viene mantenuta.",
     "portableUpdateButton": "Scarica il programma di installazione",
     "portableUpdateBrowseMessage": "Le installazioni portatili non possono essere aggiornate automaticamente. Scarica da GitHub Releases la versione più recente per il tuo sistema e installala nella stessa cartella: la cartella Data/ (impostazioni, modelli, registrazioni) viene mantenuta.",
-    "portableUpdateBrowseButton": "Apri i rilasci su GitHub"
+    "portableUpdateBrowseButton": "Apri i rilasci su GitHub",
+    "network": {
+      "system": "Rete: Proxy di sistema",
+      "direct": "Rete: Diretto",
+      "manual": "Rete: Proxy manuale"
+    }
   },
   "common": {
     "loading": "Caricamento...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "modello sconosciuto",
     "pasteFailedTitle": "Impossibile incollare il testo",
     "pasteFailed": "Non è stato possibile incollare il testo nell'applicazione attiva.",
-    "transcriptionFailedTitle": "Trascrizione non riuscita"
+    "transcriptionFailedTitle": "Trascrizione non riuscita",
+    "missingCloudApiKey": "Configura prima la tua chiave API Cloud STT nelle impostazioni."
   },
   "appLanguage": {
     "title": "Lingua Applicazione",

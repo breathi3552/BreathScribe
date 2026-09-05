@@ -158,7 +158,8 @@
     },
     "cancel": "Cancelar",
     "cancelDownload": "Cancelar download",
-    "legacy": "Legado"
+    "legacy": "Legado",
+    "cloudProviderGoogle": "Reconhecimento de fala na nuvem Google Gemini"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Instalações portáteis não podem ser atualizadas automaticamente. Baixe abaixo o instalador para o seu sistema, execute-o e instale na mesma pasta — a sua pasta Data/ (configurações, modelos, gravações) é mantida.",
     "portableUpdateButton": "Baixar instalador",
     "portableUpdateBrowseMessage": "Instalações portáteis não podem ser atualizadas automaticamente. Baixe a versão mais recente para o seu sistema no GitHub Releases e instale-a na mesma pasta — a sua pasta Data/ (configurações, modelos, gravações) é mantida.",
-    "portableUpdateBrowseButton": "Abrir GitHub Releases"
+    "portableUpdateBrowseButton": "Abrir GitHub Releases",
+    "network": {
+      "system": "Rede: Proxy do sistema",
+      "direct": "Rede: Direto",
+      "manual": "Rede: Proxy manual"
+    }
   },
   "common": {
     "loading": "Carregando...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "modelo desconhecido",
     "pasteFailedTitle": "Falha ao colar o texto",
     "pasteFailed": "Não foi possível colar o texto no aplicativo ativo.",
-    "transcriptionFailedTitle": "Falha na transcrição"
+    "transcriptionFailedTitle": "Falha na transcrição",
+    "missingCloudApiKey": "Configure sua chave de API do Cloud STT nas configurações primeiro."
   },
   "appLanguage": {
     "title": "Idioma da Aplicação",

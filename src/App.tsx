@@ -146,7 +146,7 @@ function App() {
     const unlisten = listen<string>("transcription-error", (event) => {
       const description =
         event.payload === "missing_cloud_api_key"
-          ? t("onboarding.cloudGuidanceDesc")
+          ? t("errors.missingCloudApiKey", "请先在设置中填写云端 API Key")
           : event.payload;
       toast.error(t("errors.transcriptionFailedTitle"), {
         description,
@@ -336,7 +336,7 @@ function App() {
           </div>
         </div>
         {/* Fixed footer at bottom */}
-        <Footer />
+        <Footer onNavigate={setCurrentSection} />
       </div>
     );
   }

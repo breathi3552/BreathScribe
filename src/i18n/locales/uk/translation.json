@@ -158,7 +158,8 @@
     },
     "cancel": "Скасувати",
     "cancelDownload": "Скасувати завантаження",
-    "legacy": "Застаріле"
+    "legacy": "Застаріле",
+    "cloudProviderGoogle": "Хмарне розпізнавання мовлення Google Gemini"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Портативні встановлення не можна оновити автоматично. Завантажте нижче інсталятор для вашої системи, запустіть його та встановіть у ту саму теку — ваша тека Data/ (налаштування, моделі, записи) залишиться на місці.",
     "portableUpdateButton": "Завантажити інсталятор",
     "portableUpdateBrowseMessage": "Портативні встановлення не можна оновити автоматично. Завантажте найновішу версію для вашої системи зі сторінки GitHub Releases та встановіть її в ту саму теку — ваша тека Data/ (налаштування, моделі, записи) залишиться на місці.",
-    "portableUpdateBrowseButton": "Відкрити GitHub Releases"
+    "portableUpdateBrowseButton": "Відкрити GitHub Releases",
+    "network": {
+      "system": "Мережа: системний проксі",
+      "direct": "Мережа: пряме підключення",
+      "manual": "Мережа: ручний проксі"
+    }
   },
   "common": {
     "loading": "Завантаження...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "невідома модель",
     "pasteFailedTitle": "Не вдалося вставити текст",
     "pasteFailed": "Не вдалося вставити текст до активної програми.",
-    "transcriptionFailedTitle": "Помилка транскрипції"
+    "transcriptionFailedTitle": "Помилка транскрипції",
+    "missingCloudApiKey": "Будь ласка, спочатку налаштуйте API-ключ Cloud STT у налаштуваннях."
   },
   "appLanguage": {
     "title": "Мова інтерфейсу",

@@ -158,7 +158,8 @@
       "translate": "ترجمة",
       "streaming": "يعرض النسخ المباشر أثناء التحدث"
     },
-    "legacy": "قديم"
+    "legacy": "قديم",
+    "cloudProviderGoogle": "التعرف على الصوت السحابي Google Gemini"
   },
   "settings": {
     "general": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "لا يمكن تحديث التثبيتات المحمولة تلقائيًا. نزّل المثبّت المناسب لنظامك من الزر أدناه، شغّله، وثبّته في المجلد نفسه — يبقى مجلد Data/ (الإعدادات والنماذج والتسجيلات) في مكانه.",
     "portableUpdateButton": "تنزيل المثبّت",
     "portableUpdateBrowseMessage": "لا يمكن تحديث التثبيتات المحمولة تلقائيًا. نزّل أحدث إصدار مناسب لنظامك من GitHub Releases وثبّته في المجلد نفسه — يبقى مجلد Data/ (الإعدادات والنماذج والتسجيلات) في مكانه.",
-    "portableUpdateBrowseButton": "فتح GitHub Releases"
+    "portableUpdateBrowseButton": "فتح GitHub Releases",
+    "network": {
+      "system": "الشبكة: وكيل النظام",
+      "direct": "الشبكة: مباشر",
+      "manual": "الشبكة: وكيل يدوي"
+    }
   },
   "common": {
     "loading": "...جاري التحميل",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "نموذج غير معروف",
     "pasteFailedTitle": "فشل لصق النص",
     "pasteFailed": "تعذر لصق النص في التطبيق النشط.",
-    "transcriptionFailedTitle": "فشل التفريغ النصي"
+    "transcriptionFailedTitle": "فشل التفريغ النصي",
+    "missingCloudApiKey": "يرجى تكوين مفتاح API لـ Cloud STT في الإعدادات أولاً."
   },
   "appLanguage": {
     "title": "لغة التطبيق",

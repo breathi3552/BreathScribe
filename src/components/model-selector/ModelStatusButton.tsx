@@ -1,4 +1,5 @@
 import React from "react";
+import { Cloud } from "lucide-react";
 
 type ModelStatus =
   | "ready"
@@ -16,6 +17,7 @@ interface ModelStatusButtonProps {
   isDropdownOpen: boolean;
   onClick: () => void;
   className?: string;
+  isCloud?: boolean;
 }
 
 const ModelStatusButton: React.FC<ModelStatusButtonProps> = ({
@@ -24,6 +26,7 @@ const ModelStatusButton: React.FC<ModelStatusButtonProps> = ({
   isDropdownOpen,
   onClick,
   className = "",
+  isCloud = false,
 }) => {
   const getStatusColor = (status: ModelStatus): string => {
     switch (status) {
@@ -54,8 +57,12 @@ const ModelStatusButton: React.FC<ModelStatusButtonProps> = ({
       className={`flex items-center gap-2 hover:text-text/80 transition-colors ${className}`}
       title={`Model status: ${displayText}`}
     >
-      <div className={`w-2 h-2 rounded-full ${getStatusColor(status)}`} />
-      <span className="max-w-28 truncate">{displayText}</span>
+      {isCloud ? (
+        <Cloud className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+      ) : (
+        <div className={`w-2 h-2 rounded-full ${getStatusColor(status)}`} />
+      )}
+      <span className="max-w-36 truncate">{displayText}</span>
       <svg
         className={`w-3 h-3 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`}
         fill="none"

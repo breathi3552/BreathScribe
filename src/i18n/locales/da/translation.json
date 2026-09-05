@@ -158,7 +158,8 @@
       "translation": "Kan oversætte til engelsk",
       "translate": "Oversæt",
       "streaming": "Viser live transskription, mens du taler"
-    }
+    },
+    "cloudProviderGoogle": "Google Gemini cloud-talegenkendelse"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Flytbare installationer kan ikke opdateres automatisk. Download installeren til dit system nedenfor, kør den, og installer i den samme mappe — din Data/-mappe (indstillinger, modeller, optagelser) bliver bevaret.",
     "portableUpdateButton": "Download installer",
     "portableUpdateBrowseMessage": "Flytbare installationer kan ikke opdateres automatisk. Download den nyeste version til dit system fra GitHub Releases, og installer den i den samme mappe — din Data/-mappe (indstillinger, modeller, optagelser) bliver bevaret.",
-    "portableUpdateBrowseButton": "Åbn GitHub Releases"
+    "portableUpdateBrowseButton": "Åbn GitHub Releases",
+    "network": {
+      "system": "Netværk: Systemproxy",
+      "direct": "Netværk: Direkte",
+      "manual": "Netværk: Manuel proxy"
+    }
   },
   "whatsNew": {
     "title": "Nyt i Handy Cloud v{{version}}"
@@ -779,7 +785,8 @@
     "modelLoadFailedUnknown": "ukendt model",
     "pasteFailedTitle": "Kunne ikke indsætte tekst",
     "pasteFailed": "Teksten kunne ikke indsættes i det aktive program.",
-    "transcriptionFailedTitle": "Transskription mislykkedes"
+    "transcriptionFailedTitle": "Transskription mislykkedes",
+    "missingCloudApiKey": "Konfigurer venligst din Cloud STT API-nøgle i indstillingerne først."
   },
   "appLanguage": {
     "title": "Applikationssprog",

@@ -158,7 +158,8 @@
       "translate": "תרגם לאנגלית",
       "streaming": "מציג תמלול חי תוך כדי דיבור"
     },
-    "legacy": "מדור קודם"
+    "legacy": "מדור קודם",
+    "cloudProviderGoogle": "זיהוי דיבור בענן של Google Gemini"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "התקנות ניידות אינן מתעדכנות אוטומטית. הורד למטה את המתקין המתאים למערכת שלך, הפעל אותו והתקן לאותה תיקייה — תיקיית Data/ (הגדרות, מודלים, הקלטות) נשמרת במקומה.",
     "portableUpdateButton": "הורדת המתקין",
     "portableUpdateBrowseMessage": "התקנות ניידות אינן מתעדכנות אוטומטית. הורד את הגרסה האחרונה המתאימה למערכת שלך מ-GitHub Releases והתקן אותה לאותה תיקייה — תיקיית Data/ (הגדרות, מודלים, הקלטות) נשמרת במקומה.",
-    "portableUpdateBrowseButton": "פתח את GitHub Releases"
+    "portableUpdateBrowseButton": "פתח את GitHub Releases",
+    "network": {
+      "system": "רשת: פרוקסי מערכת",
+      "direct": "רשת: ישיר",
+      "manual": "רשת: פרוקסי ידני"
+    }
   },
   "common": {
     "loading": "טוען...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "מודל לא ידוע",
     "pasteFailedTitle": "ההדבקה נכשלה",
     "pasteFailed": "לא ניתן היה להדביק את הטקסט ביישום הפעיל.",
-    "transcriptionFailedTitle": "התמלול נכשל"
+    "transcriptionFailedTitle": "התמלול נכשל",
+    "missingCloudApiKey": "אנא הגדר תחילה את מפתח ה-API של Cloud STT בהגדרות."
   },
   "appLanguage": {
     "title": "שפת האפליקציה",

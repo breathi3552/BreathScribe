@@ -4,10 +4,10 @@ import { listen } from "@tauri-apps/api/event";
 import { commands } from "@/bindings";
 import { getTranslatedModelName } from "../../lib/utils/modelTranslation";
 import { useModelStore } from "../../stores/modelStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import ModelStatusButton from "./ModelStatusButton";
 import ModelDropdown from "./ModelDropdown";
 import DownloadProgressDisplay from "./DownloadProgressDisplay";
-
 import { ModelStateEvent } from "@/lib/types/events";
 
 type ModelStatus =
@@ -36,14 +36,34 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
     selectModel,
   } = useModelStore();
 
+  const settings = useSettingsStore((state) => state.settings);
+  const setTranscriptionMode = useSettingsStore(
+    (state) => state.setTranscriptionMode,
+  );
+  const isCloudMode = settings?.transcription_mode?.type === "cloud";
+  const cloudModelId =
+    settings?.transcription_mode?.type === "cloud"
+      ? settings.transcription_mode.config.model_id
+      : (settings?.cloud_stt_providers?.["gemini"]?.model_id ??
+        "gemini-2.5-flash");
+
+  const formatCloudModelName = (modelId: string): string => {
+    switch (modelId) {
+      case "gemini-2.5-flash":
+        return "Gemini 2.5 Flash";
+      case "gemini-2.5-pro":
+        return "Gemini 2.5 Pro";
+      default:
+        return modelId;
+    }
+  };
+
   const [modelStatus, setModelStatus] = useState<ModelStatus>("unloaded");
   const [modelError, setModelError] = useState<string | null>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   // Track pending model switch for optimistic display
   const [pendingModelId, setPendingModelId] = useState<string | null>(null);
-
   const dropdownRef = useRef<HTMLDivElement>(null);
-
   const displayModelId = pendingModelId || currentModel;
 
   // Check model status when currentModel changes
@@ -141,6 +161,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
   }, [selectModel]);
 
   const handleModelSelect = async (modelId: string) => {
+    if (isCloudMode) {
+      await setTranscriptionMode({ type: "local" });
+    }
     setPendingModelId(modelId);
     setModelError(null);
     setShowModelDropdown(false);
@@ -153,7 +176,22 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
     }
   };
 
+  const handleSelectCloud = async () => {
+    setShowModelDropdown(false);
+    await setTranscriptionMode({
+      type: "cloud",
+      config: {
+        provider_id: "gemini",
+        model_id: cloudModelId,
+      },
+    });
+  };
+
   const getModelDisplayText = (): string => {
+    if (isCloudMode) {
+      return formatCloudModelName(cloudModelId);
+    }
+
     const verifyingKeys = Object.keys(verifyingModels);
     if (verifyingKeys.length > 0) {
       if (verifyingKeys.length === 1) {
@@ -236,6 +274,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
 
   // Derive display status from model status + store state
   const getDisplayStatus = (): ModelStatus => {
+    if (isCloudMode) return "ready";
     if (Object.keys(verifyingModels).length > 0) return "verifying";
     if (Object.keys(extractingModels).length > 0) return "extracting";
     if (Object.keys(downloadProgress).length > 0) return "downloading";
@@ -251,6 +290,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
           displayText={getModelDisplayText()}
           isDropdownOpen={showModelDropdown}
           onClick={() => setShowModelDropdown(!showModelDropdown)}
+          isCloud={isCloudMode}
         />
 
         {/* Model Dropdown */}
@@ -259,6 +299,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
             models={models}
             currentModelId={displayModelId}
             onModelSelect={handleModelSelect}
+            isCloudMode={isCloudMode}
+            cloudModelName={formatCloudModelName(cloudModelId)}
+            onSelectCloud={handleSelectCloud}
           />
         )}
       </div>

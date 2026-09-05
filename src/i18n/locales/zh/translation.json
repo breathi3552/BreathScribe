@@ -158,7 +158,8 @@
     },
     "cancel": "取消",
     "cancelDownload": "取消下载",
-    "legacy": "旧版"
+    "legacy": "旧版",
+    "cloudProviderGoogle": "Google Gemini 云端大模型转写"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "便携版无法自动更新。请通过下方按钮下载适用于你的系统的安装程序，运行后安装到同一文件夹，你的 Data/ 文件夹（设置、模型、录音）会保留在原处。",
     "portableUpdateButton": "下载安装程序",
     "portableUpdateBrowseMessage": "便携版无法自动更新。请从 GitHub Releases 下载适用于你的系统的最新版本，并安装到同一文件夹，你的 Data/ 文件夹（设置、模型、录音）会保留在原处。",
-    "portableUpdateBrowseButton": "打开 GitHub Releases"
+    "portableUpdateBrowseButton": "打开 GitHub Releases",
+    "network": {
+      "system": "网络: 系统代理",
+      "direct": "网络: 直连",
+      "manual": "网络: 手动代理"
+    }
   },
   "common": {
     "loading": "加载中...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "未知模型",
     "pasteFailedTitle": "粘贴文本失败",
     "pasteFailed": "无法将文本粘贴到当前活动的应用程序中。",
-    "transcriptionFailedTitle": "转录失败"
+    "transcriptionFailedTitle": "转录失败",
+    "missingCloudApiKey": "请先在设置中填写云端 API Key"
   },
   "appLanguage": {
     "title": "应用语言",

@@ -6,7 +6,7 @@ use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
 use crate::settings::{
     get_settings, AppSettings, ModelUnloadTimeout, OrtAcceleratorSetting,
-    TranscribeAcceleratorSetting,
+    TranscribeAcceleratorSetting, TranscriptionMode,
 };
 use anyhow::Result;
 use log::{debug, error, info, warn};
@@ -317,19 +317,26 @@ impl TranscriptionManager {
                     let settings = get_settings(&app_handle_cloned);
                     let timeout = settings.model_unload_timeout;
 
-                    // Skip Immediately — that variant is handled by
-                    // maybe_unload_immediately() after each transcription.
-                    // Treating it as 0s here would unload the model mid-recording.
+                    // Skip Immediately in local mode — that variant is handled by
+                    // maybe_unload_immediately() after each local transcription.
+                    // If in Cloud mode and Immediately is configured, eagerly unload
+                    // any resident local model.
                     if timeout == ModelUnloadTimeout::Immediately {
+                        if settings.transcription_mode != TranscriptionMode::Local
+                            && manager_cloned.is_model_loaded()
+                        {
+                            let _ = manager_cloned.unload_model();
+                        }
                         continue;
                     }
 
-                    // While recording, keep the idle timer fresh so the
+                    // While recording in local mode, keep the idle timer fresh so the
                     // model is never unloaded mid-session.
+                    // In cloud mode, audio capture does not reset the local model's idle timer.
                     let is_recording = app_handle_cloned
                         .try_state::<Arc<AudioRecordingManager>>()
                         .is_some_and(|a| a.is_recording());
-                    if is_recording {
+                    if is_recording && settings.transcription_mode == TranscriptionMode::Local {
                         manager_cloned.touch_activity();
                         continue;
                     }

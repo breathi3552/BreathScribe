@@ -655,10 +655,15 @@ impl ShortcutAction for TranscribeAction {
     }
 
     fn stop(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
+        let rm = Arc::clone(&app.state::<Arc<AudioRecordingManager>>());
+        if !rm.is_recording() {
+            debug!("TranscribeAction::stop called but recording manager is not recording; ignoring");
+            return;
+        }
+
         // Prevent a slow microphone from emitting a ready event or start chime
         // after the user has already requested stop.
-        app.state::<Arc<AudioRecordingManager>>()
-            .invalidate_recording_readiness();
+        rm.invalidate_recording_readiness();
 
         // Unregister the cancel shortcut when transcription stops
         shortcut::unregister_cancel_shortcut(app);
@@ -667,7 +672,6 @@ impl ShortcutAction for TranscribeAction {
         debug!("TranscribeAction::stop called for binding: {}", binding_id);
 
         let ah = app.clone();
-        let rm = Arc::clone(&app.state::<Arc<AudioRecordingManager>>());
         let tm = Arc::clone(&app.state::<Arc<TranscriptionManager>>());
         let hm = Arc::clone(&app.state::<Arc<HistoryManager>>());
 
@@ -741,30 +745,48 @@ impl ShortcutAction for TranscribeAction {
                     // running, finalize it and use its text (all audio was already
                     // fed to the stream); otherwise batch-transcribe the samples.
                     let transcription_time = Instant::now();
-                    let transcription_result = match tm.finalize_stream() {
-                        // A finalized stream with usable text wins. An empty result
-                        // (no active stream, produced nothing, or a finalize error
-                        // after the engine was returned) falls back to a full batch
-                        // transcription of the same audio. A finalize timeout is
-                        // surfaced instead — the worker may still hold the engine,
-                        // so a batch fallback would contend with it.
-                        Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
-                        Ok(_) => {
-                            if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
-                                let settings = get_settings(&ah);
-                                let options = TranscriptionOptions {
-                                    language: settings.selected_language.clone(),
-                                    prompt: None,
-                                };
-                                router
-                                    .transcribe(samples, &options)
-                                    .await
-                                    .map_err(|e| anyhow::anyhow!(e))
-                            } else {
-                                tm.transcribe(samples)
-                            }
+                    let settings = get_settings(&ah);
+                    let is_cloud =
+                        matches!(settings.transcription_mode, TranscriptionMode::Cloud { .. });
+
+                    let transcription_result = if is_cloud {
+                        if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
+                            let options = TranscriptionOptions {
+                                language: settings.selected_language.clone(),
+                                prompt: None,
+                            };
+                            router
+                                .transcribe(samples, &options)
+                                .await
+                                .map_err(|e| anyhow::anyhow!(e))
+                        } else {
+                            Err(anyhow::anyhow!("Transcription router not available"))
                         }
-                        Err(err) => Err(err),
+                    } else {
+                        match tm.finalize_stream() {
+                            // A finalized stream with usable text wins. An empty result
+                            // (no active stream, produced nothing, or a finalize error
+                            // after the engine was returned) falls back to a full batch
+                            // transcription of the same audio. A finalize timeout is
+                            // surfaced instead — the worker may still hold the engine,
+                            // so a batch fallback would contend with it.
+                            Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
+                            Ok(_) => {
+                                if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
+                                    let options = TranscriptionOptions {
+                                        language: settings.selected_language.clone(),
+                                        prompt: None,
+                                    };
+                                    router
+                                        .transcribe(samples, &options)
+                                        .await
+                                        .map_err(|e| anyhow::anyhow!(e))
+                                } else {
+                                    tm.transcribe(samples)
+                                }
+                            }
+                            Err(err) => Err(err),
+                        }
                     };
 
                     // Await WAV save and verify

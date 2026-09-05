@@ -158,7 +158,8 @@
       "translation": "Kan vertalen naar het Engels",
       "translate": "Vertalen",
       "streaming": "Toont live transcriptie tijdens het spreken"
-    }
+    },
+    "cloudProviderGoogle": "Google Gemini cloud-spraakherkenning"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Draagbare (portable) installaties kunnen niet automatisch worden bijgewerkt. Download hieronder het installatiebestand voor je systeem, voer het uit en installeer in dezelfde map — je Data/-map (instellingen, modellen, opnames) blijft behouden.",
     "portableUpdateButton": "Installatiebestand downloaden",
     "portableUpdateBrowseMessage": "Draagbare (portable) installaties kunnen niet automatisch worden bijgewerkt. Download de nieuwste versie voor je systeem van GitHub Releases en installeer die in dezelfde map — je Data/-map (instellingen, modellen, opnames) blijft behouden.",
-    "portableUpdateBrowseButton": "GitHub Releases openen"
+    "portableUpdateBrowseButton": "GitHub Releases openen",
+    "network": {
+      "system": "Netwerk: Systeemproxy",
+      "direct": "Netwerk: Direct",
+      "manual": "Netwerk: Handmatige proxy"
+    }
   },
   "whatsNew": {
     "title": "Nieuw in Handy Cloud v{{version}}"
@@ -779,7 +785,8 @@
     "modelLoadFailedUnknown": "onbekend model",
     "pasteFailedTitle": "Tekst plakken mislukt",
     "pasteFailed": "Tekst kon niet worden geplakt in de actieve applicatie.",
-    "transcriptionFailedTitle": "Transcriptie mislukt"
+    "transcriptionFailedTitle": "Transcriptie mislukt",
+    "missingCloudApiKey": "Configureer eerst uw Cloud STT API-sleutel in de instellingen."
   },
   "appLanguage": {
     "title": "Interfacetaal",

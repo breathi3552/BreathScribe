@@ -10,7 +10,8 @@ use crate::settings::{
 #[specta::specta]
 pub fn set_transcription_mode(app: AppHandle, mode: TranscriptionMode) -> Result<(), String> {
     let mut settings = get_settings(&app);
-    settings.transcription_mode = mode;
+    let previous_mode = settings.transcription_mode.clone();
+    settings.transcription_mode = mode.clone();
     write_settings(&app, settings);
     let _ = app.emit(
         "settings-changed",
@@ -18,6 +19,17 @@ pub fn set_transcription_mode(app: AppHandle, mode: TranscriptionMode) -> Result
             "setting": "transcription_mode",
         }),
     );
+
+    if mode == TranscriptionMode::Local && previous_mode != TranscriptionMode::Local {
+        let current_settings = get_settings(&app);
+        if !current_settings.selected_model.is_empty() {
+            if let Some(tm) = app.try_state::<Arc<crate::managers::transcription::TranscriptionManager>>() {
+                tm.initiate_model_load();
+            }
+        }
+    }
+
+    crate::tray::update_tray_menu(&app);
     Ok(())
 }
 

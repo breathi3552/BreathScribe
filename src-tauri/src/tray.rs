@@ -534,13 +534,20 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
     } else {
         // Build model submenu — label is the active model name
         let is_cloud_active = matches!(inputs.transcription_mode, TranscriptionMode::Cloud { .. });
-        let submenu_label = if is_cloud_active {
-            match &inputs.transcription_mode {
-                TranscriptionMode::Cloud { model_id, .. } => {
-                    format!("☁️ {}", model_id)
-                }
-                _ => "☁️ Cloud STT".to_string(),
+        let (cloud_model_id, cloud_display_name) = match &inputs.transcription_mode {
+            TranscriptionMode::Cloud { model_id, .. } => {
+                let name = match model_id.as_str() {
+                    "gemini-2.5-flash" => "Gemini 2.5 Flash",
+                    "gemini-2.5-pro" => "Gemini 2.5 Pro",
+                    other => other,
+                };
+                (model_id.as_str(), format!("☁️ {}", name))
             }
+            _ => ("gemini-2.5-flash", "☁️ Gemini 2.5 Flash".to_string()),
+        };
+
+        let submenu_label = if is_cloud_active {
+            cloud_display_name.clone()
         } else {
             inputs
                 .downloaded_models
@@ -553,11 +560,11 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         let model_submenu = Submenu::with_id(app, "model_submenu", &submenu_label, true)?;
 
         // 1. 置顶云端 STT 选项
-        let cloud_item_id = "transcription_mode:cloud:gemini-2.5-flash";
+        let cloud_item_id = format!("transcription_mode:cloud:{}", cloud_model_id);
         let cloud_item = CheckMenuItem::with_id(
             app,
-            cloud_item_id,
-            "☁️ Gemini 2.5 Flash",
+            &cloud_item_id,
+            &cloud_display_name,
             true,
             is_cloud_active,
             None::<&str>,
@@ -780,5 +787,20 @@ mod tests {
     #[test]
     fn idle_and_busy_menus_differ() {
         assert_ne!(inputs(false), inputs(true));
+    }
+
+    #[test]
+    fn tray_menu_inputs_differ_between_cloud_models() {
+        let mut input_flash = inputs(false);
+        input_flash.transcription_mode = TranscriptionMode::Cloud {
+            provider_id: "gemini".to_string(),
+            model_id: "gemini-2.5-flash".to_string(),
+        };
+        let mut input_pro = inputs(false);
+        input_pro.transcription_mode = TranscriptionMode::Cloud {
+            provider_id: "gemini".to_string(),
+            model_id: "gemini-2.5-pro".to_string(),
+        };
+        assert_ne!(input_flash, input_pro);
     }
 }

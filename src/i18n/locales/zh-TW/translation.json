@@ -158,7 +158,8 @@
       "translate": "翻譯為英語",
       "streaming": "在您說話時即時顯示轉錄"
     },
-    "legacy": "舊版"
+    "legacy": "舊版",
+    "cloudProviderGoogle": "Google Gemini 雲端大模型轉寫"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "可攜式安裝無法自動更新。請透過下方按鈕下載適用於你的系統的安裝程式，執行後安裝到相同資料夾，你的 Data/ 資料夾（設定、模型、錄音）會保留在原處。",
     "portableUpdateButton": "下載安裝程式",
     "portableUpdateBrowseMessage": "可攜式安裝無法自動更新。請從 GitHub Releases 下載適用於你的系統的最新版本，並安裝到相同資料夾，你的 Data/ 資料夾（設定、模型、錄音）會保留在原處。",
-    "portableUpdateBrowseButton": "開啟 GitHub Releases"
+    "portableUpdateBrowseButton": "開啟 GitHub Releases",
+    "network": {
+      "system": "網路: 系統代理",
+      "direct": "網路: 直連",
+      "manual": "網路: 手動代理"
+    }
   },
   "common": {
     "loading": "載入中...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "未知模型",
     "pasteFailedTitle": "貼上文字失敗",
     "pasteFailed": "無法將文字貼上至目前作用中的應用程式。",
-    "transcriptionFailedTitle": "轉錄失敗"
+    "transcriptionFailedTitle": "轉錄失敗",
+    "missingCloudApiKey": "請先在設定中填寫雲端 API 金鑰"
   },
   "appLanguage": {
     "title": "應用程式語言",

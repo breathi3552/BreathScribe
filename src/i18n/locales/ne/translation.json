@@ -158,7 +158,8 @@
       "translation": "अङ्ग्रेजीमा अनुवाद गर्न सक्छ",
       "translate": "अनुवाद",
       "streaming": "बोल्दै गर्दा लाइभ ट्रान्सक्रिप्सन देखाउँछ"
-    }
+    },
+    "cloudProviderGoogle": "Google Gemini क्लाउड बोली पहिचान"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "पोर्टेबल इन्स्टलहरू स्वतः अपडेट गर्न सकिँदैन। तलबाट आफ्नो प्रणालीका लागि इन्स्टलर डाउनलोड गर्नुहोस्, चलाउनुहोस् र उही फोल्डरमा इन्स्टल गर्नुहोस् — तपाईंको Data/ फोल्डर (सेटिङ, मोडेल, रेकर्डिङ) जस्ताको तस्तै रहन्छ।",
     "portableUpdateButton": "इन्स्टलर डाउनलोड गर्नुहोस्",
     "portableUpdateBrowseMessage": "पोर्टेबल इन्स्टलहरू स्वतः अपडेट गर्न सकिँदैन। GitHub Releases बाट आफ्नो प्रणालीका लागि पछिल्लो संस्करण डाउनलोड गर्नुहोस् र उही फोल्डरमा इन्स्टल गर्नुहोस् — तपाईंको Data/ फोल्डर (सेटिङ, मोडेल, रेकर्डिङ) जस्ताको तस्तै रहन्छ।",
-    "portableUpdateBrowseButton": "GitHub Releases खोल्नुहोस्"
+    "portableUpdateBrowseButton": "GitHub Releases खोल्नुहोस्",
+    "network": {
+      "system": "नेटवर्क: प्रणाली प्रोक्सी",
+      "direct": "नेटवर्क: प्रत्यक्ष",
+      "manual": "नेटवर्क: म्यानुअल प्रोक्सी"
+    }
   },
   "whatsNew": {
     "title": "Handy Cloud v{{version}} मा नयाँ"
@@ -779,7 +785,8 @@
     "modelLoadFailedUnknown": "अज्ञात मोडेल",
     "pasteFailedTitle": "टेक्स्ट पेस्ट गर्न सकिएन",
     "pasteFailed": "सक्रिय एपमा टेक्स्ट पेस्ट गर्न सकिएन।",
-    "transcriptionFailedTitle": "ट्रान्सक्रिप्सन गर्न सकिएन"
+    "transcriptionFailedTitle": "ट्रान्सक्रिप्सन गर्न सकिएन",
+    "missingCloudApiKey": "कृपया पहिले सेटिङहरूमा आफ्नो Cloud STT API कुञ्जी कन्फिगर गर्नुहोस्।"
   },
   "appLanguage": {
     "title": "एपको भाषा",

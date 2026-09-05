@@ -91,7 +91,7 @@ pub async fn retry_history_entry_transcription(
 
     let router = app
         .try_state::<Arc<TranscriptionRouter>>()
-        .ok_or_else(|| "转写路由器未初始化".to_string())?;
+        .ok_or_else(|| "Transcription router not initialized".to_string())?;
     let options = TranscriptionOptions {
         language: settings.selected_language.clone(),
         prompt: None,

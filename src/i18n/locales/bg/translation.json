@@ -158,7 +158,8 @@
       "translate": "Превод на английски",
       "streaming": "Показва транскрипция на живо, докато говорите"
     },
-    "legacy": "Наследен"
+    "legacy": "Наследен",
+    "cloudProviderGoogle": "Облачно разпознаване на реч Google Gemini"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Преносимите инсталации не могат да бъдат актуализирани автоматично. Изтеглете инсталатора за вашата система от бутона по-долу, стартирайте го и инсталирайте в същата папка — папката Data/ (настройки, модели, записи) остава на мястото си.",
     "portableUpdateButton": "Изтегляне на инсталатора",
     "portableUpdateBrowseMessage": "Преносимите инсталации не могат да бъдат актуализирани автоматично. Изтеглете най-новата версия за вашата система от GitHub Releases и я инсталирайте в същата папка — папката Data/ (настройки, модели, записи) остава на мястото си.",
-    "portableUpdateBrowseButton": "Отвори GitHub Releases"
+    "portableUpdateBrowseButton": "Отвори GitHub Releases",
+    "network": {
+      "system": "Мрежа: Системен прокси",
+      "direct": "Мрежа: Директна",
+      "manual": "Мрежа: Ръчен прокси"
+    }
   },
   "common": {
     "loading": "Зареждане...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "неизвестен модел",
     "pasteFailedTitle": "Неуспешно поставяне на текст",
     "pasteFailed": "Текстът не можа да бъде поставен в активното приложение.",
-    "transcriptionFailedTitle": "Неуспешна транскрипция"
+    "transcriptionFailedTitle": "Неуспешна транскрипция",
+    "missingCloudApiKey": "Моля, първо конфигурирайте вашия Cloud STT API ключ в настройките."
   },
   "appLanguage": {
     "title": "Език на приложението",

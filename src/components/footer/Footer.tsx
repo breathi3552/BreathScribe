@@ -3,8 +3,13 @@ import { getVersion } from "@tauri-apps/api/app";
 
 import ModelSelector from "../model-selector";
 import UpdateChecker from "../update-checker";
+import NetworkProxyIndicator from "./NetworkProxyIndicator";
 
-const Footer: React.FC = () => {
+interface FooterProps {
+  onNavigate?: (section: "advanced" | "models") => void;
+}
+
+const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const [version, setVersion] = useState("");
 
   useEffect(() => {
@@ -28,8 +33,9 @@ const Footer: React.FC = () => {
           <ModelSelector />
         </div>
 
-        {/* Update Status */}
-        <div className="flex items-center gap-1">
+        {/* Status Indicators & Update Status */}
+        <div className="flex items-center gap-2.5">
+          <NetworkProxyIndicator onClick={() => onNavigate?.("advanced")} />
           <UpdateChecker />
           <span>•</span>
           {/* eslint-disable-next-line i18next/no-literal-string */}

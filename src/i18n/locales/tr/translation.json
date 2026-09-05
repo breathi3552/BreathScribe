@@ -158,7 +158,8 @@
     },
     "cancel": "İptal",
     "cancelDownload": "İndirmeyi iptal et",
-    "legacy": "Eski"
+    "legacy": "Eski",
+    "cloudProviderGoogle": "Google Gemini bulut ses tanıma"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Taşınabilir kurulumlar otomatik olarak güncellenemez. Aşağıdan sisteminize uygun yükleyiciyi indirin, çalıştırın ve aynı klasöre kurun — Data/ klasörünüz (ayarlar, modeller, kayıtlar) yerinde kalır.",
     "portableUpdateButton": "Yükleyiciyi indir",
     "portableUpdateBrowseMessage": "Taşınabilir kurulumlar otomatik olarak güncellenemez. Sisteminize uygun en son sürümü GitHub Releases’ten indirin ve aynı klasöre kurun — Data/ klasörünüz (ayarlar, modeller, kayıtlar) yerinde kalır.",
-    "portableUpdateBrowseButton": "GitHub Releases’i aç"
+    "portableUpdateBrowseButton": "GitHub Releases’i aç",
+    "network": {
+      "system": "Ağ: Sistem Vekili",
+      "direct": "Ağ: Doğrudan",
+      "manual": "Ağ: Manuel Vekil"
+    }
   },
   "common": {
     "loading": "Yükleniyor...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "bilinmeyen model",
     "pasteFailedTitle": "Metin yapıştırılamadı",
     "pasteFailed": "Metin etkin uygulamaya yapıştırılamadı.",
-    "transcriptionFailedTitle": "Transkripsiyon başarısız oldu"
+    "transcriptionFailedTitle": "Transkripsiyon başarısız oldu",
+    "missingCloudApiKey": "Lütfen önce ayarlardan Cloud STT API Anahtarınızı yapılandırın."
   },
   "appLanguage": {
     "title": "Uygulama Dili",

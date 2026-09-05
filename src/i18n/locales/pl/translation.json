@@ -158,7 +158,8 @@
     },
     "cancel": "Anuluj",
     "cancelDownload": "Anuluj pobieranie",
-    "legacy": "Przestarzałe"
+    "legacy": "Przestarzałe",
+    "cloudProviderGoogle": "Rozpoznawanie mowy w chmurze Google Gemini"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Instalacji przenośnych nie można aktualizować automatycznie. Pobierz poniżej instalator dla swojego systemu, uruchom go i zainstaluj w tym samym folderze — Twój folder Data/ (ustawienia, modele, nagrania) pozostaje na miejscu.",
     "portableUpdateButton": "Pobierz instalator",
     "portableUpdateBrowseMessage": "Instalacji przenośnych nie można aktualizować automatycznie. Pobierz najnowszą wersję dla swojego systemu z GitHub Releases i zainstaluj ją w tym samym folderze — Twój folder Data/ (ustawienia, modele, nagrania) pozostaje na miejscu.",
-    "portableUpdateBrowseButton": "Otwórz GitHub Releases"
+    "portableUpdateBrowseButton": "Otwórz GitHub Releases",
+    "network": {
+      "system": "Sieć: Serwer proxy systemu",
+      "direct": "Sieć: Bezpośrednio",
+      "manual": "Sieć: Ręczny serwer proxy"
+    }
   },
   "common": {
     "loading": "Wczytywanie...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "nieznany model",
     "pasteFailedTitle": "Nie udało się wkleić tekstu",
     "pasteFailed": "Nie można było wkleić tekstu do aktywnej aplikacji.",
-    "transcriptionFailedTitle": "Transkrypcja nie powiodła się"
+    "transcriptionFailedTitle": "Transkrypcja nie powiodła się",
+    "missingCloudApiKey": "Najpierw skonfiguruj klucz API Cloud STT w ustawieniach."
   },
   "appLanguage": {
     "title": "Język aplikacji",

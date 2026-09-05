@@ -158,7 +158,8 @@
     },
     "cancel": "Zrušit",
     "cancelDownload": "Zrušit stahování",
-    "legacy": "Zastaralé"
+    "legacy": "Zastaralé",
+    "cloudProviderGoogle": "Cloudové rozpoznávání řeči Google Gemini"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Přenosné instalace nelze aktualizovat automaticky. Níže stáhněte instalátor pro svůj systém, spusťte jej a nainstalujte do stejné složky — vaše složka Data/ (nastavení, modely, nahrávky) zůstane na místě.",
     "portableUpdateButton": "Stáhnout instalátor",
     "portableUpdateBrowseMessage": "Přenosné instalace nelze aktualizovat automaticky. Stáhněte nejnovější verzi pro svůj systém z GitHub Releases a nainstalujte ji do stejné složky — vaše složka Data/ (nastavení, modely, nahrávky) zůstane na místě.",
-    "portableUpdateBrowseButton": "Otevřít GitHub Releases"
+    "portableUpdateBrowseButton": "Otevřít GitHub Releases",
+    "network": {
+      "system": "Síť: Systémový proxy",
+      "direct": "Síť: Přímo",
+      "manual": "Síť: Ruční proxy"
+    }
   },
   "common": {
     "loading": "Načítání...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "neznámý model",
     "pasteFailedTitle": "Vložení textu se nezdařilo",
     "pasteFailed": "Text nebylo možné vložit do aktivní aplikace.",
-    "transcriptionFailedTitle": "Přepis selhal"
+    "transcriptionFailedTitle": "Přepis selhal",
+    "missingCloudApiKey": "Nejprve v nastavení nakonfigurujte svůj klíč API pro Cloud STT."
   },
   "appLanguage": {
     "title": "Jazyk aplikace",

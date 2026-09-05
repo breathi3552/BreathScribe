@@ -158,7 +158,8 @@
     },
     "cancel": "Abbrechen",
     "cancelDownload": "Download abbrechen",
-    "legacy": "Veraltet"
+    "legacy": "Veraltet",
+    "cloudProviderGoogle": "Google Gemini Cloud-Spracherkennung"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Portable Installationen können nicht automatisch aktualisiert werden. Lade unten den Installer für dein System herunter, führe ihn aus und installiere in denselben Ordner — dein Data/-Ordner (Einstellungen, Modelle, Aufnahmen) bleibt erhalten.",
     "portableUpdateButton": "Installer herunterladen",
     "portableUpdateBrowseMessage": "Portable Installationen können nicht automatisch aktualisiert werden. Lade die neueste Version für dein System von GitHub Releases herunter und installiere sie in denselben Ordner — dein Data/-Ordner (Einstellungen, Modelle, Aufnahmen) bleibt erhalten.",
-    "portableUpdateBrowseButton": "GitHub Releases öffnen"
+    "portableUpdateBrowseButton": "GitHub Releases öffnen",
+    "network": {
+      "system": "Netzwerk: System-Proxy",
+      "direct": "Netzwerk: Direkt",
+      "manual": "Netzwerk: Manueller Proxy"
+    }
   },
   "common": {
     "loading": "Wird geladen...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "unbekanntes Modell",
     "pasteFailedTitle": "Text konnte nicht eingefügt werden",
     "pasteFailed": "Der Text konnte nicht in die aktive Anwendung eingefügt werden.",
-    "transcriptionFailedTitle": "Transkription fehlgeschlagen"
+    "transcriptionFailedTitle": "Transkription fehlgeschlagen",
+    "missingCloudApiKey": "Bitte konfigurieren Sie zuerst Ihren Cloud-STT-API-Schlüssel in den Einstellungen."
   },
   "appLanguage": {
     "title": "Anwendungssprache",

@@ -312,6 +312,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
                     Ok(()) => log::info!("Model unloaded via tray."),
                     Err(e) => log::error!("Failed to unload model via tray: {}", e),
                 }
+                tray::update_tray_menu(app);
             }
             "cancel" => {
                 use crate::utils::cancel_current_operation;
@@ -379,11 +380,16 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     }
 
     // Refresh tray menu when model state changes
-    let app_handle_for_listener = app_handle.clone();
+    let app_handle_for_model_state = app_handle.clone();
     app_handle.listen("model-state-changed", move |_| {
-        tray::update_tray_menu(&app_handle_for_listener);
+        tray::update_tray_menu(&app_handle_for_model_state);
     });
 
+    // Refresh tray menu when settings change (e.g. mode switch from UI)
+    let app_handle_for_settings = app_handle.clone();
+    app_handle.listen("settings-changed", move |_| {
+        tray::update_tray_menu(&app_handle_for_settings);
+    });
     // Apply the autostart preference (SMAppService login item on macOS 13+,
     // tauri-plugin-autostart elsewhere)
     autostart::apply_autostart(app_handle, settings.autostart_enabled);

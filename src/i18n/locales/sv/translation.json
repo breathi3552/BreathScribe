@@ -158,7 +158,8 @@
       "translate": "Översätt till engelska",
       "streaming": "Visar transkription i realtid medan du talar"
     },
-    "legacy": "Äldre"
+    "legacy": "Äldre",
+    "cloudProviderGoogle": "Google Gemini molnbaserad taligenkänning"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Portabla installationer kan inte uppdateras automatiskt. Ladda ner installeraren för ditt system nedan, kör den och installera i samma mapp — din Data/-mapp (inställningar, modeller, inspelningar) behålls.",
     "portableUpdateButton": "Ladda ner installeraren",
     "portableUpdateBrowseMessage": "Portabla installationer kan inte uppdateras automatiskt. Ladda ner den senaste versionen för ditt system från GitHub Releases och installera den i samma mapp — din Data/-mapp (inställningar, modeller, inspelningar) behålls.",
-    "portableUpdateBrowseButton": "Öppna GitHub Releases"
+    "portableUpdateBrowseButton": "Öppna GitHub Releases",
+    "network": {
+      "system": "Nätverk: Systemproxy",
+      "direct": "Nätverk: Direkt",
+      "manual": "Nätverk: Manuell proxy"
+    }
   },
   "common": {
     "loading": "Laddar...",
@@ -776,7 +782,8 @@
     "noInputDevice": "Ingen ljudenhet hittades. Anslut en mikrofon eller ett headset och försök igen.",
     "pasteFailedTitle": "Det gick inte att klistra in texten",
     "pasteFailed": "Texten kunde inte klistras in i det aktiva programmet.",
-    "transcriptionFailedTitle": "Transkriptionen misslyckades"
+    "transcriptionFailedTitle": "Transkriptionen misslyckades",
+    "missingCloudApiKey": "Konfigurera din API-nyckel för Cloud STT i inställningarna först."
   },
   "appLanguage": {
     "title": "Applikationsspråk",

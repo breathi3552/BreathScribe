@@ -158,7 +158,8 @@
     },
     "cancel": "Annuler",
     "cancelDownload": "Annuler le téléchargement",
-    "legacy": "Hérité"
+    "legacy": "Hérité",
+    "cloudProviderGoogle": "Reconnaissance vocale cloud Google Gemini"
   },
   "settings": {
     "modelSettings": {
@@ -745,7 +746,12 @@
     "portableUpdateMessage": "Les installations portables ne peuvent pas être mises à jour automatiquement. Téléchargez ci-dessous l’installateur correspondant à votre système, exécutez-le et installez-le dans le même dossier : votre dossier Data/ (paramètres, modèles, enregistrements) est conservé.",
     "portableUpdateButton": "Télécharger l’installateur",
     "portableUpdateBrowseMessage": "Les installations portables ne peuvent pas être mises à jour automatiquement. Téléchargez la dernière version correspondant à votre système depuis GitHub Releases et installez-la dans le même dossier : votre dossier Data/ (paramètres, modèles, enregistrements) est conservé.",
-    "portableUpdateBrowseButton": "Ouvrir GitHub Releases"
+    "portableUpdateBrowseButton": "Ouvrir GitHub Releases",
+    "network": {
+      "system": "Réseau : Proxy système",
+      "direct": "Réseau : Direct",
+      "manual": "Réseau : Proxy manuel"
+    }
   },
   "common": {
     "loading": "Chargement...",
@@ -776,7 +782,8 @@
     "modelLoadFailedUnknown": "modèle inconnu",
     "pasteFailedTitle": "Échec du collage du texte",
     "pasteFailed": "Le texte n'a pas pu être collé dans l'application active.",
-    "transcriptionFailedTitle": "Échec de la transcription"
+    "transcriptionFailedTitle": "Échec de la transcription",
+    "missingCloudApiKey": "Veuillez d'abord configurer votre clé API Cloud STT dans les paramètres."
   },
   "appLanguage": {
     "title": "Langue de l'application",

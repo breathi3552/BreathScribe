@@ -198,7 +198,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             .expect("Failed to initialize fallback network manager")
         }),
     );
-    app_handle.manage(network_manager);
+    app_handle.manage(network_manager.clone());
     let local_provider = Arc::new(providers::local::LocalTranscriptionProvider::new(
         transcription_manager.clone(),
     ));

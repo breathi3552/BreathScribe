@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="cloudBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="cloudFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f0f9ff"/>
+    </linearGradient>
+    <linearGradient id="waveGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background squircle -->
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="url(#cloudBg)"/>
+  <rect x="26" y="26" width="460" height="460" rx="102" fill="none" stroke="url(#rimGrad)" stroke-width="4"/>
+
+  <!-- Cloud shadow -->
+  <path d="M155 358 c-34 0 -62 -27 -62 -61 c0 -28 19 -52 46 -59 c5 -43 42 -76 87 -76 c20 0 39 7 54 19 c16 -23 43 -38 73 -38 c48 0 88 37 92 84 c28 5 49 29 49 59 c0 34 -28 62 -62 62 Z"
+        fill="#0f172a" fill-opacity="0.2" transform="translate(0, 10)"/>
+
+  <!-- Main cloud body -->
+  <path d="M155 352 c-34 0 -62 -27 -62 -61 c0 -28 19 -52 46 -59 c5 -43 42 -76 87 -76 c20 0 39 7 54 19 c16 -23 43 -38 73 -38 c48 0 88 37 92 84 c28 5 49 29 49 59 c0 34 -28 62 -62 62 Z"
+        fill="url(#cloudFill)"/>
+
+  <!-- Soundwave bars in center of cloud -->
+  <!-- bar 1 (outer left) -->
+  <rect x="186" y="262" width="14" height="52" rx="7" fill="url(#waveGrad)"/>
+  <!-- bar 2 (mid left) -->
+  <rect x="218" y="238" width="14" height="82" rx="7" fill="url(#waveGrad)"/>
+  <!-- bar 3 (center) -->
+  <rect x="250" y="218" width="14" height="112" rx="7" fill="url(#waveGrad)"/>
+  <!-- bar 4 (mid right) -->
+  <rect x="282" y="238" width="14" height="82" rx="7" fill="url(#waveGrad)"/>
+  <!-- bar 5 (outer right) -->
+  <rect x="314" y="262" width="14" height="52" rx="7" fill="url(#waveGrad)"/>
+
+  <!-- Acoustic arcs top right -->
+  <path d="M400 185 A 48 48 0 0 1 432 230" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-opacity="0.85"/>
+  <path d="M416 155 A 84 84 0 0 1 462 232" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-opacity="0.5"/>
+</svg>

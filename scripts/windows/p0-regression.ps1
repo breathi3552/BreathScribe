@@ -143,7 +143,8 @@ $sourcePaths = @(
   "src-tauri/src/tray.rs"
 )
 foreach ($path in $sourcePaths) { Assert-FileExists $path }
-Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -match "handy-cloud-icon-source\.png") "UI hand icon uses approved Handy Cloud source"
+Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -match "<svg") "UI hand icon is pure SVG vector"
+Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -notmatch "<img") "UI hand icon does not rely on bitmap img"
 Assert-True ((Get-Content "src/components/icons/HandyTextLogo.tsx" -Raw) -match "Handy Cloud") "text logo displays Handy Cloud"
 Assert-True ((Get-Content "src/components/settings/about/AboutSettings.tsx" -Raw) -notmatch "github\.com/cjpais/Handy") "About source link uses fork"
 Assert-True ((Get-Content "src-tauri/src/tray.rs" -Raw) -match "Handy Cloud v") "Tray tooltip identifies Handy Cloud"

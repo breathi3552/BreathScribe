@@ -144,8 +144,12 @@ function App() {
   // The payload is the backend error message (also logged to handy.log).
   useEffect(() => {
     const unlisten = listen<string>("transcription-error", (event) => {
+      const description =
+        event.payload === "missing_cloud_api_key"
+          ? t("onboarding.cloudGuidanceDesc")
+          : event.payload;
       toast.error(t("errors.transcriptionFailedTitle"), {
-        description: event.payload,
+        description,
       });
     });
     return () => {
@@ -251,6 +255,18 @@ function App() {
     setOnboardingStep("done");
   };
 
+  const handleSkipToCloud = () => {
+    setCurrentSection("models");
+    setOnboardingStep("done");
+    const settings = useSettingsStore.getState().settings;
+    const geminiKey = settings?.cloud_stt_api_keys?.gemini;
+    if (!geminiKey || geminiKey.trim() === "") {
+      toast.info(t("onboarding.cloudGuidanceToast"), {
+        description: t("onboarding.cloudGuidanceDesc"),
+      });
+    }
+  };
+
   // Rendered once around every step below (including onboarding) so
   // toast.error() calls surface to the user. sonner renders via a portal, so
   // its position in the tree doesn't affect layout. Without this, errors during
@@ -287,7 +303,12 @@ function App() {
       <AccessibilityOnboarding onComplete={handleAccessibilityComplete} />
     );
   } else if (onboardingStep === "model") {
-    content = <Onboarding onModelSelected={handleModelSelected} />;
+    content = (
+      <Onboarding
+        onModelSelected={handleModelSelected}
+        onSkipToCloud={handleSkipToCloud}
+      />
+    );
   } else {
     content = (
       <div

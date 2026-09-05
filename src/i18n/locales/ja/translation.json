@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "モデルの選択に失敗しました"
+      "selectModel": "モデルの選択に失敗しました",
+      "skipFailed": "スキップに失敗しました。もう一度お試しください"
     },
     "permissions": {
       "title": "権限が必要です",
@@ -118,7 +119,12 @@
         "checkFailed": "権限の確認に失敗しました。もう一度お試しください。",
         "requestFailed": "権限のリクエストに失敗しました。もう一度お試しください。"
       }
-    }
+    },
+    "cloudBannerTitle": "クラウド優先モード（GPU非搭載PCやノートPC向け）",
+    "cloudBannerDescription": "数百MBのローカルモデルをダウンロードすることなく、Google Geminiによる高精度な文字起こしをすぐに利用できます。",
+    "skipAndConfigureCloud": "ダウンロードをスキップして設定 →",
+    "cloudGuidanceToast": "クラウドモードが有効になりました",
+    "cloudGuidanceDesc": "文字起こしを開始するには、Gemini APIキーを設定してください。"
   },
   "modelSelector": {
     "custom": "カスタム",

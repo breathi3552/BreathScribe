@@ -7,12 +7,17 @@ import type { ModelCardStatus } from "./ModelCard";
 import ModelCard, { isLegacySource } from "./ModelCard";
 import HandyTextLogo from "../icons/HandyTextLogo";
 import { useModelStore } from "../../stores/modelStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 interface OnboardingProps {
   onModelSelected: () => void;
+  onSkipToCloud?: () => void;
 }
 
-const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
+const Onboarding: React.FC<OnboardingProps> = ({
+  onModelSelected,
+  onSkipToCloud,
+}) => {
   const { t } = useTranslation();
   const {
     models,
@@ -28,6 +33,25 @@ const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const hasStartedSelection = useRef(false);
+  const { completeOnboardingWithCloud } = useSettingsStore();
+  const [isSkipping, setIsSkipping] = useState(false);
+
+  const handleSkipToCloud = async () => {
+    if (isSkipping || isBusy) return;
+    setIsSkipping(true);
+    try {
+      await completeOnboardingWithCloud();
+      if (onSkipToCloud) {
+        onSkipToCloud();
+      } else {
+        onModelSelected();
+      }
+    } catch (e) {
+      console.error("Failed to skip to cloud onboarding:", e);
+      toast.error(t("onboarding.errors.skipFailed"));
+      setIsSkipping(false);
+    }
+  };
 
   const isBusy = selectedModelId !== null;
 
@@ -154,6 +178,29 @@ const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
 
       <div className="max-w-[600px] w-full mx-auto text-center flex-1 flex flex-col min-h-0">
         <div className="space-y-6 pb-6">
+          <div className="rounded-xl border border-logo-primary/30 bg-logo-primary/5 p-4 text-left transition-all hover:border-logo-primary/50">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">⚡</span>
+                  <span className="font-semibold text-sm text-text">
+                    {t("onboarding.cloudBannerTitle")}
+                  </span>
+                </div>
+                <p className="text-xs text-text/70">
+                  {t("onboarding.cloudBannerDescription")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSkipToCloud}
+                disabled={isSkipping || isBusy}
+                className="shrink-0 px-4 py-2 rounded-lg bg-logo-primary hover:bg-logo-primary/90 text-white text-xs font-semibold transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {t("onboarding.skipAndConfigureCloud")}
+              </button>
+            </div>
+          </div>
           {models.some((m: ModelInfo) => m.is_downloaded) && (
             <div className="space-y-3">
               <div className="text-left">

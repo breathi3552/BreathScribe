@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Impossibile selezionare il modello"
+      "selectModel": "Impossibile selezionare il modello",
+      "skipFailed": "Impossibile saltare il download, riprova"
     },
     "permissions": {
       "title": "Permessi Richiesti",
@@ -118,7 +119,12 @@
         "checkFailed": "Impossibile verificare i permessi. Riprova.",
         "requestFailed": "Impossibile richiedere il permesso. Riprova."
       }
-    }
+    },
+    "cloudBannerTitle": "Modalità priorità cloud (consigliata per laptop / dispositivi senza GPU)",
+    "cloudBannerDescription": "Salta il download di centinaia di MB di modelli locali e inizia a trascrivere direttamente con Google Gemini.",
+    "skipAndConfigureCloud": "Salta download e configura →",
+    "cloudGuidanceToast": "Modalità cloud abilitata",
+    "cloudGuidanceDesc": "Configura la tua chiave API Gemini per iniziare a trascrivere."
   },
   "modelSelector": {
     "custom": "Personalizzato",

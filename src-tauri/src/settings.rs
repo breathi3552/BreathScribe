@@ -619,6 +619,35 @@ pub struct AppSettings {
     pub cloud_stt_providers: HashMap<String, CloudSttProviderSettings>,
 }
 
+pub const DEFAULT_CLOUD_STT_PROVIDER_ID: &str = "gemini";
+
+impl AppSettings {
+    /// 解析默认或当前激活的云端转写模式配置
+    pub fn resolve_cloud_transcription_mode(&self) -> TranscriptionMode {
+        match &self.transcription_mode {
+            TranscriptionMode::Cloud {
+                provider_id,
+                model_id,
+            } => TranscriptionMode::Cloud {
+                provider_id: provider_id.clone(),
+                model_id: model_id.clone(),
+            },
+            _ => {
+                let provider_id = DEFAULT_CLOUD_STT_PROVIDER_ID.to_string();
+                let model_id = self
+                    .cloud_stt_providers
+                    .get(&provider_id)
+                    .map(|p| p.model_id.clone())
+                    .unwrap_or_else(|| "gemini-2.5-flash".to_string());
+                TranscriptionMode::Cloud {
+                    provider_id,
+                    model_id,
+                }
+            }
+        }
+    }
+}
+
 fn default_model() -> String {
     "".to_string()
 }

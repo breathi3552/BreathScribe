@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "मॉडल चुना नहीं जा सका"
+      "selectModel": "मॉडल चुना नहीं जा सका",
+      "skipFailed": "Failed to skip download, please try again"
     },
     "permissions": {
       "title": "अनुमतियों की ज़रूरत है",
@@ -118,7 +119,12 @@
         "checkFailed": "अनुमतियां जांची नहीं जा सकीं. कृपया फिर से कोशिश करें.",
         "requestFailed": "अनुमति मांगी नहीं जा सकी. कृपया फिर से कोशिश करें."
       }
-    }
+    },
+    "cloudBannerTitle": "Cloud-first mode (recommended for laptops / devices without GPU)",
+    "cloudBannerDescription": "Skip downloading hundreds of megabytes of local model weights and start transcribing directly with Google Gemini.",
+    "skipAndConfigureCloud": "Skip download & configure →",
+    "cloudGuidanceToast": "Cloud mode enabled",
+    "cloudGuidanceDesc": "Please configure your Gemini API Key to start transcribing."
   },
   "modelSelector": {
     "custom": "कस्टम",

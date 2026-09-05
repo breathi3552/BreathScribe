@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Falha ao selecionar o modelo"
+      "selectModel": "Falha ao selecionar o modelo",
+      "skipFailed": "Falha ao pular o download, tente novamente"
     },
     "permissions": {
       "title": "Permissões Necessárias",
@@ -118,7 +119,12 @@
         "checkFailed": "Erro ao verificar permissões. Por favor, tente novamente.",
         "requestFailed": "Erro ao solicitar permissão. Por favor, tente novamente."
       }
-    }
+    },
+    "cloudBannerTitle": "Modo prioridade em nuvem (recomendado para laptops / dispositivos sem GPU)",
+    "cloudBannerDescription": "Ignore o download de centenas de MB de modelos locais e comece a transcrever diretamente com o Google Gemini.",
+    "skipAndConfigureCloud": "Pular download e configurar →",
+    "cloudGuidanceToast": "Modo em nuvem ativado",
+    "cloudGuidanceDesc": "Configure sua chave de API do Gemini para começar a transcrever."
   },
   "modelSelector": {
     "custom": "Personalizado",

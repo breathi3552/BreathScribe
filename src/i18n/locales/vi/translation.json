@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Không thể chọn mô hình"
+      "selectModel": "Không thể chọn mô hình",
+      "skipFailed": "Không thể bỏ qua tải xuống, vui lòng thử lại"
     },
     "permissions": {
       "title": "Cần cấp quyền",
@@ -118,7 +119,12 @@
         "checkFailed": "Không thể kiểm tra quyền. Vui lòng thử lại.",
         "requestFailed": "Không thể yêu cầu quyền. Vui lòng thử lại."
       }
-    }
+    },
+    "cloudBannerTitle": "Chế độ ưu tiên đám mây (khuyên dùng cho máy tính xách tay / thiết bị không có GPU)",
+    "cloudBannerDescription": "Bỏ qua việc tải xuống các mô hình cục bộ và bắt đầu chuyển ngữ trực tiếp với Google Gemini.",
+    "skipAndConfigureCloud": "Bỏ qua tải xuống & cấu hình →",
+    "cloudGuidanceToast": "Đã bật chế độ đám mây",
+    "cloudGuidanceDesc": "Vui lòng định cấu hình khóa API Gemini của bạn để bắt đầu chuyển ngữ."
   },
   "modelSelector": {
     "custom": "Tùy chỉnh",

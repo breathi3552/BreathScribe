@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Error al seleccionar el modelo"
+      "selectModel": "Error al seleccionar el modelo",
+      "skipFailed": "Error al omitir, inténtelo de nuevo"
     },
     "permissions": {
       "title": "Permisos requeridos",
@@ -118,7 +119,12 @@
         "checkFailed": "Error al verificar permisos. Por favor, inténtalo de nuevo.",
         "requestFailed": "Error al solicitar permiso. Por favor, inténtalo de nuevo."
       }
-    }
+    },
+    "cloudBannerTitle": "Modo de nube primero (recomendado para portátiles / dispositivos sin GPU)",
+    "cloudBannerDescription": "Omita la descarga de cientos de MB de modelos locales y comience a transcribir directamente con Google Gemini.",
+    "skipAndConfigureCloud": "Omitir descarga y configurar →",
+    "cloudGuidanceToast": "Modo en la nube activado",
+    "cloudGuidanceDesc": "Configure su clave de API de Gemini para comenzar a transcribir."
   },
   "modelSelector": {
     "custom": "Personalizado",

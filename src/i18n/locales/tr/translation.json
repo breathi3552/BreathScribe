@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Model seçilemedi"
+      "selectModel": "Model seçilemedi",
+      "skipFailed": "İndirme atlanamadı, lütfen tekrar deneyin"
     },
     "permissions": {
       "title": "İzinler Gerekli",
@@ -118,7 +119,12 @@
         "checkFailed": "İzinler kontrol edilemedi. Lütfen tekrar deneyin.",
         "requestFailed": "İzin isteği başarısız oldu. Lütfen tekrar deneyin."
       }
-    }
+    },
+    "cloudBannerTitle": "Bulut öncelikli mod (dizüstü / GPU'suz cihazlar için önerilir)",
+    "cloudBannerDescription": "Yerel modelleri indirmeyi atlayın ve doğrudan Google Gemini ile metne dönüştürmeye başlayın.",
+    "skipAndConfigureCloud": "İndirmeyi atla ve yapılandır →",
+    "cloudGuidanceToast": "Bulut modu etkinleştirildi",
+    "cloudGuidanceDesc": "Metne dönüştürmeye başlamak için lütfen Gemini API anahtarınızı yapılandırın."
   },
   "modelSelector": {
     "custom": "Özel",

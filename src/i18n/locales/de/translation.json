@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Modellauswahl fehlgeschlagen"
+      "selectModel": "Modellauswahl fehlgeschlagen",
+      "skipFailed": "Überspringen fehlgeschlagen, bitte versuchen Sie es erneut"
     },
     "permissions": {
       "title": "Berechtigungen erforderlich",
@@ -118,7 +119,12 @@
         "checkFailed": "Berechtigungsprüfung fehlgeschlagen. Bitte erneut versuchen.",
         "requestFailed": "Berechtigungsanfrage fehlgeschlagen. Bitte erneut versuchen."
       }
-    }
+    },
+    "cloudBannerTitle": "Cloud-First-Modus (empfohlen für Laptops / Geräte ohne GPU)",
+    "cloudBannerDescription": "Überspringen Sie das Herunterladen lokaler Modelle und transkribieren Sie direkt mit Google Gemini.",
+    "skipAndConfigureCloud": "Download überspringen & konfigurieren →",
+    "cloudGuidanceToast": "Cloud-Modus aktiviert",
+    "cloudGuidanceDesc": "Bitte konfigurieren Sie Ihren Gemini API-Schlüssel, um mit der Transkription zu beginnen."
   },
   "modelSelector": {
     "custom": "Benutzerdefiniert",

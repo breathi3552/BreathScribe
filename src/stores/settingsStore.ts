@@ -78,6 +78,7 @@ interface SettingsStore {
     apiKey?: string,
     customBaseUrl?: string,
   ) => Promise<void>;
+  completeOnboardingWithCloud: () => Promise<void>;
 
   // Internal state setters
   setSettings: (settings: Settings | null) => void;
@@ -823,6 +824,13 @@ export const useSettingsStore = create<SettingsStore>()(
       if (result.status === "error") {
         throw new Error(result.error);
       }
+    },
+    completeOnboardingWithCloud: async () => {
+      const result = await commands.completeOnboardingCloud();
+      if (result.status === "error") {
+        throw new Error(result.error);
+      }
+      await get().refreshSettings();
     },
   })),
 );

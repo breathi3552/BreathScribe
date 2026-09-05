@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Model selecteren mislukt"
+      "selectModel": "Model selecteren mislukt",
+      "skipFailed": "Overslaan van download mislukt, probeer het opnieuw"
     },
     "permissions": {
       "title": "Machtigingen vereist",
@@ -118,7 +119,12 @@
         "checkFailed": "Machtigingen controleren mislukt. Probeer het opnieuw.",
         "requestFailed": "Machtiging aanvragen mislukt. Probeer het opnieuw."
       }
-    }
+    },
+    "cloudBannerTitle": "Cloud-eerst modus (aanbevolen voor laptops / apparaten zonder GPU)",
+    "cloudBannerDescription": "Sla het downloaden van lokale modellen over en transcribeer direct met Google Gemini.",
+    "skipAndConfigureCloud": "Download overslaan & configureren →",
+    "cloudGuidanceToast": "Cloudmodus ingeschakeld",
+    "cloudGuidanceDesc": "Configureer uw Gemini API-sleutel om te beginnen met transcriberen."
   },
   "modelSelector": {
     "custom": "Aangepast",

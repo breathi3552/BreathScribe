@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Nie udało się wybrać modelu"
+      "selectModel": "Nie udało się wybrać modelu",
+      "skipFailed": "Nie udało się pominąć pobierania, spróbuj ponownie"
     },
     "permissions": {
       "title": "Wymagane uprawnienia",
@@ -118,7 +119,12 @@
         "checkFailed": "Nie udało się sprawdzić uprawnień. Spróbuj ponownie.",
         "requestFailed": "Nie udało się poprosić o uprawnienie. Spróbuj ponownie."
       }
-    }
+    },
+    "cloudBannerTitle": "Tryb chmury (zalecany dla laptopów / urządzeń bez GPU)",
+    "cloudBannerDescription": "Pomiń pobieranie modeli lokalnych i rozpocznij transkrypcję bezpośrednio z Google Gemini.",
+    "skipAndConfigureCloud": "Pomiń pobieranie i skonfiguruj →",
+    "cloudGuidanceToast": "Tryb chmury włączony",
+    "cloudGuidanceDesc": "Skonfiguruj klucz API Gemini, aby rozpocząć transkrypcję."
   },
   "modelSelector": {
     "custom": "Własny",

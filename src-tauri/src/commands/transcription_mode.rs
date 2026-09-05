@@ -2,7 +2,9 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::network::NetworkManager;
-use crate::settings::{get_settings, write_settings, CloudSttProviderSettings, TranscriptionMode};
+use crate::settings::{
+    get_settings, write_settings, AppSettings, CloudSttProviderSettings, TranscriptionMode,
+};
 
 #[tauri::command]
 #[specta::specta]
@@ -105,5 +107,86 @@ pub async fn test_cloud_stt_connection(
             .await
         }
         unknown => Err(format!("未知的云端转写提供商: {}", unknown)),
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn complete_onboarding_cloud(app: AppHandle) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    apply_complete_onboarding_cloud(&mut settings);
+    write_settings(&app, settings);
+    let _ = app.emit(
+        "settings-changed",
+        serde_json::json!({
+            "setting": "onboarding_completed",
+        }),
+    );
+    let _ = app.emit(
+        "settings-changed",
+        serde_json::json!({
+            "setting": "transcription_mode",
+        }),
+    );
+    let _ = app.emit(
+        "settings-changed",
+        serde_json::json!({
+            "setting": "selected_model",
+        }),
+    );
+    Ok(())
+}
+
+pub(crate) fn apply_complete_onboarding_cloud(settings: &mut AppSettings) {
+    settings.transcription_mode = settings.resolve_cloud_transcription_mode();
+    settings.onboarding_completed = true;
+    settings.selected_model = String::new();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings::get_default_settings;
+
+    #[test]
+    fn test_apply_complete_onboarding_cloud_from_initial_state() {
+        let mut settings = get_default_settings();
+        assert!(!settings.onboarding_completed);
+        assert_eq!(settings.transcription_mode, TranscriptionMode::Local);
+
+        apply_complete_onboarding_cloud(&mut settings);
+
+        assert!(settings.onboarding_completed);
+        assert_eq!(settings.selected_model, "");
+        match settings.transcription_mode {
+            TranscriptionMode::Cloud { provider_id, model_id } => {
+                assert_eq!(provider_id, "gemini");
+                assert_eq!(model_id, "gemini-2.5-flash");
+            }
+            _ => panic!("Expected Cloud transcription mode"),
+        }
+    }
+
+    #[test]
+    fn test_apply_complete_onboarding_cloud_preserves_custom_cloud_config() {
+        let mut settings = get_default_settings();
+        settings.transcription_mode = TranscriptionMode::Cloud {
+            provider_id: "gemini".to_string(),
+            model_id: "gemini-2.5-pro".to_string(),
+        };
+        settings.selected_model = "parakeet-tdt-0.6b-v3".to_string();
+        settings.onboarding_completed = false;
+
+        apply_complete_onboarding_cloud(&mut settings);
+
+        assert!(settings.onboarding_completed);
+        assert_eq!(settings.selected_model, "");
+        match settings.transcription_mode {
+            TranscriptionMode::Cloud { provider_id, model_id } => {
+                assert_eq!(provider_id, "gemini");
+                assert_eq!(model_id, "gemini-2.5-pro");
+            }
+            _ => panic!("Expected Cloud transcription mode"),
+        }
     }
 }

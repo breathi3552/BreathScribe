@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Échec de la sélection du modèle"
+      "selectModel": "Échec de la sélection du modèle",
+      "skipFailed": "Échec de l'omission, veuillez réessayer"
     },
     "permissions": {
       "title": "Autorisations requises",
@@ -118,7 +119,12 @@
         "checkFailed": "Échec de la vérification des autorisations. Veuillez réessayer.",
         "requestFailed": "Échec de la demande d'autorisation. Veuillez réessayer."
       }
-    }
+    },
+    "cloudBannerTitle": "Mode Cloud d'abord (recommandé pour ordinateurs portables / sans GPU)",
+    "cloudBannerDescription": "Ne téléchargez pas des centaines de Mo de modèles locaux et transcrivez directement avec Google Gemini.",
+    "skipAndConfigureCloud": "Ignorer le téléchargement et configurer →",
+    "cloudGuidanceToast": "Mode Cloud activé",
+    "cloudGuidanceDesc": "Veuillez configurer votre clé API Gemini pour commencer la transcription."
   },
   "modelSelector": {
     "custom": "Personnalisé",

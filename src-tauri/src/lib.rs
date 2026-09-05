@@ -48,7 +48,7 @@ use tauri::{AppHandle, Emitter, Listener, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_log::{Builder as LogBuilder, RotationStrategy, Target, TargetKind};
 
-use crate::settings::get_settings;
+use crate::settings::{get_settings, write_settings, TranscriptionMode};
 
 // Global atomic to store the file log level filter
 // We use u8 to store the log::LevelFilter as a number
@@ -322,12 +322,33 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             "quit" => {
                 app.exit(0);
             }
+            id if id.starts_with("transcription_mode:cloud:") => {
+                let mut settings = get_settings(app);
+                settings.transcription_mode = settings.resolve_cloud_transcription_mode();
+                write_settings(app, settings);
+                let _ = app.emit(
+                    "settings-changed",
+                    serde_json::json!({
+                        "setting": "transcription_mode",
+                    }),
+                );
+                tray::update_tray_menu(app);
+            }
             id if id.starts_with("model_select:") => {
                 let model_id = id.strip_prefix("model_select:").unwrap().to_string();
-                let current_model = settings::get_settings(app).selected_model;
-                if model_id == current_model {
+                let mut settings = get_settings(app);
+                let is_cloud = matches!(settings.transcription_mode, TranscriptionMode::Cloud { .. });
+                if !is_cloud && model_id == settings.selected_model {
                     return;
                 }
+                settings.transcription_mode = TranscriptionMode::Local;
+                write_settings(app, settings);
+                let _ = app.emit(
+                    "settings-changed",
+                    serde_json::json!({
+                        "setting": "transcription_mode",
+                    }),
+                );
                 let app_clone = app.clone();
                 std::thread::spawn(move || {
                     match commands::models::switch_active_model(&app_clone, &model_id) {
@@ -770,6 +791,7 @@ pub fn run(cli_args: CliArgs) {
             commands::transcription_mode::set_cloud_stt_api_key,
             commands::transcription_mode::set_cloud_stt_provider_settings,
             commands::transcription_mode::test_cloud_stt_connection,
+            commands::transcription_mode::complete_onboarding_cloud,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,

@@ -968,6 +968,14 @@ async testCloudSttConnection(providerId: string, apiKey: string | null, customBa
     if(e instanceof Error) throw e;
     else return { status: "error", error: String(e) };
 }
+},
+async completeOnboardingCloud() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("complete_onboarding_cloud") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: String(e) };
+}
 }
 };
 

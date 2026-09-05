@@ -23,7 +23,7 @@
 use crate::managers::history::{HistoryEntry, HistoryManager};
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings;
+use crate::settings::{self, TranscriptionMode};
 use crate::tray_i18n::get_tray_translations;
 use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
@@ -59,6 +59,7 @@ struct MenuInputs {
     warning: bool,
     model_loaded: bool,
     selected_model: String,
+    transcription_mode: TranscriptionMode,
     /// `(id, name)` of downloaded models, sorted by name.
     downloaded_models: Vec<(String, String)>,
     locale: String,
@@ -331,6 +332,7 @@ fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
             warning,
             model_loaded,
             selected_model: settings.selected_model,
+            transcription_mode: settings.transcription_mode,
             downloaded_models,
             locale: settings.app_language,
             update_checks_enabled: settings.update_checks_enabled,
@@ -531,18 +533,42 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         )?
     } else {
         // Build model submenu — label is the active model name
-        let submenu_label = inputs
-            .downloaded_models
-            .iter()
-            .find(|(id, _)| *id == inputs.selected_model)
-            .map(|(_, name)| name.clone())
-            .unwrap_or_else(|| strings.model.clone());
+        let is_cloud_active = matches!(inputs.transcription_mode, TranscriptionMode::Cloud { .. });
+        let submenu_label = if is_cloud_active {
+            match &inputs.transcription_mode {
+                TranscriptionMode::Cloud { model_id, .. } => {
+                    format!("☁️ {}", model_id)
+                }
+                _ => "☁️ Cloud STT".to_string(),
+            }
+        } else {
+            inputs
+                .downloaded_models
+                .iter()
+                .find(|(id, _)| *id == inputs.selected_model)
+                .map(|(_, name)| name.clone())
+                .unwrap_or_else(|| strings.model.clone())
+        };
 
         let model_submenu = Submenu::with_id(app, "model_submenu", &submenu_label, true)?;
+
+        // 1. 置顶云端 STT 选项
+        let cloud_item_id = "transcription_mode:cloud:gemini-2.5-flash";
+        let cloud_item = CheckMenuItem::with_id(
+            app,
+            cloud_item_id,
+            "☁️ Gemini 2.5 Flash",
+            true,
+            is_cloud_active,
+            None::<&str>,
+        )?;
+        model_submenu.append(&cloud_item)?;
+
+        // 2. 追加本地模型列表
         for (id, name) in &inputs.downloaded_models {
-            let is_active = *id == inputs.selected_model;
+            let is_local_active = !is_cloud_active && (*id == inputs.selected_model);
             let item_id = format!("model_select:{}", id);
-            let item = CheckMenuItem::with_id(app, &item_id, name, true, is_active, None::<&str>)?;
+            let item = CheckMenuItem::with_id(app, &item_id, name, true, is_local_active, None::<&str>)?;
             model_submenu.append(&item)?;
         }
 
@@ -692,6 +718,7 @@ mod tests {
             model_loaded: true,
             selected_model: "small".to_string(),
             downloaded_models: vec![("small".to_string(), "Small".to_string())],
+            transcription_mode: TranscriptionMode::Local,
             locale: "en".to_string(),
             update_checks_enabled: true,
         }
@@ -707,6 +734,17 @@ mod tests {
     fn falls_back_to_raw_transcription() {
         let entry = build_entry("raw", None);
         assert_eq!(last_transcript_text(&entry), "raw");
+    }
+
+    #[test]
+    fn tray_menu_inputs_equality_considers_transcription_mode() {
+        let input_local = inputs(false);
+        let mut input_cloud = inputs(false);
+        input_cloud.transcription_mode = TranscriptionMode::Cloud {
+            provider_id: "gemini".to_string(),
+            model_id: "gemini-2.5-flash".to_string(),
+        };
+        assert_ne!(input_local, input_cloud);
     }
 
     #[test]

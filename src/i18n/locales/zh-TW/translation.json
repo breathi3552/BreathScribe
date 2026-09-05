@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "選擇模型失敗"
+      "selectModel": "選擇模型失敗",
+      "skipFailed": "跳過失敗，請重試"
     },
     "permissions": {
       "title": "需要權限",
@@ -118,7 +119,12 @@
         "checkFailed": "檢查權限失敗，請重試",
         "requestFailed": "請求權限失敗，請重試"
       }
-    }
+    },
+    "cloudBannerTitle": "雲端優先模式（推薦輕薄筆電/無顯卡用戶）",
+    "cloudBannerDescription": "無需下載數百 MB 本地模型檔案，直接使用 Google Gemini 高準確率轉寫。",
+    "skipAndConfigureCloud": "跳過下載並設定 →",
+    "cloudGuidanceToast": "已切換為雲端模式",
+    "cloudGuidanceDesc": "請在設定中配置 Gemini API Key 開始使用。"
   },
   "modelSelector": {
     "custom": "自訂",

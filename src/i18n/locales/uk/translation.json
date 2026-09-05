@@ -97,7 +97,8 @@
       }
     },
     "errors": {
-      "selectModel": "Не вдалося вибрати модель"
+      "selectModel": "Не вдалося вибрати модель",
+      "skipFailed": "Failed to skip download, please try again"
     },
     "permissions": {
       "title": "Потрібні дозволи",
@@ -118,7 +119,12 @@
         "checkFailed": "Не вдалося перевірити дозволи. Будь ласка, спробуйте ще раз.",
         "requestFailed": "Не вдалося запросити дозвіл. Будь ласка, спробуйте ще раз."
       }
-    }
+    },
+    "cloudBannerTitle": "Cloud-first mode (recommended for laptops / devices without GPU)",
+    "cloudBannerDescription": "Skip downloading hundreds of megabytes of local model weights and start transcribing directly with Google Gemini.",
+    "skipAndConfigureCloud": "Skip download & configure →",
+    "cloudGuidanceToast": "Cloud mode enabled",
+    "cloudGuidanceDesc": "Please configure your Gemini API Key to start transcribing."
   },
   "modelSelector": {
     "custom": "Користувацька",

@@ -7,7 +7,11 @@ use crate::managers::history::HistoryManager;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::StreamWorkKind;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{get_settings, AppSettings, OverlayStyle, APPLE_INTELLIGENCE_PROVIDER_ID};
+use crate::providers::TranscriptionOptions;
+use crate::settings::{
+    get_settings, AppSettings, OverlayStyle, TranscriptionMode, APPLE_INTELLIGENCE_PROVIDER_ID,
+};
+use crate::transcription_router::TranscriptionRouter;
 use crate::shortcut;
 use crate::tray::{set_tray_state, TrayIconState};
 use crate::utils::{
@@ -470,13 +474,33 @@ impl ShortcutAction for TranscribeAction {
         let start_time = Instant::now();
         debug!("TranscribeAction::start called for binding: {}", binding_id);
 
+        let settings = get_settings(app);
+        if let TranscriptionMode::Cloud { ref provider_id, .. } = settings.transcription_mode {
+            let has_key = settings
+                .cloud_stt_api_keys
+                .get(provider_id)
+                .map(|k| !k.trim().is_empty())
+                .unwrap_or(false);
+
+            if !has_key {
+                warn!(
+                    "TranscribeAction: blocked due to missing API Key for provider {}",
+                    provider_id
+                );
+                let _ = app.emit("transcription-error", "missing_cloud_api_key");
+                return;
+            }
+        }
+
         // Load model in the background
         let tm = app.state::<Arc<TranscriptionManager>>();
         let rm = app.state::<Arc<AudioRecordingManager>>();
 
         // Load ASR model and VAD model in parallel
         let kickoff_started = Instant::now();
-        tm.initiate_model_load();
+        if settings.transcription_mode == TranscriptionMode::Local {
+            tm.initiate_model_load();
+        }
         let rm_clone = Arc::clone(&rm);
         std::thread::spawn(move || {
             if let Err(e) = rm_clone.preload_vad() {
@@ -484,7 +508,6 @@ impl ShortcutAction for TranscribeAction {
             }
         });
         let kickoff_elapsed = kickoff_started.elapsed();
-
         let binding_id = binding_id.to_string();
         let tray_started = Instant::now();
         set_tray_state(app, TrayIconState::Recording);
@@ -492,7 +515,6 @@ impl ShortcutAction for TranscribeAction {
 
         // Get the microphone mode to determine audio feedback timing
         let plan_started = Instant::now();
-        let settings = get_settings(app);
         let is_always_on = settings.always_on_microphone;
 
         let selected_model_info = app
@@ -724,7 +746,21 @@ impl ShortcutAction for TranscribeAction {
                         // surfaced instead — the worker may still hold the engine,
                         // so a batch fallback would contend with it.
                         Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
-                        Ok(_) => tm.transcribe(samples),
+                        Ok(_) => {
+                            if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
+                                let settings = get_settings(&ah);
+                                let options = TranscriptionOptions {
+                                    language: settings.selected_language.clone(),
+                                    prompt: None,
+                                };
+                                router
+                                    .transcribe(samples, &options)
+                                    .await
+                                    .map_err(|e| anyhow::anyhow!(e))
+                            } else {
+                                tm.transcribe(samples)
+                            }
+                        }
                         Err(err) => Err(err),
                     };
 

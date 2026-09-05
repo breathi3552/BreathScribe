@@ -50,7 +50,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
       : (settings?.cloud_stt_providers?.["gemini"]?.model_id ??
         "gemini-2.5-flash");
 
-
   const [modelStatus, setModelStatus] = useState<ModelStatus>("unloaded");
   const [modelError, setModelError] = useState<string | null>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);

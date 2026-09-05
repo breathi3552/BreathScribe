@@ -69,11 +69,19 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   const modelOptions: DropdownOption[] = useMemo(
     () => [
       {
+        value: "gemini-3.5-transcribe-live",
+        label: "Gemini 3.5 Transcribe Live",
+        description: t(
+          "settings.models.cloud.models.transcribeLiveDesc",
+          "专用实时流式识别大模型，边说边出字，毫秒级极速打字（推荐）",
+        ),
+      },
+      {
         value: "gemini-3.5-transcribe",
         label: "Gemini 3.5 Transcribe",
         description: t(
           "settings.models.cloud.models.transcribeDesc",
-          "专用语音识别模型，智能过滤语气词与标点规整化（推荐）",
+          "专用语音识别大模型，智能过滤语气词与标点规整化（批处理高精度）",
         ),
       },
       {

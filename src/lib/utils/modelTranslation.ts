@@ -39,6 +39,8 @@ export function getTranslatedModelDescription(
  */
 export function formatCloudModelName(modelId: string): string {
   switch (modelId) {
+    case "gemini-3.5-transcribe-live":
+      return "Gemini 3.5 Transcribe Live";
     case "gemini-3.5-transcribe":
       return "Gemini 3.5 Transcribe";
     case "gemini-3.6-flash":

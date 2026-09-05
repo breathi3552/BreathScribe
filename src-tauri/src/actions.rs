@@ -524,13 +524,17 @@ impl ShortcutAction for TranscribeAction {
             .state::<Arc<ModelManager>>()
             .get_model_info(&settings.selected_model);
 
-        // Use the app-facing model capability as the single pre-recording source
-        // for live streaming decisions. Unknown support is represented as false
-        // until the model registry is updated by discovery or runtime load.
-        let model_supports_streaming = selected_model_info
-            .as_ref()
-            .map(|m| m.supports_streaming)
-            .unwrap_or(false);
+        let router = app.try_state::<Arc<TranscriptionRouter>>();
+        let is_cloud_mode = matches!(settings.transcription_mode, TranscriptionMode::Cloud { .. });
+
+        let model_supports_streaming = if let Some(r) = &router {
+            r.is_streaming_supported(&settings)
+        } else {
+            selected_model_info
+                .as_ref()
+                .map(|m| m.supports_streaming)
+                .unwrap_or(false)
+        };
         let vad_policy = if !settings.vad_enabled {
             VadPolicy::Disabled
         } else if model_supports_streaming {
@@ -539,7 +543,23 @@ impl ShortcutAction for TranscribeAction {
             VadPolicy::Offline
         };
         if model_supports_streaming {
-            tm.start_stream();
+            if is_cloud_mode {
+                if let Some(r) = &router {
+                    let r_clone = Arc::clone(r);
+                    let stream_router = tm.stream_router();
+                    let options = TranscriptionOptions {
+                        language: settings.selected_language.clone(),
+                        prompt: None,
+                    };
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = r_clone.start_cloud_stream(&options, &stream_router).await {
+                            log::warn!("启动云端实时流式转写失败: {}", e);
+                        }
+                    });
+                }
+            } else {
+                tm.start_stream();
+            }
         }
         let plan_elapsed = plan_started.elapsed();
 
@@ -628,6 +648,9 @@ impl ShortcutAction for TranscribeAction {
             // Starting failed (for example due to blocked microphone permissions).
             // Revert UI state so we don't stay stuck in the recording overlay.
             tm.cancel_stream();
+            if let Some(router) = app.try_state::<Arc<TranscriptionRouter>>() {
+                router.cancel_cloud_stream();
+            }
             utils::hide_recording_overlay(app);
             set_tray_state(app, TrayIconState::Idle);
             if let Some(err) = recording_error {
@@ -683,9 +706,13 @@ impl ShortcutAction for TranscribeAction {
         // spinner while the stream finalizes. Non-streaming paths use the
         // compact transcribing pill (None no-ops in show_*).
         let style = get_settings(app).overlay_style;
-        // Capture this before finalizing the stream so every later working state
-        // targets the same overlay that was shown for this transcription.
-        let use_streaming_overlay = should_use_streaming_overlay(style, tm.is_streaming());
+        let router = app.try_state::<Arc<TranscriptionRouter>>();
+        let is_cloud_streaming = router
+            .as_ref()
+            .map(|r| r.has_active_cloud_stream())
+            .unwrap_or(false);
+        let is_streaming = tm.is_streaming() || is_cloud_streaming;
+        let use_streaming_overlay = should_use_streaming_overlay(style, is_streaming);
         if use_streaming_overlay {
             tm.emit_stream_working(StreamWorkKind::Transcribing);
         } else {
@@ -720,6 +747,9 @@ impl ShortcutAction for TranscribeAction {
                 if rm.was_cancelled_since(cancel_generation) {
                     debug!("Transcription operation cancelled after recording stop");
                     tm.cancel_stream();
+                    if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
+                        router.cancel_cloud_stream();
+                    }
                     utils::hide_recording_overlay(&ah);
                     set_tray_state(&ah, TrayIconState::Idle);
                     return;
@@ -730,6 +760,9 @@ impl ShortcutAction for TranscribeAction {
                     // Tear down any streaming worker so its channel doesn't leak
                     // and block the next start_stream.
                     tm.cancel_stream();
+                    if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
+                        router.cancel_cloud_stream();
+                    }
                     utils::hide_recording_overlay(&ah);
                     set_tray_state(&ah, TrayIconState::Idle);
                 } else {
@@ -752,17 +785,38 @@ impl ShortcutAction for TranscribeAction {
                         matches!(settings.transcription_mode, TranscriptionMode::Cloud { .. });
 
                     let transcription_result = if is_cloud {
-                        if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
-                            let options = TranscriptionOptions {
-                                language: settings.selected_language.clone(),
-                                prompt: None,
-                            };
-                            router
-                                .transcribe(samples, &options)
-                                .await
-                                .map_err(|e| anyhow::anyhow!(e))
+                        let router = ah.try_state::<Arc<TranscriptionRouter>>();
+                        let cloud_stream_res = if let Some(r) = &router {
+                            if r.has_active_cloud_stream() {
+                                r.finalize_cloud_stream().await
+                            } else {
+                                None
+                            }
                         } else {
-                            Err(anyhow::anyhow!("Transcription router not available"))
+                            None
+                        };
+
+                        match cloud_stream_res {
+                            Some(Ok(text)) if !text.trim().is_empty() => {
+                                debug!("Gemini Live 实时流式转写成功交付: {}", text);
+                                Ok(text)
+                            }
+                            other => {
+                                if let Some(Err(e)) = other {
+                                    warn!("Gemini Live 实时流式转写异常 ({}): 自动降级回退至云端批处理模式", e);
+                                }
+                                if let Some(r) = &router {
+                                    let options = TranscriptionOptions {
+                                        language: settings.selected_language.clone(),
+                                        prompt: None,
+                                    };
+                                    r.transcribe(samples, &options)
+                                        .await
+                                        .map_err(|e| anyhow::anyhow!(e))
+                                } else {
+                                    Err(anyhow::anyhow!("Transcription router not available"))
+                                }
+                            }
                         }
                     } else {
                         match tm.finalize_stream() {
@@ -940,6 +994,9 @@ impl ShortcutAction for TranscribeAction {
                 debug!("No samples retrieved from recording stop");
                 // Tear down any streaming worker so its channel doesn't leak.
                 tm.cancel_stream();
+                if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
+                    router.cancel_cloud_stream();
+                }
                 utils::hide_recording_overlay(&ah);
                 set_tray_state(&ah, TrayIconState::Idle);
             }

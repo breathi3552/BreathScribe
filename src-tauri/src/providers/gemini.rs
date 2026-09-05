@@ -1,12 +1,105 @@
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
+use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::AppHandle;
+use tokio_tungstenite::WebSocketStream;
 
+use crate::network::proxy_tunnel::TunnelStream;
 use crate::network::NetworkManager;
-use crate::providers::{BatchTranscriptionProvider, TranscriptionOptions};
+use crate::providers::{
+    BatchTranscriptionProvider, StreamTextSink, StreamingSession, StreamingTranscriptionProvider,
+    TranscriptionOptions,
+};
 use crate::settings::DEFAULT_CLOUD_STT_MODEL_ID;
 
+pub const GEMINI_LIVE_MODEL_ID: &str = "gemini-3.5-transcribe-live";
+pub const SAMPLES_PER_CHUNK: usize = 1600; // 100ms at 16kHz
+
+/// Gemini Live 客户端握手帧（Setup）
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiLiveSetupFrame {
+    pub setup: GeminiLiveSetupConfig,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiLiveSetupConfig {
+    pub model: String,
+    #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
+    pub generation_config: Option<GeminiLiveGenerationConfig>,
+    #[serde(
+        rename = "inputAudioTranscription",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub input_audio_transcription: Option<GeminiLiveInputAudioTranscription>,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiLiveGenerationConfig {
+    #[serde(rename = "responseModalities")]
+    pub response_modalities: Vec<String>,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiLiveInputAudioTranscription {
+    #[serde(rename = "languageCodes")]
+    pub language_codes: Vec<String>,
+    pub mode: String,
+    #[serde(rename = "customVocabulary", skip_serializing_if = "Option::is_none")]
+    pub custom_vocabulary: Option<Vec<String>>,
+}
+
+/// Gemini Live 实时音频推流或结束帧（Client Message）
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiLiveRealtimeInputFrame {
+    #[serde(rename = "realtimeInput")]
+    pub realtime_input: GeminiLiveRealtimeInput,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiLiveRealtimeInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio: Option<GeminiLiveAudioData>,
+    #[serde(rename = "audioStreamEnd", skip_serializing_if = "Option::is_none")]
+    pub audio_stream_end: Option<bool>,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct GeminiLiveAudioData {
+    pub data: String,
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
+}
+
+/// Gemini Live 服务端下行消息契约
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct GeminiLiveServerMessage {
+    #[serde(rename = "serverContent")]
+    pub server_content: Option<GeminiLiveServerContent>,
+    pub error: Option<GeminiLiveError>,
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct GeminiLiveServerContent {
+    #[serde(rename = "interimInputTranscription")]
+    pub interim_input_transcription: Option<GeminiLiveTranscriptionText>,
+    #[serde(rename = "inputTranscription")]
+    pub input_transcription: Option<GeminiLiveTranscriptionText>,
+    #[serde(rename = "turnComplete")]
+    pub turn_complete: Option<bool>,
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct GeminiLiveTranscriptionText {
+    pub text: Option<String>,
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct GeminiLiveError {
+    pub code: Option<i32>,
+    pub message: Option<String>,
+}
 /// Interactions API 请求体契约
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct GeminiInteractionRequest {
@@ -217,6 +310,45 @@ impl GeminiProvider {
 
         Ok(())
     }
+
+    /// 将 [-1.0, 1.0] 的 16kHz f32 音频采样转换为 16 位单声道无损 PCM 小端序字节流
+    pub fn convert_samples_to_pcm16_le(samples: &[f32]) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(samples.len() * 2);
+        for &sample in samples {
+            let clamped = sample.max(-1.0).min(1.0);
+            let scaled = (clamped * 32767.0).round() as i16;
+            bytes.extend_from_slice(&scaled.to_le_bytes());
+        }
+        bytes
+    }
+
+    /// 构造 Gemini Live 双向全双工 WebSocket 连接 URL
+    pub fn build_live_websocket_url(custom_base_url: Option<&str>, api_key: &str) -> String {
+        let base = custom_base_url.map(|s| s.trim()).unwrap_or_default();
+        let clean_base = base.trim_end_matches('/');
+        let host_and_proto = if clean_base.is_empty() {
+            "wss://generativelanguage.googleapis.com".to_string()
+        } else if let Some(stripped) = clean_base.strip_prefix("https://") {
+            format!("wss://{}", stripped)
+        } else if let Some(stripped) = clean_base.strip_prefix("http://") {
+            format!("ws://{}", stripped)
+        } else if clean_base.starts_with("wss://") || clean_base.starts_with("ws://") {
+            clean_base.to_string()
+        } else {
+            format!("wss://{}", clean_base)
+        };
+
+        let path = "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+        if host_and_proto.contains(path) {
+            if host_and_proto.contains('?') {
+                format!("{}&key={}", host_and_proto, api_key)
+            } else {
+                format!("{}?key={}", host_and_proto, api_key)
+            }
+        } else {
+            format!("{}{path}?key={}", host_and_proto, api_key)
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -315,6 +447,302 @@ impl BatchTranscriptionProvider for GeminiProvider {
 
     fn provider_id(&self) -> &'static str {
         "gemini"
+    }
+}
+
+enum SessionCmd {
+    Finalize(tokio::sync::oneshot::Sender<Result<String, String>>),
+    Cancel,
+}
+
+/// 基于 Google Gemini Live 双向全双工 WebSocket 的实时流式会话句柄
+pub struct GeminiLiveStreamingSession {
+    audio_tx: tokio::sync::mpsc::UnboundedSender<Vec<f32>>,
+    cmd_tx: tokio::sync::mpsc::Sender<SessionCmd>,
+}
+
+#[async_trait::async_trait]
+impl StreamingSession for GeminiLiveStreamingSession {
+    fn feed_audio(&self, samples: &[f32]) -> Result<(), String> {
+        self.audio_tx
+            .send(samples.to_vec())
+            .map_err(|e| format!("推送音频采样至流式会话失败: {}", e))
+    }
+
+    async fn finalize(self: Box<Self>) -> Result<String, String> {
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        self.cmd_tx
+            .send(SessionCmd::Finalize(reply_tx))
+            .await
+            .map_err(|e| format!("发送 finalize 指令失败: {}", e))?;
+        reply_rx
+            .await
+            .map_err(|_| "会话工作协程未响应 finalize 指令".to_string())?
+    }
+
+    async fn cancel(self: Box<Self>) {
+        let _ = self.cmd_tx.send(SessionCmd::Cancel).await;
+    }
+}
+
+async fn run_gemini_live_worker(
+    mut ws: WebSocketStream<TunnelStream>,
+    mut audio_rx: tokio::sync::mpsc::UnboundedReceiver<Vec<f32>>,
+    mut cmd_rx: tokio::sync::mpsc::Receiver<SessionCmd>,
+    text_sink: Arc<dyn StreamTextSink>,
+) {
+    let mut committed_text = String::new();
+    let mut tentative_text = String::new();
+    let mut pcm_buffer: Vec<u8> = Vec::with_capacity(SAMPLES_PER_CHUNK * 2);
+    let mut session_error: Option<String> = None;
+
+    loop {
+        tokio::select! {
+            // 1. 麦克风音频采样流入
+            maybe_samples = audio_rx.recv() => {
+                match maybe_samples {
+                    Some(samples) => {
+                        let pcm_bytes = GeminiProvider::convert_samples_to_pcm16_le(&samples);
+                        pcm_buffer.extend_from_slice(&pcm_bytes);
+
+                        // 达到 100ms 周期（1600 个采样 = 3200 字节 PCM）打包推流
+                        let chunk_size = SAMPLES_PER_CHUNK * 2;
+                        while pcm_buffer.len() >= chunk_size {
+                            let chunk: Vec<u8> = pcm_buffer.drain(..chunk_size).collect();
+                            let base64_pcm = BASE64.encode(&chunk);
+                            let input_frame = GeminiLiveRealtimeInputFrame {
+                                realtime_input: GeminiLiveRealtimeInput {
+                                    audio: Some(GeminiLiveAudioData {
+                                        data: base64_pcm,
+                                        mime_type: "audio/pcm;rate=16000".to_string(),
+                                    }),
+                                    audio_stream_end: None,
+                                },
+                            };
+                            if let Ok(frame_json) = serde_json::to_string(&input_frame) {
+                                if let Err(e) = ws.send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into())).await {
+                                    log::warn!("发送流式音频帧失败: {}", e);
+                                    session_error = Some(format!("WebSocket 发送音频帧失败: {}", e));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        // audio_rx 管道关闭
+                    }
+                }
+            }
+
+            // 2. 服务端实时下行报文监听
+            maybe_ws_msg = ws.next() => {
+                match maybe_ws_msg {
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
+                        if let Ok(server_msg) = serde_json::from_str::<GeminiLiveServerMessage>(&text) {
+                            if let Some(err) = server_msg.error {
+                                let err_text = err.message.unwrap_or_else(|| "未知服务端错误".to_string());
+                                log::warn!("Gemini Live 服务端返回错误: {}", err_text);
+                                session_error = Some(err_text);
+                            }
+                            if let Some(content) = server_msg.server_content {
+                                if let Some(interim) = content.interim_input_transcription {
+                                    if let Some(t) = interim.text {
+                                        tentative_text = t;
+                                        text_sink.emit_text(committed_text.clone(), tentative_text.clone());
+                                    }
+                                }
+                                if let Some(input) = content.input_transcription {
+                                    if let Some(c) = input.text {
+                                        committed_text.push_str(&c);
+                                        tentative_text.clear();
+                                        text_sink.emit_text(committed_text.clone(), String::new());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Ping(data))) => {
+                        let _ = ws.send(tokio_tungstenite::tungstenite::Message::Pong(data)).await;
+                    }
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => {
+                        log::info!("Gemini Live 服务端主动关闭了长连接");
+                        break;
+                    }
+                    Some(Err(e)) => {
+                        log::warn!("Gemini Live WebSocket 连接异常: {}", e);
+                        session_error = Some(format!("WebSocket 接收异常: {}", e));
+                        break;
+                    }
+                    None => {
+                        // WebSocket 连接已断开
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            // 3. 生命周期指令接收
+            cmd = cmd_rx.recv() => {
+                match cmd {
+                    Some(SessionCmd::Finalize(reply_tx)) => {
+                        // 冲刷残留采样（若有）
+                        if !pcm_buffer.is_empty() {
+                            let chunk: Vec<u8> = pcm_buffer.drain(..).collect();
+                            let base64_pcm = BASE64.encode(&chunk);
+                            let input_frame = GeminiLiveRealtimeInputFrame {
+                                realtime_input: GeminiLiveRealtimeInput {
+                                    audio: Some(GeminiLiveAudioData {
+                                        data: base64_pcm,
+                                        mime_type: "audio/pcm;rate=16000".to_string(),
+                                    }),
+                                    audio_stream_end: None,
+                                },
+                            };
+                            if let Ok(frame_json) = serde_json::to_string(&input_frame) {
+                                let _ = ws.send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into())).await;
+                            }
+                        }
+
+                        // 发送 audioStreamEnd 结束标记
+                        let end_frame = GeminiLiveRealtimeInputFrame {
+                            realtime_input: GeminiLiveRealtimeInput {
+                                audio: None,
+                                audio_stream_end: Some(true),
+                            },
+                        };
+                        if let Ok(frame_json) = serde_json::to_string(&end_frame) {
+                            let _ = ws.send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into())).await;
+                        }
+
+                        // 最多等待 5 秒获取服务端最终分句与收尾确认
+                        let finalize_deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+                        while tokio::time::Instant::now() < finalize_deadline {
+                            let remaining = finalize_deadline - tokio::time::Instant::now();
+                            let res = tokio::time::timeout(remaining, ws.next()).await;
+                            match res {
+                                Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) => {
+                                    if let Ok(server_msg) = serde_json::from_str::<GeminiLiveServerMessage>(&text) {
+                                        if let Some(content) = server_msg.server_content {
+                                            if let Some(input) = content.input_transcription {
+                                                if let Some(c) = input.text {
+                                                    committed_text.push_str(&c);
+                                                    text_sink.emit_text(committed_text.clone(), String::new());
+                                                }
+                                            }
+                                            if content.turn_complete.unwrap_or(false) {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))) | Ok(None) => break,
+                                _ => break,
+                            }
+                        }
+
+                        let _ = ws.close(None).await;
+
+                        let trimmed = committed_text.trim().to_string();
+                        if !trimmed.is_empty() {
+                            let _ = reply_tx.send(Ok(trimmed));
+                        } else if let Some(err) = session_error {
+                            let _ = reply_tx.send(Err(err));
+                        } else {
+                            let _ = reply_tx.send(Ok(String::new()));
+                        }
+                        return;
+                    }
+                    Some(SessionCmd::Cancel) | None => {
+                        let _ = ws.close(None).await;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl StreamingTranscriptionProvider for GeminiProvider {
+    fn supports_streaming(&self, model: &str) -> bool {
+        let trimmed = model.trim();
+        trimmed == GEMINI_LIVE_MODEL_ID
+            || trimmed == "models/gemini-3.5-transcribe-live"
+            || trimmed.ends_with("transcribe-live")
+    }
+
+    async fn start_stream(
+        &self,
+        options: &TranscriptionOptions,
+        text_sink: Arc<dyn StreamTextSink>,
+    ) -> Result<Box<dyn StreamingSession>, String> {
+        let settings = crate::settings::get_settings(&self.app_handle);
+        let api_key = settings
+            .cloud_stt_api_keys
+            .get("gemini")
+            .map(|k| k.trim())
+            .filter(|k| !k.is_empty())
+            .ok_or_else(|| "Gemini API Key 未配置，请前往【转录模型】设置配置凭据".to_string())?;
+
+        let provider_config = settings
+            .cloud_stt_providers
+            .get("gemini")
+            .cloned()
+            .unwrap_or_default();
+
+        let custom_base = provider_config.custom_base_url.as_deref();
+        let ws_url = Self::build_live_websocket_url(custom_base, api_key);
+        let proxy_settings = self.network_manager.proxy_settings().await;
+
+        let mut ws =
+            crate::network::proxy_tunnel::connect_websocket_tunnel(&ws_url, &proxy_settings)
+                .await?;
+
+        let mut language_codes = Vec::new();
+        if options.language != "auto" && !options.language.trim().is_empty() {
+            language_codes.push(options.language.trim().to_string());
+        }
+
+        let custom_vocab = options
+            .prompt
+            .as_ref()
+            .map(|p| {
+                p.split(&[',', '，', '、', ' '][..])
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|v| !v.is_empty());
+
+        let setup_frame = GeminiLiveSetupFrame {
+            setup: GeminiLiveSetupConfig {
+                model: "models/gemini-3.5-transcribe-live".to_string(),
+                generation_config: Some(GeminiLiveGenerationConfig {
+                    response_modalities: vec!["TEXT".to_string()],
+                }),
+                input_audio_transcription: Some(GeminiLiveInputAudioTranscription {
+                    language_codes,
+                    mode: "SMART".to_string(),
+                    custom_vocabulary: custom_vocab,
+                }),
+            },
+        };
+
+        let setup_json = serde_json::to_string(&setup_frame)
+            .map_err(|e| format!("序列化 Gemini Live Setup 报文失败: {}", e))?;
+
+        ws.send(tokio_tungstenite::tungstenite::Message::Text(
+            setup_json.into(),
+        ))
+        .await
+        .map_err(|e| format!("发送 Gemini Live Setup 握手帧失败: {}", e))?;
+
+        let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
+
+        tokio::spawn(run_gemini_live_worker(ws, audio_rx, cmd_rx, text_sink));
+
+        Ok(Box::new(GeminiLiveStreamingSession { audio_tx, cmd_tx }))
     }
 }
 
@@ -529,5 +957,167 @@ mod tests {
 
         let default_mode: GeminiTranscriptionMode = Default::default();
         assert_eq!(default_mode, GeminiTranscriptionMode::Smart);
+    }
+
+    #[test]
+    fn test_convert_samples_to_pcm16_le() {
+        let samples = vec![0.0, 1.0, -1.0, 0.5, 2.0, -2.0];
+        let pcm_bytes = GeminiProvider::convert_samples_to_pcm16_le(&samples);
+        assert_eq!(pcm_bytes.len(), samples.len() * 2);
+
+        // 0.0 -> 0
+        let val0 = i16::from_le_bytes([pcm_bytes[0], pcm_bytes[1]]);
+        assert_eq!(val0, 0);
+
+        // 1.0 -> 32767
+        let val1 = i16::from_le_bytes([pcm_bytes[2], pcm_bytes[3]]);
+        assert_eq!(val1, 32767);
+
+        // -1.0 -> -32767
+        let val2 = i16::from_le_bytes([pcm_bytes[4], pcm_bytes[5]]);
+        assert_eq!(val2, -32767);
+
+        // 2.0 clamped to 1.0 -> 32767
+        let val4 = i16::from_le_bytes([pcm_bytes[8], pcm_bytes[9]]);
+        assert_eq!(val4, 32767);
+    }
+
+    #[test]
+    fn test_build_live_websocket_url() {
+        let default_url = GeminiProvider::build_live_websocket_url(None, "my_api_key");
+        assert_eq!(
+            default_url,
+            "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=my_api_key"
+        );
+
+        let https_url = GeminiProvider::build_live_websocket_url(
+            Some("https://api.mygateway.com/v1"),
+            "test_key",
+        );
+        assert_eq!(
+            https_url,
+            "wss://api.mygateway.com/v1/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=test_key"
+        );
+
+        let http_url =
+            GeminiProvider::build_live_websocket_url(Some("http://localhost:8080"), "test_key");
+        assert_eq!(
+            http_url,
+            "ws://localhost:8080/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=test_key"
+        );
+    }
+
+    #[test]
+    fn test_gemini_live_setup_frame_serialization() {
+        let frame = GeminiLiveSetupFrame {
+            setup: GeminiLiveSetupConfig {
+                model: "models/gemini-3.5-transcribe-live".to_string(),
+                generation_config: Some(GeminiLiveGenerationConfig {
+                    response_modalities: vec!["TEXT".to_string()],
+                }),
+                input_audio_transcription: Some(GeminiLiveInputAudioTranscription {
+                    language_codes: vec!["zh-CN".to_string()],
+                    mode: "SMART".to_string(),
+                    custom_vocabulary: Some(vec!["Handy".to_string(), "Tauri".to_string()]),
+                }),
+            },
+        };
+
+        let json_val = serde_json::to_value(&frame).expect("should serialize setup frame");
+        assert_eq!(
+            json_val["setup"]["model"],
+            "models/gemini-3.5-transcribe-live"
+        );
+        assert_eq!(
+            json_val["setup"]["generationConfig"]["responseModalities"][0],
+            "TEXT"
+        );
+        assert_eq!(
+            json_val["setup"]["inputAudioTranscription"]["mode"],
+            "SMART"
+        );
+        assert_eq!(
+            json_val["setup"]["inputAudioTranscription"]["languageCodes"][0],
+            "zh-CN"
+        );
+        assert_eq!(
+            json_val["setup"]["inputAudioTranscription"]["customVocabulary"][0],
+            "Handy"
+        );
+    }
+
+    #[test]
+    fn test_gemini_live_realtime_input_frame_serialization() {
+        let audio_frame = GeminiLiveRealtimeInputFrame {
+            realtime_input: GeminiLiveRealtimeInput {
+                audio: Some(GeminiLiveAudioData {
+                    data: "base64pcm".to_string(),
+                    mime_type: "audio/pcm;rate=16000".to_string(),
+                }),
+                audio_stream_end: None,
+            },
+        };
+        let json_audio = serde_json::to_value(&audio_frame).unwrap();
+        assert_eq!(json_audio["realtimeInput"]["audio"]["data"], "base64pcm");
+        assert_eq!(
+            json_audio["realtimeInput"]["audio"]["mimeType"],
+            "audio/pcm;rate=16000"
+        );
+        assert!(json_audio["realtimeInput"]["audioStreamEnd"].is_null());
+
+        let end_frame = GeminiLiveRealtimeInputFrame {
+            realtime_input: GeminiLiveRealtimeInput {
+                audio: None,
+                audio_stream_end: Some(true),
+            },
+        };
+        let json_end = serde_json::to_value(&end_frame).unwrap();
+        assert_eq!(json_end["realtimeInput"]["audioStreamEnd"], true);
+        assert!(json_end["realtimeInput"]["audio"].is_null());
+    }
+
+    #[test]
+    fn test_gemini_live_server_message_deserialization() {
+        let json_interim = r#"{
+            "serverContent": {
+                "interimInputTranscription": {
+                    "text": "你好"
+                }
+            }
+        }"#;
+        let msg: GeminiLiveServerMessage = serde_json::from_str(json_interim).unwrap();
+        let interim = msg
+            .server_content
+            .unwrap()
+            .interim_input_transcription
+            .unwrap();
+        assert_eq!(interim.text.as_deref(), Some("你好"));
+
+        let json_final = r#"{
+            "serverContent": {
+                "inputTranscription": {
+                    "text": "你好，世界！"
+                },
+                "turnComplete": true
+            }
+        }"#;
+        let msg2: GeminiLiveServerMessage = serde_json::from_str(json_final).unwrap();
+        let content = msg2.server_content.unwrap();
+        assert_eq!(
+            content.input_transcription.unwrap().text.as_deref(),
+            Some("你好，世界！")
+        );
+        assert_eq!(content.turn_complete, Some(true));
+
+        let json_err = r#"{
+            "error": {
+                "code": 400,
+                "message": "Invalid API Key"
+            }
+        }"#;
+        let msg3: GeminiLiveServerMessage = serde_json::from_str(json_err).unwrap();
+        let err = msg3.error.unwrap();
+        assert_eq!(err.code, Some(400));
+        assert_eq!(err.message.as_deref(), Some("Invalid API Key"));
     }
 }

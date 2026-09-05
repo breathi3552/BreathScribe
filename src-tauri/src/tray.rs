@@ -537,6 +537,7 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         let (cloud_model_id, cloud_display_name) = match &inputs.transcription_mode {
             TranscriptionMode::Cloud { model_id, .. } => {
                 let name = match model_id.as_str() {
+                    "gemini-3.5-transcribe-live" => "Gemini 3.5 Transcribe Live",
                     "gemini-3.5-transcribe" => "Gemini 3.5 Transcribe",
                     "gemini-3.6-flash" => "Gemini 3.6 Flash",
                     "gemini-3.5-flash" => "Gemini 3.5 Flash",

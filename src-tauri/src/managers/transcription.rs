@@ -98,7 +98,7 @@ pub struct StreamPhaseEvent {
 /// Commands sent to the streaming worker thread. Audio frames and the finalize
 /// request travel the same channel so FIFO ordering guarantees every fed frame
 /// is processed before finalize runs.
-enum StreamCmd {
+pub(crate) enum StreamCmd {
     Feed(Vec<f32>),
     /// Flush the stream and reply with the final text, or `None` if no stream
     /// was ever active (caller should fall back to batch transcription).
@@ -138,7 +138,7 @@ impl StreamRouter {
     /// Open a fresh command channel for a new streaming session, returning the
     /// receiver the worker should drain. Caller must ensure no prior channel is
     /// still open.
-    fn open(&self) -> mpsc::Receiver<StreamCmd> {
+    pub(crate) fn open(&self) -> mpsc::Receiver<StreamCmd> {
         let (tx, rx) = mpsc::channel::<StreamCmd>();
         *self.tx.lock().unwrap() = Some(tx);
         self.open.store(true, Ordering::Relaxed);
@@ -147,14 +147,14 @@ impl StreamRouter {
 
     /// Take the sender out (closing the channel to new feeds). Returns the
     /// sender so the caller can send the final `Finalize`/`Cancel` command.
-    fn take(&self) -> Option<mpsc::Sender<StreamCmd>> {
+    pub(crate) fn take(&self) -> Option<mpsc::Sender<StreamCmd>> {
         self.open.store(false, Ordering::Relaxed);
         self.tx.lock().unwrap().take()
     }
 
     /// Drop the channel and mark closed without sending a final command (used
     /// when the worker exits without a finalize/cancel handshake).
-    fn clear(&self) {
+    pub(crate) fn clear(&self) {
         self.open.store(false, Ordering::Relaxed);
         *self.tx.lock().unwrap() = None;
     }

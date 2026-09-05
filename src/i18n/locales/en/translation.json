@@ -281,7 +281,8 @@
         "models": {
           "flashDesc": "Fast response, high accuracy, recommended for speech recognition",
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",
-          "transcribeDesc": "Dedicated speech recognition model with smart filler word filtering and punctuation formatting (Recommended)",
+          "transcribeDesc": "Dedicated speech recognition model with smart filler word filtering and punctuation formatting (Batch high-precision)",
+          "transcribeLiveDesc": "Dedicated real-time speech recognition model with instant typing feedback and smart filler removal (Recommended)",
           "flash36Desc": "Latest generation general multimodal model with superior reasoning and complex context handling",
           "flash35Desc": "Lightweight high-efficiency general model with low latency"
         },

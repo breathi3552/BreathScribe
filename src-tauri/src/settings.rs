@@ -621,6 +621,7 @@ pub struct AppSettings {
 
 pub const DEFAULT_CLOUD_STT_PROVIDER_ID: &str = "gemini";
 pub const DEFAULT_CLOUD_STT_MODEL_ID: &str = "gemini-3.5-transcribe";
+pub const GEMINI_LIVE_MODEL_ID: &str = "gemini-3.5-transcribe-live";
 
 impl AppSettings {
     /// 解析默认或当前激活的云端转写模式配置

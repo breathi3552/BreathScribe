@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
+pub mod proxy_tunnel;
 pub mod system_proxy;
 
 pub struct NetworkManager {
@@ -23,6 +24,10 @@ impl NetworkManager {
     /// 获取共享连接池 HTTP Client 的克隆（reqwest::Client 内部自带 Arc）
     pub async fn client(&self) -> Client {
         self.client.read().await.clone()
+    }
+    /// 获取当前生效的代理配置快照
+    pub async fn proxy_settings(&self) -> ProxySettings {
+        self.current_settings.read().await.clone()
     }
 
     /// 更新代理配置并即时原子替换全局 Client

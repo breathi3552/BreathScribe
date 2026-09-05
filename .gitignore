@@ -49,8 +49,10 @@ __pycache__/
 # Temporary and local scratch files
 .scratch/
 
-# Extracted portable test build
-release-builds/portable/
+# Release packages and portable builds
+release-builds/
 
+# Design prototypes and assets
+prototypes/
 # Agent runtime artifacts
 .agents/

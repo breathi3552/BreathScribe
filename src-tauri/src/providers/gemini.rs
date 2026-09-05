@@ -312,7 +312,11 @@ mod tests {
             "https://custom-proxy.internal/v1beta/models/gemini-2.5-pro:generateContent?key=my-key"
         );
 
-        let url3 = GeminiProvider::build_request_url("https://custom-proxy.internal/v1beta/", "gemini-2.5-flash", "my-key");
+        let url3 = GeminiProvider::build_request_url(
+            "https://custom-proxy.internal/v1beta/",
+            "gemini-2.5-flash",
+            "my-key",
+        );
         assert_eq!(
             url3,
             "https://custom-proxy.internal/v1beta/models/gemini-2.5-flash:generateContent?key=my-key"
@@ -328,7 +332,8 @@ mod tests {
         assert!(formatted.contains("400"));
 
         let raw_err = "Gateway timeout";
-        let raw_formatted = GeminiProvider::parse_api_error(reqwest::StatusCode::GATEWAY_TIMEOUT, raw_err);
+        let raw_formatted =
+            GeminiProvider::parse_api_error(reqwest::StatusCode::GATEWAY_TIMEOUT, raw_err);
         assert!(raw_formatted.contains("504"));
         assert!(raw_formatted.contains("Gateway timeout"));
     }
@@ -350,9 +355,15 @@ mod tests {
         let res: GeminiResponse = serde_json::from_str(json).unwrap();
         assert_eq!(
             res.candidates.as_ref().unwrap()[0]
-                .content.as_ref().unwrap()
-                .parts.as_ref().unwrap()[0]
-                .text.as_deref().unwrap(),
+                .content
+                .as_ref()
+                .unwrap()
+                .parts
+                .as_ref()
+                .unwrap()[0]
+                .text
+                .as_deref()
+                .unwrap(),
             "This is a transcribed test."
         );
     }

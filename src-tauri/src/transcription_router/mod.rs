@@ -40,15 +40,11 @@ impl TranscriptionRouter {
     ) -> Result<String, String> {
         let settings = crate::settings::get_settings(&self.app_handle);
         match &settings.transcription_mode {
-            TranscriptionMode::Local => {
-                self.local_provider.transcribe(audio, options).await
-            }
-            TranscriptionMode::Cloud { provider_id, .. } => {
-                match provider_id.as_str() {
-                    "gemini" => self.gemini_provider.transcribe(audio, options).await,
-                    unknown => Err(format!("未知的云端转写提供商: {}", unknown)),
-                }
-            }
+            TranscriptionMode::Local => self.local_provider.transcribe(audio, options).await,
+            TranscriptionMode::Cloud { provider_id, .. } => match provider_id.as_str() {
+                "gemini" => self.gemini_provider.transcribe(audio, options).await,
+                unknown => Err(format!("未知的云端转写提供商: {}", unknown)),
+            },
         }
     }
 }

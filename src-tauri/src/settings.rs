@@ -984,7 +984,6 @@ fn ensure_cloud_stt_defaults(settings: &mut AppSettings) -> bool {
     changed
 }
 
-
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -1848,9 +1847,10 @@ mod tests {
     #[test]
     fn debug_output_redacts_cloud_stt_api_keys() {
         let mut settings = get_default_settings();
-        settings
-            .cloud_stt_api_keys
-            .insert("gemini".to_string(), "AIzaSySecretGeminiKey123456".to_string());
+        settings.cloud_stt_api_keys.insert(
+            "gemini".to_string(),
+            "AIzaSySecretGeminiKey123456".to_string(),
+        );
 
         let debug_output = format!("{:?}", settings);
         assert!(!debug_output.contains("AIzaSySecretGeminiKey123456"));

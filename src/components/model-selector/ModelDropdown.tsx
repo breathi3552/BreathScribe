@@ -5,6 +5,7 @@ import type { ModelInfo } from "@/bindings";
 import {
   getTranslatedModelName,
   getTranslatedModelDescription,
+  formatCloudModelName,
 } from "../../lib/utils/modelTranslation";
 
 interface ModelDropdownProps {
@@ -35,7 +36,7 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
     <div className="absolute bottom-full start-0 mb-2 w-64 max-h-[60vh] overflow-y-auto bg-background border border-mid-gray/20 rounded-lg shadow-lg py-2 z-50">
       {/* 1. Cloud Option (pinned to top) */}
       <div
-        onClick={onSelectCloud}
+        onClick={() => onSelectCloud?.()}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -53,7 +54,7 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
             <Cloud className="w-4 h-4 text-sky-400 shrink-0" />
             <div>
               <div className="text-sm font-medium text-text/80">
-                {cloudModelName || "Gemini 2.5 Flash"}
+                {cloudModelName || formatCloudModelName("gemini-2.5-flash")}
               </div>
               <div className="text-xs text-text/40 italic pe-4">
                 {t(

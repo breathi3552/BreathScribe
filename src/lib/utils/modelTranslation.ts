@@ -31,3 +31,19 @@ export function getTranslatedModelDescription(
   const translated = t(translationKey, { defaultValue: "" });
   return translated !== "" ? translated : model.description;
 }
+
+/**
+ * Format a cloud model ID into a user-friendly display name
+ * @param modelId - The cloud model ID (e.g. "gemini-2.5-flash")
+ * @returns Human-readable cloud model name
+ */
+export function formatCloudModelName(modelId: string): string {
+  switch (modelId) {
+    case "gemini-2.5-flash":
+      return "Gemini 2.5 Flash";
+    case "gemini-2.5-pro":
+      return "Gemini 2.5 Pro";
+    default:
+      return modelId;
+  }
+}

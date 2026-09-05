@@ -28,8 +28,6 @@ pub fn set_transcription_mode(app: AppHandle, mode: TranscriptionMode) -> Result
             }
         }
     }
-
-    crate::tray::update_tray_menu(&app);
     Ok(())
 }
 

@@ -2,7 +2,10 @@ import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { commands } from "@/bindings";
-import { getTranslatedModelName } from "../../lib/utils/modelTranslation";
+import {
+  getTranslatedModelName,
+  formatCloudModelName,
+} from "../../lib/utils/modelTranslation";
 import { useModelStore } from "../../stores/modelStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import ModelStatusButton from "./ModelStatusButton";
@@ -47,16 +50,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
       : (settings?.cloud_stt_providers?.["gemini"]?.model_id ??
         "gemini-2.5-flash");
 
-  const formatCloudModelName = (modelId: string): string => {
-    switch (modelId) {
-      case "gemini-2.5-flash":
-        return "Gemini 2.5 Flash";
-      case "gemini-2.5-pro":
-        return "Gemini 2.5 Pro";
-      default:
-        return modelId;
-    }
-  };
 
   const [modelStatus, setModelStatus] = useState<ModelStatus>("unloaded");
   const [modelError, setModelError] = useState<string | null>(null);

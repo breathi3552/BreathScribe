@@ -236,8 +236,8 @@
           "flash35Desc": "轻量高性价比通用大模型，低延迟响应"
         },
         "warnings": {
-          "keyFormatHint": "提示：标准的 Google Gemini API Key 通常以 'AIzaSy' 开头（长度 39 位）",
-          "keyFormatNote": "格式提示：标准的 Google Gemini API Key 通常为以 'AIzaSy' 开头的 39 位字符"
+          "keyFormatHint": "提示：标准的 Google Gemini API Key 通常以 'AIzaSy' 或 'AQ.' 开头",
+          "keyFormatNote": "格式提示：标准的 Google Gemini API Key 通常为以 'AIzaSy' 或 'AQ.' 开头的字符"
         },
         "providerGoogleDesc": "Google Gemini 3.5 Transcribe & Flash"
       }

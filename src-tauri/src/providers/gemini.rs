@@ -6,7 +6,6 @@ use std::time::Duration;
 use tauri::AppHandle;
 use tokio_tungstenite::WebSocketStream;
 
-use crate::network::proxy_tunnel::TunnelStream;
 use crate::network::NetworkManager;
 use crate::providers::{
     BatchTranscriptionProvider, StreamTextSink, StreamingSession, StreamingTranscriptionProvider,
@@ -72,9 +71,15 @@ pub struct GeminiLiveAudioData {
     pub mime_type: String,
 }
 
+/// Gemini Live 服务端握手完成报文
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Default)]
+pub struct GeminiLiveSetupComplete {}
+
 /// Gemini Live 服务端下行消息契约
 #[derive(serde::Deserialize, Debug, Clone)]
 pub struct GeminiLiveServerMessage {
+    #[serde(rename = "setupComplete")]
+    pub setup_complete: Option<GeminiLiveSetupComplete>,
     #[serde(rename = "serverContent")]
     pub server_content: Option<GeminiLiveServerContent>,
     pub error: Option<GeminiLiveError>,
@@ -220,6 +225,10 @@ impl GeminiProvider {
             .map_err(|e| format!("完成 WAV 编码失败: {}", e))?;
         Ok(cursor.into_inner())
     }
+    /// 检查凭据是否为 Google OAuth 访问令牌（通常以 ya29. 开头）
+    pub fn is_oauth_token(key: &str) -> bool {
+        key.trim().starts_with("ya29.")
+    }
 
     /// 根据 Base URL 与 API Key 构造 Interactions API 请求端点 URL
     pub fn build_request_url(base_url: &str, api_key: &str) -> String {
@@ -230,10 +239,17 @@ impl GeminiProvider {
             trimmed_base
         };
 
-        if base.ends_with("/v1beta") {
-            format!("{}/interactions?key={}", base, api_key)
+        let is_bearer = Self::is_oauth_token(api_key);
+        let path = if base.ends_with("/v1beta") {
+            "/interactions"
         } else {
-            format!("{}/v1beta/interactions?key={}", base, api_key)
+            "/v1beta/interactions"
+        };
+
+        if is_bearer {
+            format!("{base}{path}")
+        } else {
+            format!("{base}{path}?key={api_key}")
         }
     }
 
@@ -289,14 +305,21 @@ impl GeminiProvider {
             .filter(|s| !s.is_empty())
             .unwrap_or("https://generativelanguage.googleapis.com");
         let clean_base = base_url.trim_end_matches('/');
+        let is_bearer = Self::is_oauth_token(api_key);
         let test_url = if clean_base.ends_with("/v1beta") {
-            format!("{}/models?key={}", clean_base, api_key)
+            if is_bearer {
+                format!("{clean_base}/models")
+            } else {
+                format!("{clean_base}/models?key={api_key}")
+            }
+        } else if is_bearer {
+            format!("{clean_base}/v1beta/models")
         } else {
-            format!("{}/v1beta/models?key={}", clean_base, api_key)
+            format!("{clean_base}/v1beta/models?key={api_key}")
         };
 
         let mut req = client.get(&test_url);
-        if api_key.starts_with("AQ.") || api_key.starts_with("ya29.") {
+        if is_bearer {
             req = req.header("Authorization", format!("Bearer {}", api_key));
         } else {
             req = req.header("x-goog-api-key", api_key);
@@ -428,7 +451,7 @@ impl BatchTranscriptionProvider for GeminiProvider {
         // 3. 复用全局网络管理器的共享连接池客户端
         let client = self.network_manager.client().await;
         let mut req = client.post(&request_url);
-        if api_key.starts_with("AQ.") || api_key.starts_with("ya29.") {
+        if Self::is_oauth_token(api_key) {
             req = req.header("Authorization", format!("Bearer {}", api_key));
         } else {
             req = req.header("x-goog-api-key", api_key);
@@ -494,20 +517,121 @@ impl StreamingSession for GeminiLiveStreamingSession {
     }
 }
 
-async fn run_gemini_live_worker(
-    mut ws: WebSocketStream<TunnelStream>,
+async fn run_gemini_live_worker<S>(
+    ws: WebSocketStream<S>,
     mut audio_rx: tokio::sync::mpsc::UnboundedReceiver<Vec<f32>>,
     mut cmd_rx: tokio::sync::mpsc::Receiver<SessionCmd>,
     text_sink: Arc<dyn StreamTextSink>,
-) {
-    let mut committed_text = String::new();
-    let mut tentative_text = String::new();
+) where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    let (mut ws_sink, mut ws_stream) = ws.split();
+
+    struct LiveState {
+        committed_text: String,
+        tentative_text: String,
+        session_error: Option<String>,
+        turn_completed: bool,
+    }
+
+    let state = Arc::new(parking_lot::Mutex::new(LiveState {
+        committed_text: String::new(),
+        tentative_text: String::new(),
+        session_error: None,
+        turn_completed: false,
+    }));
+
+    let turn_notify = Arc::new(tokio::sync::Notify::new());
+    let (sink_tx, mut sink_rx) =
+        tokio::sync::mpsc::channel::<tokio_tungstenite::tungstenite::Message>(64);
+
+    // 1. 出站写入协程：独占持有 ws_sink，解耦所有发送操作
+    let writer_handle = tokio::spawn(async move {
+        while let Some(msg) = sink_rx.recv().await {
+            if let Err(e) = ws_sink.send(msg).await {
+                log::warn!("Gemini Live WebSocket 发送失败: {}", e);
+                break;
+            }
+        }
+        let _ = ws_sink.close().await;
+    });
+
+    // 2. 下行接收协程：独占持有 ws_stream，毫秒级广播 interim 与 inputTranscription
+    let state_receiver = Arc::clone(&state);
+    let sink_tx_receiver = sink_tx.clone();
+    let turn_notify_receiver = Arc::clone(&turn_notify);
+    let text_sink_receiver = Arc::clone(&text_sink);
+
+    let receiver_handle = tokio::spawn(async move {
+        while let Some(msg_res) = ws_stream.next().await {
+            match msg_res {
+                Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
+                    if let Ok(server_msg) = serde_json::from_str::<GeminiLiveServerMessage>(&text) {
+                        if let Some(err) = server_msg.error {
+                            let err_text =
+                                err.message.unwrap_or_else(|| "未知服务端错误".to_string());
+                            log::warn!("Gemini Live 服务端返回错误: {}", err_text);
+                            state_receiver.lock().session_error = Some(err_text);
+                            turn_notify_receiver.notify_waiters();
+                        }
+                        if let Some(content) = server_msg.server_content {
+                            if let Some(interim) = content.interim_input_transcription {
+                                if let Some(t) = interim.text {
+                                    let (committed, tentative) = {
+                                        let mut s = state_receiver.lock();
+                                        s.tentative_text = t.clone();
+                                        (s.committed_text.clone(), t)
+                                    };
+                                    text_sink_receiver.emit_text(committed, tentative);
+                                }
+                            }
+                            if let Some(input) = content.input_transcription {
+                                if let Some(c) = input.text {
+                                    let committed = {
+                                        let mut s = state_receiver.lock();
+                                        s.committed_text.push_str(&c);
+                                        s.tentative_text.clear();
+                                        s.committed_text.clone()
+                                    };
+                                    text_sink_receiver.emit_text(committed, String::new());
+                                }
+                            }
+                            if content.turn_complete.unwrap_or(false) {
+                                state_receiver.lock().turn_completed = true;
+                                turn_notify_receiver.notify_waiters();
+                                break;
+                            }
+                        }
+                    }
+                }
+                Ok(tokio_tungstenite::tungstenite::Message::Ping(data)) => {
+                    let _ = sink_tx_receiver
+                        .send(tokio_tungstenite::tungstenite::Message::Pong(data))
+                        .await;
+                }
+                Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
+                    log::info!("Gemini Live 服务端关闭长连接");
+                    turn_notify_receiver.notify_waiters();
+                    break;
+                }
+                Err(e) => {
+                    log::warn!("Gemini Live WebSocket 接收异常: {}", e);
+                    state_receiver.lock().session_error =
+                        Some(format!("WebSocket 接收异常: {}", e));
+                    turn_notify_receiver.notify_waiters();
+                    break;
+                }
+                _ => {}
+            }
+        }
+        turn_notify_receiver.notify_waiters();
+    });
+
+    // 3. 上行推流与生命周期协程
     let mut pcm_buffer: Vec<u8> = Vec::with_capacity(SAMPLES_PER_CHUNK * 2);
-    let mut session_error: Option<String> = None;
 
     loop {
         tokio::select! {
-            // 1. 麦克风音频采样流入
             maybe_samples = audio_rx.recv() => {
                 match maybe_samples {
                     Some(samples) => {
@@ -529,9 +653,11 @@ async fn run_gemini_live_worker(
                                 },
                             };
                             if let Ok(frame_json) = serde_json::to_string(&input_frame) {
-                                if let Err(e) = ws.send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into())).await {
-                                    log::warn!("发送流式音频帧失败: {}", e);
-                                    session_error = Some(format!("WebSocket 发送音频帧失败: {}", e));
+                                if sink_tx
+                                    .send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into()))
+                                    .await
+                                    .is_err()
+                                {
                                     break;
                                 }
                             }
@@ -543,60 +669,18 @@ async fn run_gemini_live_worker(
                 }
             }
 
-            // 2. 服务端实时下行报文监听
-            maybe_ws_msg = ws.next() => {
-                match maybe_ws_msg {
-                    Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
-                        if let Ok(server_msg) = serde_json::from_str::<GeminiLiveServerMessage>(&text) {
-                            if let Some(err) = server_msg.error {
-                                let err_text = err.message.unwrap_or_else(|| "未知服务端错误".to_string());
-                                log::warn!("Gemini Live 服务端返回错误: {}", err_text);
-                                session_error = Some(err_text);
-                            }
-                            if let Some(content) = server_msg.server_content {
-                                if let Some(interim) = content.interim_input_transcription {
-                                    if let Some(t) = interim.text {
-                                        tentative_text = t;
-                                        text_sink.emit_text(committed_text.clone(), tentative_text.clone());
-                                    }
-                                }
-                                if let Some(input) = content.input_transcription {
-                                    if let Some(c) = input.text {
-                                        committed_text.push_str(&c);
-                                        tentative_text.clear();
-                                        text_sink.emit_text(committed_text.clone(), String::new());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Some(Ok(tokio_tungstenite::tungstenite::Message::Ping(data))) => {
-                        let _ = ws.send(tokio_tungstenite::tungstenite::Message::Pong(data)).await;
-                    }
-                    Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => {
-                        log::info!("Gemini Live 服务端主动关闭了长连接");
-                        break;
-                    }
-                    Some(Err(e)) => {
-                        log::warn!("Gemini Live WebSocket 连接异常: {}", e);
-                        session_error = Some(format!("WebSocket 接收异常: {}", e));
-                        break;
-                    }
-                    None => {
-                        // WebSocket 连接已断开
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-
-            // 3. 生命周期指令接收
             cmd = cmd_rx.recv() => {
                 match cmd {
                     Some(SessionCmd::Finalize(reply_tx)) => {
+                        // 冲刷 audio_rx 通道中积压的未处理采样
+                        while let Ok(samples) = audio_rx.try_recv() {
+                            let pcm_bytes = GeminiProvider::convert_samples_to_pcm16_le(&samples);
+                            pcm_buffer.extend_from_slice(&pcm_bytes);
+                        }
+
                         // 冲刷残留采样（若有）
                         if !pcm_buffer.is_empty() {
-                            let chunk: Vec<u8> = pcm_buffer.drain(..).collect();
+                            let chunk = std::mem::take(&mut pcm_buffer);
                             let base64_pcm = BASE64.encode(&chunk);
                             let input_frame = GeminiLiveRealtimeInputFrame {
                                 realtime_input: GeminiLiveRealtimeInput {
@@ -608,7 +692,9 @@ async fn run_gemini_live_worker(
                                 },
                             };
                             if let Ok(frame_json) = serde_json::to_string(&input_frame) {
-                                let _ = ws.send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into())).await;
+                                let _ = sink_tx
+                                    .send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into()))
+                                    .await;
                             }
                         }
 
@@ -620,49 +706,44 @@ async fn run_gemini_live_worker(
                             },
                         };
                         if let Ok(frame_json) = serde_json::to_string(&end_frame) {
-                            let _ = ws.send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into())).await;
+                            let _ = sink_tx
+                                .send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into()))
+                                .await;
                         }
 
                         // 最多等待 5 秒获取服务端最终分句与收尾确认
                         let finalize_deadline = tokio::time::Instant::now() + Duration::from_secs(5);
                         while tokio::time::Instant::now() < finalize_deadline {
-                            let remaining = finalize_deadline - tokio::time::Instant::now();
-                            let res = tokio::time::timeout(remaining, ws.next()).await;
-                            match res {
-                                Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) => {
-                                    if let Ok(server_msg) = serde_json::from_str::<GeminiLiveServerMessage>(&text) {
-                                        if let Some(content) = server_msg.server_content {
-                                            if let Some(input) = content.input_transcription {
-                                                if let Some(c) = input.text {
-                                                    committed_text.push_str(&c);
-                                                    text_sink.emit_text(committed_text.clone(), String::new());
-                                                }
-                                            }
-                                            if content.turn_complete.unwrap_or(false) {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))) | Ok(None) => break,
-                                _ => break,
+                            if state.lock().turn_completed
+                                || state.lock().session_error.is_some()
+                                || receiver_handle.is_finished()
+                            {
+                                break;
                             }
+                            let remaining = finalize_deadline - tokio::time::Instant::now();
+                            let _ = tokio::time::timeout(remaining, turn_notify.notified()).await;
                         }
 
-                        let _ = ws.close(None).await;
-
-                        let trimmed = committed_text.trim().to_string();
+                        drop(sink_tx);
+                        let _ = writer_handle.await;
+                        receiver_handle.abort();
+                        let _ = receiver_handle.await;
+                        let final_state = state.lock();
+                        let trimmed = final_state.committed_text.trim().to_string();
                         if !trimmed.is_empty() {
                             let _ = reply_tx.send(Ok(trimmed));
-                        } else if let Some(err) = session_error {
-                            let _ = reply_tx.send(Err(err));
+                        } else if let Some(err) = &final_state.session_error {
+                            let _ = reply_tx.send(Err(err.clone()));
                         } else {
                             let _ = reply_tx.send(Ok(String::new()));
                         }
                         return;
                     }
                     Some(SessionCmd::Cancel) | None => {
-                        let _ = ws.close(None).await;
+                        drop(sink_tx);
+                        let _ = writer_handle.await;
+                        receiver_handle.abort();
+                        let _ = receiver_handle.await;
                         return;
                     }
                 }
@@ -746,6 +827,46 @@ impl StreamingTranscriptionProvider for GeminiProvider {
         .await
         .map_err(|e| format!("发送 Gemini Live Setup 握手帧失败: {}", e))?;
 
+        let setup_timeout = Duration::from_secs(10);
+        let setup_result = tokio::time::timeout(setup_timeout, async {
+            while let Some(msg_res) = ws.next().await {
+                match msg_res {
+                    Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
+                        if let Ok(server_msg) =
+                            serde_json::from_str::<GeminiLiveServerMessage>(&text)
+                        {
+                            if let Some(err) = server_msg.error {
+                                return Err(format!(
+                                    "Gemini Live Setup 握手失败: {}",
+                                    err.message.unwrap_or_else(|| "未知错误".to_string())
+                                ));
+                            }
+                            if server_msg.setup_complete.is_some() {
+                                return Ok(());
+                            }
+                        }
+                    }
+                    Ok(tokio_tungstenite::tungstenite::Message::Close(frame)) => {
+                        return Err(format!("Gemini Live 服务端关闭连接: {:?}", frame));
+                    }
+                    Err(e) => {
+                        return Err(format!("Gemini Live 接收握手响应失败: {}", e));
+                    }
+                    _ => {}
+                }
+            }
+            Err("Gemini Live 服务端在握手完成前断开连接".to_string())
+        })
+        .await;
+
+        match setup_result {
+            Ok(Ok(())) => {
+                log::info!("Gemini Live Setup 握手成功 (setupComplete 已就绪)");
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(_) => return Err("等待 Gemini Live setupComplete 握手超时 (10s)".to_string()),
+        }
+
         let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
 
@@ -821,6 +942,18 @@ mod tests {
         assert_eq!(
             url4,
             "https://custom-proxy.internal/v1beta/interactions?key=my-key"
+        );
+
+        let url_aq = GeminiProvider::build_request_url("", "AQ.Ab8RN6Test");
+        assert_eq!(
+            url_aq,
+            "https://generativelanguage.googleapis.com/v1beta/interactions?key=AQ.Ab8RN6Test"
+        );
+
+        let url_oauth = GeminiProvider::build_request_url("", "ya29.a0AfH6SMTest");
+        assert_eq!(
+            url_oauth,
+            "https://generativelanguage.googleapis.com/v1beta/interactions"
         );
     }
 
@@ -1128,5 +1261,110 @@ mod tests {
         let err = msg3.error.unwrap();
         assert_eq!(err.code, Some(400));
         assert_eq!(err.message.as_deref(), Some("Invalid API Key"));
+    }
+
+    struct MockSink {
+        emitted: Arc<parking_lot::Mutex<Vec<(String, String)>>>,
+    }
+    impl StreamTextSink for MockSink {
+        fn emit_text(&self, committed: String, tentative: String) {
+            self.emitted.lock().push((committed, tentative));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_gemini_live_worker_full_duplex_flow() {
+        use tokio_tungstenite::tungstenite::protocol::Role;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+        let client_ws =
+            tokio_tungstenite::WebSocketStream::from_raw_socket(client_io, Role::Client, None)
+                .await;
+        let mut server_ws =
+            tokio_tungstenite::WebSocketStream::from_raw_socket(server_io, Role::Server, None)
+                .await;
+
+        let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
+        let emitted = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let sink = Arc::new(MockSink {
+            emitted: Arc::clone(&emitted),
+        });
+
+        let worker_handle = tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
+
+        // 1. 发送 1600 个静音采样（刚好 100ms）
+        let samples = vec![0.0f32; 1600];
+        audio_tx.send(samples).unwrap();
+
+        // 2. 服务端应当收到一个包含 realtimeInput.audio 的消息
+        let msg = server_ws.next().await.unwrap().unwrap();
+        if let Message::Text(text) = msg {
+            assert!(text.contains("realtimeInput"));
+            assert!(text.contains("audio"));
+        } else {
+            panic!("Expected text message from client");
+        }
+
+        // 3. 服务端并发推送 interim 和 committed 消息
+        let interim_json = r#"{"serverContent":{"interimInputTranscription":{"text":"你好"}}}"#;
+        server_ws
+            .send(Message::Text(interim_json.into()))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        {
+            let events = emitted.lock();
+            assert_eq!(events.last(), Some(&("".to_string(), "你好".to_string())));
+        }
+
+        let final_text_json = r#"{"serverContent":{"inputTranscription":{"text":"你好，世界！"}}}"#;
+        server_ws
+            .send(Message::Text(final_text_json.into()))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        {
+            let events = emitted.lock();
+            assert_eq!(
+                events.last(),
+                Some(&("你好，世界！".to_string(), "".to_string()))
+            );
+        }
+
+        // 4. 客户端发起 finalize
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        cmd_tx.send(SessionCmd::Finalize(reply_tx)).await.unwrap();
+
+        // 5. 服务端应当收到 audioStreamEnd 帧
+        let end_msg = server_ws.next().await.unwrap().unwrap();
+        if let Message::Text(text) = end_msg {
+            assert!(text.contains("audioStreamEnd"));
+        } else {
+            panic!("Expected audioStreamEnd frame");
+        }
+
+        // 6. 服务端响应 turnComplete
+        let turn_complete_json = r#"{"serverContent":{"turnComplete":true}}"#;
+        server_ws
+            .send(Message::Text(turn_complete_json.into()))
+            .await
+            .unwrap();
+
+        // 7. finalize 应当收到完整的最终转写结果
+        let final_result = reply_rx.await.unwrap().unwrap();
+        assert_eq!(final_result, "你好，世界！");
+
+        worker_handle.await.unwrap();
+    }
+
+    #[test]
+    fn test_gemini_live_server_message_setup_complete() {
+        let json_setup = r#"{"setupComplete":{}}"#;
+        let msg: GeminiLiveServerMessage = serde_json::from_str(json_setup).unwrap();
+        assert!(msg.setup_complete.is_some());
     }
 }

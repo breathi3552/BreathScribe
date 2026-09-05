@@ -545,17 +545,12 @@ impl ShortcutAction for TranscribeAction {
         if model_supports_streaming {
             if is_cloud_mode {
                 if let Some(r) = &router {
-                    let r_clone = Arc::clone(r);
                     let stream_router = tm.stream_router();
                     let options = TranscriptionOptions {
                         language: settings.selected_language.clone(),
                         prompt: None,
                     };
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = r_clone.start_cloud_stream(&options, &stream_router).await {
-                            log::warn!("启动云端实时流式转写失败: {}", e);
-                        }
-                    });
+                    r.start_cloud_stream(&options, Arc::clone(&stream_router));
                 }
             } else {
                 tm.start_stream();
@@ -804,6 +799,8 @@ impl ShortcutAction for TranscribeAction {
                             other => {
                                 if let Some(Err(e)) = other {
                                     warn!("Gemini Live 实时流式转写异常 ({}): 自动降级回退至云端批处理模式", e);
+                                } else {
+                                    debug!("Gemini Live 未产生有效流式文本，自动降级回退至云端批处理模式");
                                 }
                                 if let Some(r) = &router {
                                     let options = TranscriptionOptions {

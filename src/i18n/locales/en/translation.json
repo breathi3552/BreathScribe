@@ -287,8 +287,8 @@
           "flash35Desc": "Lightweight high-efficiency general model with low latency"
         },
         "warnings": {
-          "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",
-          "keyFormatNote": "Format hint: Standard Google Gemini API Keys are typically 39 characters starting with 'AIzaSy'"
+          "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' or 'AQ.'",
+          "keyFormatNote": "Format hint: Standard Google Gemini API Keys typically start with 'AIzaSy' or 'AQ.'"
         },
         "providerGoogleDesc": "Google Gemini 3.5 Transcribe & Flash"
       }

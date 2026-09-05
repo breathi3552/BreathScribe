@@ -225,11 +225,10 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
       toast.warning(
         t(
           "settings.models.cloud.warnings.keyFormatHint",
-          "提示：标准的 Google Gemini API Key 通常以 'AIzaSy' 开头（长度 39 位）",
+          "提示：标准的 Google Gemini API Key 通常以 'AIzaSy' 或 'AQ.' 开头",
         ),
       );
     }
-
     setIsValidating(true);
     setValidationResult(null);
 
@@ -450,7 +449,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
               <p className="text-[11px] text-amber-500/90 font-medium">
                 {t(
                   "settings.models.cloud.warnings.keyFormatNote",
-                  "格式提示：标准的 Google Gemini API Key 通常为以 'AIzaSy' 开头的 39 位字符",
+                  "格式提示：标准的 Google Gemini API Key 通常为以 'AIzaSy' 或 'AQ.' 开头的字符",
                 )}
               </p>
             )}

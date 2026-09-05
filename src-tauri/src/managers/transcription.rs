@@ -128,7 +128,7 @@ pub struct StreamRouter {
 }
 
 impl StreamRouter {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             tx: Mutex::new(None),
             open: Arc::new(AtomicBool::new(false)),

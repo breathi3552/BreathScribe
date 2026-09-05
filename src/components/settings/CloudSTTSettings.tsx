@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -27,19 +27,6 @@ import { DEFAULT_CLOUD_STT_PROVIDER_SETTINGS } from "@/bindings";
 interface CloudSTTSettingsProps {
   grouped?: boolean;
 }
-
-const GEMINI_MODELS: DropdownOption[] = [
-  {
-    value: "gemini-2.5-flash",
-    label: "Gemini 2.5 Flash",
-    description: "极速响应、高准确率，语音转写推荐基准",
-  },
-  {
-    value: "gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    description: "超强大脑、复杂语境与专业术语更强",
-  },
-];
 
 const GOOGLE_AI_STUDIO_URL = "https://aistudio.google.com/app/apikey";
 
@@ -75,6 +62,45 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(
     Boolean(storedProviderConfig.custom_base_url?.trim()),
   );
+
+  const modelOptions: DropdownOption[] = useMemo(
+    () => [
+      {
+        value: "gemini-2.5-flash",
+        label: "Gemini 2.5 Flash",
+        description: t(
+          "settings.models.cloud.models.flashDesc",
+          "极速响应、高准确率，语音转写推荐基准",
+        ),
+      },
+      {
+        value: "gemini-2.5-pro",
+        label: "Gemini 2.5 Pro",
+        description: t(
+          "settings.models.cloud.models.proDesc",
+          "超强大脑、复杂语境与专业术语更强",
+        ),
+      },
+    ],
+    [t],
+  );
+
+  const providerOptions: DropdownOption[] = useMemo(
+    () => [
+      {
+        value: "gemini",
+        label: "Google Gemini",
+        description: "Google Gemini 2.5 Flash & Pro",
+      },
+    ],
+    [],
+  );
+
+  const isKeyFormatValid = (key: string): boolean => {
+    const trimmed = key.trim();
+    if (!trimmed) return true;
+    return /^AIzaSy[A-Za-z0-9_-]{33}$/.test(trimmed);
+  };
 
   const [isValidating, setIsValidating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -148,6 +174,15 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
         t("settings.models.cloud.errors.emptyKey", "请先填写 Gemini API Key"),
       );
       return;
+    }
+
+    if (!isKeyFormatValid(key) && !customBaseUrlDraft.trim()) {
+      toast.warning(
+        t(
+          "settings.models.cloud.warnings.keyFormatHint",
+          "提示：标准的 Google Gemini API Key 通常以 'AIzaSy' 开头（长度 39 位）",
+        ),
+      );
     }
 
     setIsValidating(true);
@@ -260,6 +295,22 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
           </Button>
         </div>
       </div>
+      {/* Provider Selection */}
+      <SettingContainer
+        title={t("settings.models.cloud.providerSelectTitle", "服务提供商")}
+        description={t(
+          "settings.models.cloud.providerSelectDesc",
+          "选择接入的云端大模型服务商（首阶段支持 Google Gemini）",
+        )}
+      >
+        <div className="w-64">
+          <Dropdown
+            options={providerOptions}
+            selectedValue={providerId}
+            onSelect={() => {}}
+          />
+        </div>
+      </SettingContainer>
 
       {/* Model Selection */}
       <SettingContainer
@@ -271,13 +322,12 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
       >
         <div className="w-64">
           <Dropdown
-            options={GEMINI_MODELS}
+            options={modelOptions}
             selectedValue={selectedModel}
             onSelect={handleModelChange}
           />
         </div>
       </SettingContainer>
-
       {/* API Key Input */}
       <SettingContainer
         title={t("settings.models.cloud.apiKeyTitle", "Google Gemini API Key")}
@@ -348,6 +398,17 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
                 : t("settings.models.cloud.saveOnly", "保存")}
             </Button>
           </div>
+
+          {apiKeyDraft.trim() &&
+            !isKeyFormatValid(apiKeyDraft) &&
+            !customBaseUrlDraft.trim() && (
+              <p className="text-[11px] text-amber-500/90 font-medium">
+                {t(
+                  "settings.models.cloud.warnings.keyFormatNote",
+                  "格式提示：标准的 Google Gemini API Key 通常为以 'AIzaSy' 开头的 39 位字符",
+                )}
+              </p>
+            )}
 
           {/* Validation Feedback */}
           {validationResult && (

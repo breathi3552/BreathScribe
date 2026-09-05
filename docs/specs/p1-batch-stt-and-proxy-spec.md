@@ -804,13 +804,15 @@ for (id, name) in &inputs.downloaded_models {
 
 ### 3.7 新增 Tauri 命令清单
 
-| 命令名称                    | 参数                                   | 返回值                | 说明                                                                         |
-| --------------------------- | -------------------------------------- | --------------------- | ---------------------------------------------------------------------------- |
-| `test_proxy_connectivity`   | `settings: Option<ProxySettings>`      | `Result<u64, String>` | 测试代理连通性并返回 RTT 往返毫秒数                                          |
-| `update_proxy_settings`     | `settings: ProxySettings`              | `Result<(), String>`  | 更新代理配置并即刻热重载 Client                                              |
-| `set_transcription_mode`    | `mode: TranscriptionMode`              | `Result<(), String>`  | 切换本地与云端引擎模式                                                       |
-| `set_cloud_stt_api_key`     | `provider_id: String, api_key: String` | `Result<(), String>`  | 设置指定服务商的 API Key 并持久化                                            |
-| `complete_onboarding_cloud` | 无                                     | `Result<(), String>`  | 开屏跳过专用：原子更新 `onboarding_completed=true`、`mode=Cloud`、`model=""` |
+| 命令名称                          | 参数                                                                            | 返回值                | 说明                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------- |
+| `test_proxy_connectivity`         | `settings: Option<ProxySettings>`                                               | `Result<u64, String>` | 测试代理连通性并返回 RTT 往返毫秒数                                          |
+| `update_proxy_settings`           | `settings: ProxySettings`                                                       | `Result<(), String>`  | 更新代理配置并即刻热重载 Client                                              |
+| `set_transcription_mode`          | `mode: TranscriptionMode`                                                       | `Result<(), String>`  | 切换本地与云端引擎模式                                                       |
+| `set_cloud_stt_api_key`           | `provider_id: String, api_key: String`                                          | `Result<(), String>`  | 设置指定服务商的 API Key 并持久化                                            |
+| `set_cloud_stt_provider_settings` | `settings_input: CloudSttProviderSettings`                                      | `Result<(), String>`  | 更新指定云端服务商的模型与自定义 Base URL 配置并持久化                       |
+| `test_cloud_stt_connection`       | `provider_id: String, api_key: Option<String>, custom_base_url: Option<String>` | `Result<(), String>`  | 测试指定云端服务商凭据与 API 端点的连通性                                    |
+| `complete_onboarding_cloud`       | 无                                                                              | `Result<(), String>`  | 开屏跳过专用：原子更新 `onboarding_completed=true`、`mode=Cloud`、`model=""` |
 
 ---
 

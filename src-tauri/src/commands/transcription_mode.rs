@@ -77,7 +77,7 @@ pub async fn test_cloud_stt_connection(
             .ok_or_else(|| "API Key 为空，请输入 API Key 进行测试".to_string())?,
     };
 
-    let base_url = custom_base_url
+    let custom_base = custom_base_url
         .as_deref()
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
@@ -88,37 +88,22 @@ pub async fn test_cloud_stt_connection(
                 .and_then(|p| p.custom_base_url.as_deref())
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
-        })
-        .unwrap_or("https://generativelanguage.googleapis.com");
+        });
 
     let network_manager = app
         .try_state::<Arc<NetworkManager>>()
         .ok_or_else(|| "网络管理器未初始化".to_string())?;
     let client = network_manager.client().await;
 
-    let clean_base = base_url.trim_end_matches('/');
-    let test_url = if clean_base.ends_with("/v1beta") {
-        format!("{}/models?key={}", clean_base, key)
-    } else {
-        format!("{}/v1beta/models?key={}", clean_base, key)
-    };
-
-    let response = client
-        .get(&test_url)
-        .send()
-        .await
-        .map_err(|e| format!("网络请求发送失败: {}", e))?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_default();
-        if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-            if let Some(msg) = err_json["error"]["message"].as_str() {
-                return Err(format!("验证失败 (HTTP {}): {}", status, msg));
-            }
+    match provider_id.as_str() {
+        "gemini" => {
+            crate::providers::gemini::GeminiProvider::test_connection(
+                &client,
+                &key,
+                custom_base,
+            )
+            .await
         }
-        return Err(format!("验证失败 HTTP {}: {}", status, error_text));
+        unknown => Err(format!("未知的云端转写提供商: {}", unknown)),
     }
-
-    Ok(())
 }

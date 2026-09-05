@@ -217,6 +217,16 @@
           "emptyKey": "请先填写 Gemini API Key",
           "validationFailed": "验证失败: {{error}}",
           "baseUrlSaveFailed": "保存自定义地址失败"
+        },
+        "providerSelectTitle": "服务提供商",
+        "providerSelectDesc": "选择接入的云端大模型服务商（首阶段支持 Google Gemini）",
+        "models": {
+          "flashDesc": "极速响应、高准确率，语音转写推荐基准",
+          "proDesc": "超强大脑、复杂语境与专业术语更强"
+        },
+        "warnings": {
+          "keyFormatHint": "提示：标准的 Google Gemini API Key 通常以 'AIzaSy' 开头（长度 39 位）",
+          "keyFormatNote": "格式提示：标准的 Google Gemini API Key 通常为以 'AIzaSy' 开头的 39 位字符"
         }
       }
     },

@@ -5,6 +5,37 @@ use tauri::AppHandle;
 
 use crate::network::NetworkManager;
 use crate::providers::{BatchTranscriptionProvider, TranscriptionOptions};
+#[derive(serde::Deserialize, Debug)]
+pub struct GeminiResponse {
+    pub candidates: Option<Vec<GeminiCandidate>>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct GeminiCandidate {
+    pub content: Option<GeminiContent>,
+    #[serde(rename = "finishReason")]
+    pub finish_reason: Option<String>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct GeminiContent {
+    pub parts: Option<Vec<GeminiPart>>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct GeminiPart {
+    pub text: Option<String>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct GeminiErrorResponse {
+    error: Option<GeminiErrorDetail>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct GeminiErrorDetail {
+    message: Option<String>,
+}
 
 pub struct GeminiProvider {
     network_manager: Arc<NetworkManager>,
@@ -62,6 +93,48 @@ impl GeminiProvider {
                 base, model, api_key
             )
         }
+    }
+
+    /// 统一解析 Gemini API 的错误响应文本
+    pub fn parse_api_error(status: reqwest::StatusCode, error_text: &str) -> String {
+        if let Ok(err_json) = serde_json::from_str::<GeminiErrorResponse>(error_text) {
+            if let Some(msg) = err_json.error.and_then(|e| e.message) {
+                return format!("Gemini API 错误 (HTTP {}): {}", status, msg);
+            }
+        }
+        format!("Gemini API 返回错误 HTTP {}: {}", status, error_text)
+    }
+
+    /// 测试与 Gemini 接口的连通性与 API Key 有效性
+    pub async fn test_connection(
+        client: &reqwest::Client,
+        api_key: &str,
+        custom_base_url: Option<&str>,
+    ) -> Result<(), String> {
+        let base_url = custom_base_url
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("https://generativelanguage.googleapis.com");
+        let clean_base = base_url.trim_end_matches('/');
+        let test_url = if clean_base.ends_with("/v1beta") {
+            format!("{}/models?key={}", clean_base, api_key)
+        } else {
+            format!("{}/v1beta/models?key={}", clean_base, api_key)
+        };
+
+        let response = client
+            .get(&test_url)
+            .send()
+            .await
+            .map_err(|e| format!("网络请求发送失败: {}", e))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(Self::parse_api_error(status, &error_text));
+        }
+
+        Ok(())
     }
 }
 
@@ -154,52 +227,34 @@ impl BatchTranscriptionProvider for GeminiProvider {
         let status = response.status();
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                if let Some(msg) = err_json["error"]["message"].as_str() {
-                    return Err(format!("Gemini API 错误 (HTTP {}): {}", status, msg));
-                }
-            }
-            return Err(format!(
-                "Gemini API 返回错误 HTTP {}: {}",
-                status, error_text
-            ));
+            return Err(Self::parse_api_error(status, &error_text));
         }
 
-        let body: serde_json::Value = response
+        let body: GeminiResponse = response
             .json()
             .await
             .map_err(|e| format!("解析 Gemini 响应 JSON 失败: {}", e))?;
 
         // 4. 提取输出文本
-        let candidate_part = body
-            .get("candidates")
-            .and_then(|c| c.as_array())
-            .and_then(|arr| arr.first())
-            .and_then(|c| c.get("content"))
-            .and_then(|cnt| cnt.get("parts"))
-            .and_then(|p| p.as_array())
-            .and_then(|arr| arr.first())
-            .and_then(|part| part.get("text"))
-            .and_then(|t| t.as_str());
-
-        let text = match candidate_part {
-            Some(t) => t.trim().to_string(),
-            None => {
-                // 若由于静音等原因未返回文字，但正常结束，返回空字符串
-                if let Some(candidates) = body.get("candidates").and_then(|c| c.as_array()) {
-                    if let Some(first) = candidates.first() {
-                        if let Some(finish_reason) = first.get("finishReason").and_then(|r| r.as_str()) {
-                            if finish_reason == "STOP" || finish_reason == "MAX_TOKENS" {
-                                return Ok(String::new());
-                            }
-                        }
-                    }
-                }
-                return Err("Gemini 未返回有效的转写文本".to_string());
+        if let Some(candidate) = body.candidates.as_deref().and_then(|c| c.first()) {
+            if let Some(text) = candidate
+                .content
+                .as_ref()
+                .and_then(|c| c.parts.as_deref())
+                .and_then(|p| p.first())
+                .and_then(|part| part.text.as_deref())
+            {
+                return Ok(text.trim().to_string());
             }
-        };
 
-        Ok(text)
+            if let Some(finish_reason) = candidate.finish_reason.as_deref() {
+                if finish_reason == "STOP" || finish_reason == "MAX_TOKENS" {
+                    return Ok(String::new());
+                }
+            }
+        }
+
+        Err("Gemini 未返回有效的转写文本".to_string())
     }
 
     fn provider_id(&self) -> &'static str {
@@ -261,6 +316,44 @@ mod tests {
         assert_eq!(
             url3,
             "https://custom-proxy.internal/v1beta/models/gemini-2.5-flash:generateContent?key=my-key"
+        );
+    }
+
+    #[test]
+    fn test_parse_api_error() {
+        let status = reqwest::StatusCode::BAD_REQUEST;
+        let json_err = r#"{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}"#;
+        let formatted = GeminiProvider::parse_api_error(status, json_err);
+        assert!(formatted.contains("API key not valid"));
+        assert!(formatted.contains("400"));
+
+        let raw_err = "Gateway timeout";
+        let raw_formatted = GeminiProvider::parse_api_error(reqwest::StatusCode::GATEWAY_TIMEOUT, raw_err);
+        assert!(raw_formatted.contains("504"));
+        assert!(raw_formatted.contains("Gateway timeout"));
+    }
+
+    #[test]
+    fn test_gemini_response_deserialization() {
+        let json = r#"{
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            { "text": "This is a transcribed test." }
+                        ]
+                    },
+                    "finishReason": "STOP"
+                }
+            ]
+        }"#;
+        let res: GeminiResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            res.candidates.as_ref().unwrap()[0]
+                .content.as_ref().unwrap()
+                .parts.as_ref().unwrap()[0]
+                .text.as_deref().unwrap(),
+            "This is a transcribed test."
         );
     }
 }

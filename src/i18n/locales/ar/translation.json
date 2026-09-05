@@ -712,6 +712,16 @@
           "emptyKey": "Please enter a Gemini API Key first",
           "validationFailed": "Validation failed: {{error}}",
           "baseUrlSaveFailed": "Failed to save custom API URL"
+        },
+        "providerSelectTitle": "Service Provider",
+        "providerSelectDesc": "Select cloud speech recognition service provider (Google Gemini supported in Phase 1)",
+        "models": {
+          "flashDesc": "Fast response, high accuracy, recommended for speech recognition",
+          "proDesc": "Superior reasoning capability, best for complex context and specialized terms"
+        },
+        "warnings": {
+          "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' (39 characters)",
+          "keyFormatNote": "Format hint: Standard Google Gemini API Keys are typically 39 characters starting with 'AIzaSy'"
         }
       }
     }

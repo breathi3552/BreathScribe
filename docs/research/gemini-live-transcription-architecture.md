@@ -58,7 +58,7 @@ sequenceDiagram
     App->>WS: TCP + TLS 握手 (经 HTTP/SOCKS5 代理)
     App->>WS: 1. Setup 帧 (配置模型, 语言, mode=SMART)
     App->>Overlay: 切换 Overlay 为 Live 展开态 (显示光标与波形)
-    
+
     loop 持续录音 (每 100ms)
         App->>WS: 2. RealtimeInput (Raw 16-bit 16kHz PCM Base64)
         opt 毫秒级推测事件
@@ -80,6 +80,7 @@ sequenceDiagram
 ```
 
 #### (1) 连接握手建立后的首帧（Setup Message）
+
 连接一经建立，客户端必须立即发送初始化握手报文：
 
 ```json
@@ -97,15 +98,18 @@ sequenceDiagram
   }
 }
 ```
+
 - `responseModalities`: 固定设为 `["TEXT"]`，告知服务端这是一个纯语音识别流，不调用大模型生成语音回复；
 - `languageCodes`: `[]` 开启自动语种识别（支持 85+ 语言与混合说话），或填入用户在 Handy 设置的单语言（如 `["zh-CN"]`）；
 - `mode`: `"SMART"` 启用智能去语气词（移除 “嗯/啊/这个”）、自动修正口误、标点及数字符号规范化；
 - `customVocabulary`: 可直接把 Handy 设置中的自定义热词列表传入（最高支持 1,000 个词汇）。
 
 #### (2) 实时推流帧（Realtime Audio Input）
+
 - **采样规范**：Raw 16-bit Mono 16kHz PCM（Little-Endian）；
 - **发送频率**：推荐每 100ms 发送一次（即 1600 个采样点 = 3200 字节二进制 PCM）；
 - **报文格式**：
+
 ```json
 {
   "realtimeInput": {
@@ -118,7 +122,9 @@ sequenceDiagram
 ```
 
 #### (3) 录音终止帧（Audio Stream End）
+
 当用户松开快捷键时，客户端无需强行中断 WebSocket，只需发送一个结束信号，触发服务端完成最终分句与字词收尾：
+
 ```json
 {
   "realtimeInput": {
@@ -128,6 +134,7 @@ sequenceDiagram
 ```
 
 #### (4) 服务端下行推流事件（Server Content Events）
+
 ```json
 {
   "serverContent": {
@@ -148,6 +155,7 @@ sequenceDiagram
 通过阅读 Handy 现有针对 `nemotron-3.5-asr-streaming-0.6b` 和 `parakeet` 的实现，其流式转写体系已经具备了成熟的分层架构：
 
 ### 1. 音频旁路流通道（`StreamRouter`）
+
 - 位于 `src-tauri/src/managers/transcription.rs`：
   - `StreamRouter` 持有一个 `Mutex<Option<mpsc::Sender<StreamCmd>>>` 和原子标记 `open: Arc<AtomicBool>`；
   - `AudioRecorder`（`src-tauri/src/audio_toolkit/audio/recorder.rs`）在录音回调中直接持有 `StreamRouter` 的 `Arc` 引用：
@@ -163,6 +171,7 @@ sequenceDiagram
   - 当流开启时，每一帧 16kHz `&[f32]` 音频被即时推入 `StreamCmd::Feed(Vec<f32>)` 队列。
 
 ### 2. 流生命周期控制（`start_stream` / `finalize_stream` / `cancel_stream`）
+
 - **启动流（`start_stream`）**：
   在 `actions.rs` 捕获到按键按下（`start`）时触发：
   - 打开 `StreamRouter`，重置流状态；
@@ -177,12 +186,15 @@ sequenceDiagram
   用户按下取消快捷键或录音为空时，清空通道并重置状态。
 
 ### 3. 前端实时悬浮窗契约（`StreamTextEvent`）
+
 - 后端通过 `app.emit("stream-text-event", StreamTextEvent { committed, tentative })` 广播事件；
 - 前端 `src/overlay/RecordingOverlay.tsx` 直接绑定：
   ```tsx
   <div className="stext-cap">
     <p>
-      <span className="committed">{streamText.committed ? streamText.committed + " " : ""}</span>
+      <span className="committed">
+        {streamText.committed ? streamText.committed + " " : ""}
+      </span>
       <span className="tentative">{streamText.tentative}</span>
       {!working && <span className="scaret" />}
     </p>
@@ -284,6 +296,7 @@ pub async fn connect_gemini_websocket(
 ### 4. 文本事件状态机（State Machine）
 
 在接收 WebSocket 下行帧的后台协程中，维护两个文本缓冲区：
+
 - `committed_text: String`：保存历次 `inputTranscription` 确认文本的拼接结果；
 - 当收到 `interimInputTranscription { text }` 时：
   - 调用 `text_sink.emit_text(committed_text.clone(), text)`；
@@ -312,9 +325,9 @@ pub async fn connect_gemini_websocket(
 
 ## 六、实施落地路线清单
 
-| 阶段 | 模块 | 实施任务 |
-|---|---|---|
-| **Phase 2.1** | **依赖与底层协议** | 1. 引入 `tokio-tungstenite` 与 WebSocket 代理握手辅助函数；<br>2. 封装 `GeminiLiveClient`，打通鉴权、Setup 与 Ping/Pong 链路。 |
-| **Phase 2.2** | **转写路由解耦** | 1. 定义 `StreamingTranscriptionProvider` 与 `StreamingSession` Trait；<br>2. 在 `TranscriptionRouter` 中添加流式统一调度入口，打通本地与云端模型能力检测。 |
-| **Phase 2.3** | **录音动作流接入** | 1. 改造 `actions.rs`，在云端模式选择 `gemini-3.5-transcribe-live` 时开启流式生命周期；<br>2. 桥接 `StreamRouter` 的 PCM 数据至 `StreamingSession`。 |
-| **Phase 2.4** | **配置与 UI 适配** | 1. 在模型选项中增加 `gemini-3.5-transcribe-live`；<br>2. 验证流式打字、自动粘贴与网络异常自动回退批处理的端到端体验。 |
+| 阶段          | 模块               | 实施任务                                                                                                                                                   |
+| ------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase 2.1** | **依赖与底层协议** | 1. 引入 `tokio-tungstenite` 与 WebSocket 代理握手辅助函数；<br>2. 封装 `GeminiLiveClient`，打通鉴权、Setup 与 Ping/Pong 链路。                             |
+| **Phase 2.2** | **转写路由解耦**   | 1. 定义 `StreamingTranscriptionProvider` 与 `StreamingSession` Trait；<br>2. 在 `TranscriptionRouter` 中添加流式统一调度入口，打通本地与云端模型能力检测。 |
+| **Phase 2.3** | **录音动作流接入** | 1. 改造 `actions.rs`，在云端模式选择 `gemini-3.5-transcribe-live` 时开启流式生命周期；<br>2. 桥接 `StreamRouter` 的 PCM 数据至 `StreamingSession`。        |
+| **Phase 2.4** | **配置与 UI 适配** | 1. 在模型选项中增加 `gemini-3.5-transcribe-live`；<br>2. 验证流式打字、自动粘贴与网络异常自动回退批处理的端到端体验。                                      |

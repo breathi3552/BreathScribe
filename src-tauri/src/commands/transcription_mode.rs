@@ -23,7 +23,9 @@ pub fn set_transcription_mode(app: AppHandle, mode: TranscriptionMode) -> Result
     if mode == TranscriptionMode::Local && previous_mode != TranscriptionMode::Local {
         let current_settings = get_settings(&app);
         if !current_settings.selected_model.is_empty() {
-            if let Some(tm) = app.try_state::<Arc<crate::managers::transcription::TranscriptionManager>>() {
+            if let Some(tm) =
+                app.try_state::<Arc<crate::managers::transcription::TranscriptionManager>>()
+            {
                 tm.initiate_model_load();
             }
         }

@@ -13,6 +13,7 @@ mod input;
 mod llm_client;
 mod managers;
 mod memory;
+pub mod migration;
 pub mod network;
 mod overlay;
 mod paste_tx;
@@ -922,6 +923,14 @@ pub fn run(cli_args: CliArgs) {
         .manage(cli_args.clone())
         .setup(move |app| {
             specta_builder.mount_events(app);
+            // Run one-time non-destructive data migration from legacy installation (ADR-0005)
+            if !portable::is_portable() {
+                if let Ok(target_dir) = portable::app_data_dir(app.handle()) {
+                    if let Err(e) = migration::migrate_if_needed(&target_dir, None) {
+                        eprintln!("[migration] warning: data migration failed: {}", e);
+                    }
+                }
+            }
 
             // Headless one-shot path (`--transcribe-file` / `--list-devices` /
             // `--list-models`): initialize only what transcription needs — the

@@ -74,16 +74,6 @@
             inherit system;
             overlays = [
               bun2nix.overlays.default
-              (final: prev: {
-                fetchurl =
-                  args:
-                  prev.fetchurl (
-                    args
-                    // {
-                      curlOpts = (args.curlOpts or "") + " -A BreathScribe-Nix/0.9.6";
-                    }
-                  );
-              })
             ];
           };
           lib = pkgs.lib;
@@ -107,11 +97,10 @@
 
             cargoLock = {
               lockFile = ./src-tauri/Cargo.lock;
-              # Automatically fetch git dependencies using builtins.fetchGit.
-              # This eliminates the need for manual outputHashes that had to be
-              # updated every time a git dependency changed in Cargo.lock.
-              # Safe for standalone flakes (not allowed in nixpkgs, it is needed something like crate2nix).
               allowBuiltinFetchGit = true;
+              extraRegistries = {
+                "https://github.com/rust-lang/crates.io-index" = "https://static.crates.io/crates";
+              };
             };
 
             postPatch = ''

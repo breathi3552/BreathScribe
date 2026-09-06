@@ -731,9 +731,9 @@
       "acknowledgments": {
         "title": "Acknowledgments",
         "handy": {
-          "title": "Handy",
+          "title": "Handy Cloud",
           "description": "Open-source speech-to-text desktop application by @cjpais",
-          "details": "BreathScribe is a fork of Handy, extending it with cloud models and proxy capabilities. Huge thanks to CJ Pais and all contributors of the original Handy project."
+          "details": "BreathScribe is a fork of Handy Cloud, extending it with cloud models and proxy capabilities. Huge thanks to CJ Pais and all contributors of the original Handy Cloud project."
         },
         "ggml": {
           "title": "ggml",

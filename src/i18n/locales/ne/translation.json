@@ -731,9 +731,9 @@
       "acknowledgments": {
         "title": "आभार",
         "handy": {
-          "title": "Handy",
+          "title": "Handy Cloud",
           "description": "@cjpais द्वारा विकसित खुला स्रोत डेस्कटप स्पिच-टु-टेक्स्ट अनुप्रयोग",
-          "details": "BreathScribe Handy को एक फोर्क हो, जसलाई क्लाउड मोडेल र प्रोक्सी क्षमताहरूसँग विस्तार गरिएको छ। CJ Pais र मूल Handy परियोजनाका सबै योगदानकर्ताहरूलाई धेरै धेरै धन्यवाद।"
+          "details": "BreathScribe Handy Cloud को एक फोर्क हो, जसलाई क्लाउड मोडेल र प्रोक्सी क्षमताहरूसँग विस्तार गरिएको छ। CJ Pais र मूल Handy Cloud परियोजनाका सबै योगदानकर्ताहरूलाई धेरै धेरै धन्यवाद।"
         },
         "ggml": {
           "title": "ggml",

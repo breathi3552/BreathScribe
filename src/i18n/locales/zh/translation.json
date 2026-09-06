@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "致谢",
         "handy": {
-          "title": "Handy",
+          "title": "Handy Cloud",
           "description": "由 @cjpais 开源的桌面语音转文字应用",
-          "details": "BreathScribe 是 Handy 的衍生分支，扩展了云端大模型通道与网络代理等能力。特别感谢 CJ Pais 及原 Handy 项目的所有贡献者。"
+          "details": "BreathScribe 是 Handy Cloud 的衍生分支，扩展了云端大模型通道与网络代理等能力。特别感谢 CJ Pais 及原 Handy Cloud 项目的所有贡献者。"
         },
         "ggml": {
           "title": "ggml",

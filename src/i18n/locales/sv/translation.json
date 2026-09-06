@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "Tack till",
         "handy": {
-          "title": "Handy",
+          "title": "Handy Cloud",
           "description": "Skrivbordsapplikation för tal-till-text med öppen källkod av @cjpais",
-          "details": "BreathScribe är en förgrening av Handy, utökad med molnmodeller och proxyfunktioner. Stort tack till CJ Pais och alla bidragsgivare till det ursprungliga Handy-projektet."
+          "details": "BreathScribe är en förgrening av Handy Cloud, utökad med molnmodeller och proxyfunktioner. Stort tack till CJ Pais och alla bidragsgivare till det ursprungliga Handy-projektet."
         },
         "ggml": {
           "title": "ggml",

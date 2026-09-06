@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "תודות",
         "handy": {
-          "title": "Handy",
+          "title": "Handy Cloud",
           "description": "אפליקציית שולחן עבודה בקוד פתוח להמרת דיבור לטקסט מאת @cjpais",
-          "details": "BreathScribe הוא פיצול של Handy, המרחיב אותו עם מודלים בענן ויכולות פרוקסי. תודה רבה ל-CJ Pais ולכל התורמים לפרויקט Handy המקורי."
+          "details": "BreathScribe הוא פיצול של Handy Cloud, המרחיב אותו עם מודלים בענן ויכולות פרוקסי. תודה רבה ל-CJ Pais ולכל התורמים לפרויקט Handy Cloud המקורי."
         },
         "ggml": {
           "title": "ggml",

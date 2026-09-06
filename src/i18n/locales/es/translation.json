@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "Reconocimientos",
         "handy": {
-          "title": "Handy",
+          "title": "Handy Cloud",
           "description": "Aplicación de escritorio de voz a texto de código abierto por @cjpais",
-          "details": "BreathScribe es una bifurcación de Handy, que lo amplía con modelos en la nube y capacidades de proxy. Muchas gracias a CJ Pais y a todos los colaboradores del proyecto Handy original."
+          "details": "BreathScribe es una bifurcación de Handy Cloud, que lo amplía con modelos en la nube y capacidades de proxy. Muchas gracias a CJ Pais y a todos los colaboradores del proyecto Handy Cloud original."
         },
         "ggml": {
           "title": "ggml",

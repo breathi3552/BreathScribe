@@ -563,6 +563,8 @@ async fn run_gemini_live_worker<S>(
         tentative_text: String,
         session_error: Option<String>,
         turn_completed: bool,
+        finalizing: bool,
+        has_received_input_after_finalize: bool,
     }
 
     let state = Arc::new(parking_lot::Mutex::new(LiveState {
@@ -570,8 +572,9 @@ async fn run_gemini_live_worker<S>(
         tentative_text: String::new(),
         session_error: None,
         turn_completed: false,
+        finalizing: false,
+        has_received_input_after_finalize: false,
     }));
-
     let turn_notify = Arc::new(tokio::sync::Notify::new());
     let (sink_tx, mut sink_rx) =
         tokio::sync::mpsc::channel::<tokio_tungstenite::tungstenite::Message>(64);
@@ -623,6 +626,7 @@ async fn run_gemini_live_worker<S>(
                                             (s.committed_text.clone(), t)
                                         };
                                         text_sink_receiver.emit_text(committed, tentative);
+                                        turn_notify_receiver.notify_waiters();
                                     }
                                 }
                                 if let Some(input) = content.input_transcription {
@@ -631,9 +635,13 @@ async fn run_gemini_live_worker<S>(
                                             let mut s = state_receiver.lock();
                                             s.committed_text.push_str(&c);
                                             s.tentative_text.clear();
+                                            if s.finalizing {
+                                                s.has_received_input_after_finalize = true;
+                                            }
                                             s.committed_text.clone()
                                         };
                                         text_sink_receiver.emit_text(committed, String::new());
+                                        turn_notify_receiver.notify_waiters();
                                     }
                                 }
                                 if content.turn_complete.unwrap_or(false) {
@@ -704,7 +712,8 @@ async fn run_gemini_live_worker<S>(
                             pcm_buffer.extend_from_slice(&pcm_bytes);
                         }
 
-                        if !pcm_buffer.is_empty() {
+                        let had_pending_audio = !pcm_buffer.is_empty();
+                        if had_pending_audio {
                             let chunk = std::mem::take(&mut pcm_buffer);
                             let base64_pcm = BASE64.encode(&chunk);
                             let input_frame = GeminiLiveRealtimeInputFrame {
@@ -735,24 +744,48 @@ async fn run_gemini_live_worker<S>(
                                 .await;
                         }
 
-                        let finalize_deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+                        let had_pending_work = {
+                            let mut s = state.lock();
+                            s.finalizing = true;
+                            had_pending_audio || !s.tentative_text.trim().is_empty()
+                        };
+
+                        let finalize_deadline =
+                            tokio::time::Instant::now() + Duration::from_millis(600);
                         while tokio::time::Instant::now() < finalize_deadline {
-                            if state.lock().turn_completed
-                                || state.lock().session_error.is_some()
-                                || receiver_handle.is_finished()
                             {
+                                let s = state.lock();
+                                if s.turn_completed
+                                    || s.session_error.is_some()
+                                    || receiver_handle.is_finished()
+                                {
+                                    break;
+                                }
+                                if s.tentative_text.is_empty()
+                                    && (!had_pending_work || s.has_received_input_after_finalize)
+                                {
+                                    break;
+                                }
+                            }
+                            let remaining = finalize_deadline
+                                .saturating_duration_since(tokio::time::Instant::now());
+                            if remaining.is_zero() {
                                 break;
                             }
-                            let remaining = finalize_deadline - tokio::time::Instant::now();
                             let _ = tokio::time::timeout(remaining, turn_notify.notified()).await;
                         }
 
-                        drop(sink_tx);
-                        let _ = writer_handle.await;
                         receiver_handle.abort();
                         let _ = receiver_handle.await;
+                        drop(sink_tx);
+                        let _ = writer_handle.await;
                         let final_state = state.lock();
-                        let trimmed = final_state.committed_text.trim().to_string();
+                        let mut result = final_state.committed_text.clone();
+                        let tentative = final_state.tentative_text.trim();
+                        if !tentative.is_empty() && !result.ends_with(tentative) {
+                            result.push_str(tentative);
+                        }
+                        let trimmed = result.trim().to_string();
                         if !trimmed.is_empty() {
                             let _ = reply_tx.send(Ok(trimmed));
                         } else if let Some(err) = &final_state.session_error {
@@ -763,10 +796,10 @@ async fn run_gemini_live_worker<S>(
                         return;
                     }
                     Some(SessionCmd::Cancel) | None => {
-                        drop(sink_tx);
-                        let _ = writer_handle.await;
                         receiver_handle.abort();
                         let _ = receiver_handle.await;
+                        drop(sink_tx);
+                        let _ = writer_handle.await;
                         return;
                     }
                 }
@@ -1366,19 +1399,58 @@ mod tests {
         } else {
             panic!("Expected audioStreamEnd frame");
         }
-
-        let turn_complete_json = r#"{"serverContent":{"turnComplete":true}}"#;
-        server_ws
-            .send(Message::Binary(
-                turn_complete_json.as_bytes().to_vec().into(),
-            ))
-            .await
-            .unwrap();
-
         let final_result = reply_rx.await.unwrap().unwrap();
         assert_eq!(final_result, "hello, world!");
 
         worker_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_gemini_live_worker_finalize_without_turn_complete() {
+        use tokio_tungstenite::tungstenite::protocol::Role;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+        let client_ws =
+            tokio_tungstenite::WebSocketStream::from_raw_socket(client_io, Role::Client, None)
+                .await;
+        let mut server_ws =
+            tokio_tungstenite::WebSocketStream::from_raw_socket(server_io, Role::Server, None)
+                .await;
+
+        let (_audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
+        let emitted = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let sink = Arc::new(MockSink {
+            emitted: Arc::clone(&emitted),
+        });
+
+        let _worker_handle = tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
+
+        let final_text_json = r#"{"serverContent":{"inputTranscription":{"text":"instant transcription"}}}"#;
+        server_ws
+            .send(Message::Text(final_text_json.into()))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        let start = tokio::time::Instant::now();
+        cmd_tx.send(SessionCmd::Finalize(reply_tx)).await.unwrap();
+
+        let end_msg = server_ws.next().await.unwrap().unwrap();
+        if let Message::Text(text) = end_msg {
+            assert!(text.contains("audioStreamEnd"));
+        } else {
+            panic!("Expected audioStreamEnd frame");
+        }
+
+        // Server sends NO turnComplete (real gemini-3.5-transcribe-live behavior)
+        let final_result = reply_rx.await.unwrap().unwrap();
+        let elapsed = start.elapsed();
+        assert_eq!(final_result, "instant transcription");
+        assert!(elapsed < Duration::from_millis(500), "Finalize took too long: {:?}", elapsed);
     }
 
     #[test]

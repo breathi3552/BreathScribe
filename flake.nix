@@ -74,11 +74,6 @@
             inherit system;
             overlays = [
               bun2nix.overlays.default
-              (final: prev: {
-                fetchurl = args: prev.fetchurl (args // {
-                  curlOpts = (args.curlOpts or "") + " -A 'HandyCI (contact: team@handy.computer)'";
-                });
-              })
             ];
           };
           lib = pkgs.lib;

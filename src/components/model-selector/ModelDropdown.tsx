@@ -48,20 +48,20 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
           isCloudMode ? "bg-logo-primary/10 text-logo-primary" : ""
         }`}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <Cloud className="w-4 h-4 text-sky-400 shrink-0" />
-            <div>
-              <div className="text-sm font-medium text-text/80">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-text/80 truncate">
                 {cloudModelName || formatCloudModelName(DEFAULT_CLOUD_MODEL_ID)}
               </div>
-              <div className="text-xs text-text/40 italic pe-4">
+              <div className="text-xs text-text/40 italic truncate">
                 {t("modelSelector.cloudProviderGoogle")}
               </div>
             </div>
           </div>
           {isCloudMode && (
-            <div className="text-xs text-logo-primary font-medium">
+            <div className="text-xs text-logo-primary font-medium shrink-0 ms-2">
               {t("modelSelector.active")}
             </div>
           )}
@@ -87,9 +87,9 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
                   : ""
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-text/80">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-sm text-text/80 truncate">
                     {getTranslatedModelName(model, t)}
                     {model.is_custom && (
                       <span className="ms-1.5 text-[10px] font-medium text-text/40 uppercase">
@@ -102,12 +102,12 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-text/40 italic pe-4">
+                  <div className="text-xs text-text/40 italic truncate">
                     {getTranslatedModelDescription(model, t)}
                   </div>
                 </div>
-                {currentModelId === model.id && (
-                  <div className="text-xs text-logo-primary">
+                {!isCloudMode && currentModelId === model.id && (
+                  <div className="text-xs text-logo-primary font-medium shrink-0 ms-2">
                     {t("modelSelector.active")}
                   </div>
                 )}

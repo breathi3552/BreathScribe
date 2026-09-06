@@ -148,7 +148,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* 1. Proxy Mode Selector */}
       <SettingContainer
         title={t("settings.advanced.proxy.mode.title")}
         description={t("settings.advanced.proxy.mode.description")}
@@ -161,8 +160,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
           className="w-56"
         />
       </SettingContainer>
-
-      {/* 2. Manual Configuration Form (Expanded when mode == manual) */}
       {draft.mode === "manual" && (
         <div className="mx-4 p-4 rounded-lg bg-mid-gray/5 border border-mid-gray/20 space-y-4 transition-all">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

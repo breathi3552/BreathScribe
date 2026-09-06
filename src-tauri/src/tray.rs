@@ -545,11 +545,11 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
                     "gemini-2.5-pro" => "Gemini 2.5 Pro",
                     other => other,
                 };
-                (model_id.as_str(), format!("☁️ {}", name))
+                (model_id.as_str(), name.to_string())
             }
             _ => (
                 DEFAULT_CLOUD_STT_MODEL_ID,
-                "☁️ Gemini 3.5 Transcribe".to_string(),
+                "Gemini 3.5 Transcribe".to_string(),
             ),
         };
 
@@ -566,7 +566,6 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
 
         let model_submenu = Submenu::with_id(app, "model_submenu", &submenu_label, true)?;
 
-        // 1. 置顶云端 STT 选项
         let cloud_item_id = format!("transcription_mode:cloud:{}", cloud_model_id);
         let cloud_item = CheckMenuItem::with_id(
             app,
@@ -578,7 +577,6 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         )?;
         model_submenu.append(&cloud_item)?;
 
-        // 2. 追加本地模型列表
         for (id, name) in &inputs.downloaded_models {
             let is_local_active = !is_cloud_active && (*id == inputs.selected_model);
             let item_id = format!("model_select:{}", id);

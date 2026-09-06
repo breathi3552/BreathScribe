@@ -114,7 +114,7 @@ pub async fn test_cloud_stt_connection(
             .get(&provider_id)
             .map(|k| k.trim().to_string())
             .filter(|k| !k.is_empty())
-            .ok_or_else(|| "API Key 为空，请输入 API Key 进行测试".to_string())?,
+            .ok_or_else(|| "API key is empty".to_string())?,
     };
 
     let custom_base = custom_base_url
@@ -132,7 +132,7 @@ pub async fn test_cloud_stt_connection(
 
     let network_manager = app
         .try_state::<Arc<NetworkManager>>()
-        .ok_or_else(|| "网络管理器未初始化".to_string())?;
+        .ok_or_else(|| "Network manager not initialized".to_string())?;
     let client = network_manager.client().await;
 
     match provider_id.as_str() {
@@ -140,7 +140,7 @@ pub async fn test_cloud_stt_connection(
             crate::providers::gemini::GeminiProvider::test_connection(&client, &key, custom_base)
                 .await
         }
-        unknown => Err(format!("未知的云端转写提供商: {}", unknown)),
+        unknown => Err(format!("Unknown cloud STT provider: {}", unknown)),
     }
 }
 

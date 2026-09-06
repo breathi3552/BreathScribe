@@ -16,7 +16,7 @@ use crate::settings::DEFAULT_CLOUD_STT_MODEL_ID;
 pub const GEMINI_LIVE_MODEL_ID: &str = "gemini-3.5-transcribe-live";
 pub const SAMPLES_PER_CHUNK: usize = 1600; // 100ms at 16kHz
 
-/// Gemini Live 客户端握手帧（Setup）
+/// Gemini Live client setup frame.
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct GeminiLiveSetupFrame {
     pub setup: GeminiLiveSetupConfig,
@@ -49,7 +49,7 @@ pub struct GeminiLiveInputAudioTranscription {
     pub custom_vocabulary: Option<Vec<String>>,
 }
 
-/// Gemini Live 实时音频推流或结束帧（Client Message）
+/// Gemini Live client realtime audio input frame.
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct GeminiLiveRealtimeInputFrame {
     #[serde(rename = "realtimeInput")]
@@ -71,11 +71,11 @@ pub struct GeminiLiveAudioData {
     pub mime_type: String,
 }
 
-/// Gemini Live 服务端握手完成报文
+/// Gemini Live server setup complete message.
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Default)]
 pub struct GeminiLiveSetupComplete {}
 
-/// Gemini Live 服务端下行消息契约
+/// Gemini Live server inbound message.
 #[derive(serde::Deserialize, Debug, Clone)]
 pub struct GeminiLiveServerMessage {
     #[serde(rename = "setupComplete")]
@@ -86,7 +86,7 @@ pub struct GeminiLiveServerMessage {
 }
 
 impl GeminiLiveServerMessage {
-    /// 统一解析 WebSocket 文本与二进制 JSON 报文
+    /// Parses WebSocket text and binary JSON frames.
     pub fn parse(msg: &tokio_tungstenite::tungstenite::Message) -> Option<Self> {
         match msg {
             tokio_tungstenite::tungstenite::Message::Text(text) => {
@@ -94,7 +94,7 @@ impl GeminiLiveServerMessage {
                     Ok(parsed) => Some(parsed),
                     Err(e) => {
                         log::warn!(
-                            "解析 Gemini Live 文本报文失败: {}, 原始报文: {}",
+                            "Failed to parse Gemini Live text message: {}, raw: {}",
                             e,
                             text.as_str()
                         );
@@ -109,7 +109,7 @@ impl GeminiLiveServerMessage {
                         let text_preview =
                             std::str::from_utf8(bytes.as_ref()).unwrap_or("<invalid utf-8>");
                         log::warn!(
-                            "解析 Gemini Live 二进制报文失败: {}, 原始报文: {}",
+                            "Failed to parse Gemini Live binary message: {}, raw: {}",
                             e,
                             text_preview
                         );
@@ -142,7 +142,7 @@ pub struct GeminiLiveError {
     pub code: Option<i32>,
     pub message: Option<String>,
 }
-/// Interactions API 请求体契约
+/// Interactions API request payload.
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct GeminiInteractionRequest {
     pub model: String,
@@ -151,7 +151,7 @@ pub struct GeminiInteractionRequest {
     pub generation_config: Option<GeminiInteractionGenerationConfig>,
 }
 
-/// Interactions API 多模态输入单元
+/// Interactions API input part.
 #[derive(serde::Serialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum GeminiInteractionInput {
@@ -161,20 +161,18 @@ pub enum GeminiInteractionInput {
     Text { text: String },
 }
 
-/// Interactions API 生成与转录配置
+/// Interactions API generation configuration.
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct GeminiInteractionGenerationConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transcription_config: Option<GeminiTranscriptionConfig>,
 }
 
-/// Interactions API 转录模式
+/// Interactions API transcription mode.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum GeminiTranscriptionMode {
-    /// 智能听写模式：自动过滤语气助词、口误修正与标点规整化（推荐）
     Smart,
-    /// 原始逐字稿模式
     Verbatim,
 }
 
@@ -184,14 +182,14 @@ impl Default for GeminiTranscriptionMode {
     }
 }
 
-/// 专用于语音转录的 transcription_config
+/// Transcription configuration for speech inputs.
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct GeminiTranscriptionConfig {
     pub language_codes: Vec<String>,
     pub mode: GeminiTranscriptionMode,
 }
 
-/// Interactions API 响应契约
+/// Interactions API response payload.
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct GeminiInteractionResponse {
     pub id: Option<String>,
@@ -237,7 +235,7 @@ impl GeminiProvider {
         }
     }
 
-    /// 在内存中将单声道音频样本列表编码为标准的 16kHz 16-bit Mono WAV 二进制数据
+    /// Encodes mono audio samples into 16kHz 16-bit mono WAV bytes.
     pub fn encode_wav_in_memory(samples: &[f32], sample_rate: u32) -> Result<Vec<u8>, String> {
         let mut cursor = std::io::Cursor::new(Vec::new());
         let spec = hound::WavSpec {
@@ -247,27 +245,27 @@ impl GeminiProvider {
             sample_format: hound::SampleFormat::Int,
         };
         let mut writer = hound::WavWriter::new(&mut cursor, spec)
-            .map_err(|e| format!("创建内存 WAV 写入器失败: {}", e))?;
+            .map_err(|e| format!("Failed to create in-memory WAV writer: {}", e))?;
 
         for &sample in samples {
-            // [-1.0, 1.0] 浮点截断并映射至 i16 范围
+            // Clamp to [-1.0, 1.0] and scale to i16 range
             let clamped = sample.max(-1.0).min(1.0);
             let scaled = (clamped * 32767.0).round() as i16;
             writer
                 .write_sample(scaled)
-                .map_err(|e| format!("写入 WAV 采样失败: {}", e))?;
+                .map_err(|e| format!("Failed to write WAV sample: {}", e))?;
         }
         writer
             .finalize()
-            .map_err(|e| format!("完成 WAV 编码失败: {}", e))?;
+            .map_err(|e| format!("Failed to finalize WAV encoding: {}", e))?;
         Ok(cursor.into_inner())
     }
-    /// 检查凭据是否为 Google OAuth 访问令牌（通常以 ya29. 开头）
+    /// Checks if a key is a Google OAuth access token.
     pub fn is_oauth_token(key: &str) -> bool {
         key.trim().starts_with("ya29.")
     }
 
-    /// 根据 Base URL 与 API Key 构造 Interactions API 请求端点 URL
+    /// Builds the Interactions API endpoint URL.
     pub fn build_request_url(base_url: &str, api_key: &str) -> String {
         let trimmed_base = base_url.trim().trim_end_matches('/');
         let base = if trimmed_base.is_empty() {
@@ -290,7 +288,7 @@ impl GeminiProvider {
         }
     }
 
-    /// 从 Interactions API 响应中提取转录结果
+    /// Extracts transcription text from an Interactions API response.
     pub fn extract_text_from_response(body: &GeminiInteractionResponse) -> Result<String, String> {
         if let Some(steps) = &body.steps {
             let mut extracted_texts = Vec::new();
@@ -318,20 +316,20 @@ impl GeminiProvider {
             }
         }
 
-        Err("Gemini Interactions API 未返回有效的转写文本".to_string())
+        Err("Gemini Interactions API returned no transcription text".to_string())
     }
 
-    /// 统一解析 Gemini API 的错误响应文本
+    /// Parses Gemini API error response.
     pub fn parse_api_error(status: reqwest::StatusCode, error_text: &str) -> String {
         if let Ok(err_json) = serde_json::from_str::<GeminiErrorResponse>(error_text) {
             if let Some(msg) = err_json.error.and_then(|e| e.message) {
-                return format!("Gemini API 错误 (HTTP {}): {}", status, msg);
+                return format!("Gemini API error (HTTP {}): {}", status, msg);
             }
         }
-        format!("Gemini API 返回错误 HTTP {}: {}", status, error_text)
+        format!("Gemini API returned error HTTP {}: {}", status, error_text)
     }
 
-    /// 测试与 Gemini 接口的连通性与 API Key 有效性
+    /// Tests connectivity to the Gemini API.
     pub async fn test_connection(
         client: &reqwest::Client,
         api_key: &str,
@@ -364,7 +362,7 @@ impl GeminiProvider {
         let response = req
             .send()
             .await
-            .map_err(|e| format!("网络请求发送失败: {}", e))?;
+            .map_err(|e| format!("Failed to send network request: {}", e))?;
 
         let status = response.status();
         if !status.is_success() {
@@ -375,7 +373,7 @@ impl GeminiProvider {
         Ok(())
     }
 
-    /// 将 [-1.0, 1.0] 的 16kHz f32 音频采样转换为 16 位单声道无损 PCM 小端序字节流
+    /// Converts [-1.0, 1.0] f32 samples to 16-bit mono PCM little-endian bytes.
     pub fn convert_samples_to_pcm16_le(samples: &[f32]) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(samples.len() * 2);
         for &sample in samples {
@@ -386,7 +384,7 @@ impl GeminiProvider {
         bytes
     }
 
-    /// 构造 Gemini Live 双向全双工 WebSocket 连接 URL
+    /// Builds Gemini Live bidirectional WebSocket connection URL.
     pub fn build_live_websocket_url(custom_base_url: Option<&str>, api_key: &str) -> String {
         let base = custom_base_url.map(|s| s.trim()).unwrap_or_default();
         let clean_base = base.trim_end_matches('/');
@@ -428,7 +426,7 @@ impl BatchTranscriptionProvider for GeminiProvider {
             .get("gemini")
             .map(|k| k.trim())
             .filter(|k| !k.is_empty())
-            .ok_or_else(|| "Gemini API Key 未配置，请前往【转录模型】设置配置凭据".to_string())?;
+            .ok_or_else(|| "Gemini API key is not configured".to_string())?;
 
         let provider_config = settings
             .cloud_stt_providers
@@ -448,11 +446,9 @@ impl BatchTranscriptionProvider for GeminiProvider {
             .as_deref()
             .unwrap_or_default();
 
-        // 1. 内存中将 16000Hz 浮点音频编码为标准 WAV 二进制并转为 Base64
         let wav_bytes = Self::encode_wav_in_memory(&audio, 16000)?;
         let base64_audio = BASE64.encode(&wav_bytes);
 
-        // 2. 构造 REST 请求 URL 与请求载荷
         let request_url = Self::build_request_url(custom_base, api_key);
 
         let mut inputs = vec![GeminiInteractionInput::Audio {
@@ -485,7 +481,6 @@ impl BatchTranscriptionProvider for GeminiProvider {
             }),
         };
 
-        // 3. 复用全局网络管理器的共享连接池客户端
         let client = self.network_manager.client().await;
         let mut req = client.post(&request_url);
         if Self::is_oauth_token(api_key) {
@@ -497,7 +492,7 @@ impl BatchTranscriptionProvider for GeminiProvider {
             .json(&payload)
             .send()
             .await
-            .map_err(|e| format!("发送 Gemini 转写请求失败 (网络错误): {}", e))?;
+            .map_err(|e| format!("Failed to send Gemini transcription request: {}", e))?;
 
         let status = response.status();
         if !status.is_success() {
@@ -508,9 +503,8 @@ impl BatchTranscriptionProvider for GeminiProvider {
         let body: GeminiInteractionResponse = response
             .json()
             .await
-            .map_err(|e| format!("解析 Gemini 响应 JSON 失败: {}", e))?;
+            .map_err(|e| format!("Failed to parse Gemini response JSON: {}", e))?;
 
-        // 4. 提取输出文本
         Self::extract_text_from_response(&body)
     }
 
@@ -524,7 +518,7 @@ enum SessionCmd {
     Cancel,
 }
 
-/// 基于 Google Gemini Live 双向全双工 WebSocket 的实时流式会话句柄
+/// Streaming session backed by Gemini Live bidirectional WebSocket.
 pub struct GeminiLiveStreamingSession {
     audio_tx: tokio::sync::mpsc::UnboundedSender<Vec<f32>>,
     cmd_tx: tokio::sync::mpsc::Sender<SessionCmd>,
@@ -535,7 +529,7 @@ impl StreamingSession for GeminiLiveStreamingSession {
     fn feed_audio(&self, samples: &[f32]) -> Result<(), String> {
         self.audio_tx
             .send(samples.to_vec())
-            .map_err(|e| format!("推送音频采样至流式会话失败: {}", e))
+            .map_err(|e| format!("Failed to feed audio samples to streaming session: {}", e))
     }
 
     async fn finalize(self: Box<Self>) -> Result<String, String> {
@@ -543,10 +537,10 @@ impl StreamingSession for GeminiLiveStreamingSession {
         self.cmd_tx
             .send(SessionCmd::Finalize(reply_tx))
             .await
-            .map_err(|e| format!("发送 finalize 指令失败: {}", e))?;
+            .map_err(|e| format!("Failed to send finalize command: {}", e))?;
         reply_rx
             .await
-            .map_err(|_| "会话工作协程未响应 finalize 指令".to_string())?
+            .map_err(|_| "Streaming worker failed to respond to finalize command".to_string())?
     }
 
     async fn cancel(self: Box<Self>) {
@@ -582,18 +576,16 @@ async fn run_gemini_live_worker<S>(
     let (sink_tx, mut sink_rx) =
         tokio::sync::mpsc::channel::<tokio_tungstenite::tungstenite::Message>(64);
 
-    // 1. 出站写入协程：独占持有 ws_sink，解耦所有发送操作
     let writer_handle = tokio::spawn(async move {
         while let Some(msg) = sink_rx.recv().await {
             if let Err(e) = ws_sink.send(msg).await {
-                log::warn!("Gemini Live WebSocket 发送失败: {}", e);
+                log::warn!("Gemini Live WebSocket send failed: {}", e);
                 break;
             }
         }
         let _ = ws_sink.close().await;
     });
 
-    // 2. 下行接收协程：独占持有 ws_stream，毫秒级广播 interim 与 inputTranscription
     let state_receiver = Arc::clone(&state);
     let sink_tx_receiver = sink_tx.clone();
     let turn_notify_receiver = Arc::clone(&turn_notify);
@@ -609,7 +601,7 @@ async fn run_gemini_live_worker<S>(
                             .await;
                     }
                     tokio_tungstenite::tungstenite::Message::Close(_) => {
-                        log::info!("Gemini Live 服务端关闭长连接");
+                        log::info!("Gemini Live server closed connection");
                         turn_notify_receiver.notify_waiters();
                         break;
                     }
@@ -617,8 +609,8 @@ async fn run_gemini_live_worker<S>(
                         if let Some(server_msg) = GeminiLiveServerMessage::parse(&other) {
                             if let Some(err) = server_msg.error {
                                 let err_text =
-                                    err.message.unwrap_or_else(|| "未知服务端错误".to_string());
-                                log::warn!("Gemini Live 服务端返回错误: {}", err_text);
+                                    err.message.unwrap_or_else(|| "Unknown server error".to_string());
+                                log::warn!("Gemini Live server error: {}", err_text);
                                 state_receiver.lock().session_error = Some(err_text);
                                 turn_notify_receiver.notify_waiters();
                             }
@@ -654,9 +646,9 @@ async fn run_gemini_live_worker<S>(
                     }
                 },
                 Err(e) => {
-                    log::warn!("Gemini Live WebSocket 接收异常: {}", e);
+                    log::warn!("Gemini Live WebSocket receive error: {}", e);
                     state_receiver.lock().session_error =
-                        Some(format!("WebSocket 接收异常: {}", e));
+                        Some(format!("WebSocket receive error: {}", e));
                     turn_notify_receiver.notify_waiters();
                     break;
                 }
@@ -665,7 +657,6 @@ async fn run_gemini_live_worker<S>(
         turn_notify_receiver.notify_waiters();
     });
 
-    // 3. 上行推流与生命周期协程
     let mut pcm_buffer: Vec<u8> = Vec::with_capacity(SAMPLES_PER_CHUNK * 2);
 
     loop {
@@ -676,7 +667,6 @@ async fn run_gemini_live_worker<S>(
                         let pcm_bytes = GeminiProvider::convert_samples_to_pcm16_le(&samples);
                         pcm_buffer.extend_from_slice(&pcm_bytes);
 
-                        // 达到 100ms 周期（1600 个采样 = 3200 字节 PCM）打包推流
                         let chunk_size = SAMPLES_PER_CHUNK * 2;
                         while pcm_buffer.len() >= chunk_size {
                             let chunk: Vec<u8> = pcm_buffer.drain(..chunk_size).collect();
@@ -702,7 +692,6 @@ async fn run_gemini_live_worker<S>(
                         }
                     }
                     None => {
-                        // audio_rx 管道关闭
                     }
                 }
             }
@@ -710,13 +699,11 @@ async fn run_gemini_live_worker<S>(
             cmd = cmd_rx.recv() => {
                 match cmd {
                     Some(SessionCmd::Finalize(reply_tx)) => {
-                        // 冲刷 audio_rx 通道中积压的未处理采样
                         while let Ok(samples) = audio_rx.try_recv() {
                             let pcm_bytes = GeminiProvider::convert_samples_to_pcm16_le(&samples);
                             pcm_buffer.extend_from_slice(&pcm_bytes);
                         }
 
-                        // 冲刷残留采样（若有）
                         if !pcm_buffer.is_empty() {
                             let chunk = std::mem::take(&mut pcm_buffer);
                             let base64_pcm = BASE64.encode(&chunk);
@@ -736,7 +723,6 @@ async fn run_gemini_live_worker<S>(
                             }
                         }
 
-                        // 发送 audioStreamEnd 结束标记
                         let end_frame = GeminiLiveRealtimeInputFrame {
                             realtime_input: GeminiLiveRealtimeInput {
                                 audio: None,
@@ -749,7 +735,6 @@ async fn run_gemini_live_worker<S>(
                                 .await;
                         }
 
-                        // 最多等待 5 秒获取服务端最终分句与收尾确认
                         let finalize_deadline = tokio::time::Instant::now() + Duration::from_secs(5);
                         while tokio::time::Instant::now() < finalize_deadline {
                             if state.lock().turn_completed
@@ -810,7 +795,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
             .get("gemini")
             .map(|k| k.trim())
             .filter(|k| !k.is_empty())
-            .ok_or_else(|| "Gemini API Key 未配置，请前往【转录模型】设置配置凭据".to_string())?;
+            .ok_or_else(|| "Gemini API key is not configured".to_string())?;
 
         let provider_config = settings
             .cloud_stt_providers
@@ -857,13 +842,13 @@ impl StreamingTranscriptionProvider for GeminiProvider {
         };
 
         let setup_json = serde_json::to_string(&setup_frame)
-            .map_err(|e| format!("序列化 Gemini Live Setup 报文失败: {}", e))?;
+            .map_err(|e| format!("Failed to serialize Gemini Live setup frame: {}", e))?;
 
         ws.send(tokio_tungstenite::tungstenite::Message::Text(
             setup_json.into(),
         ))
         .await
-        .map_err(|e| format!("发送 Gemini Live Setup 握手帧失败: {}", e))?;
+        .map_err(|e| format!("Failed to send Gemini Live setup frame: {}", e))?;
 
         let setup_timeout = Duration::from_secs(10);
         let setup_result = tokio::time::timeout(setup_timeout, async {
@@ -871,7 +856,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                 match msg_res {
                     Ok(msg) => match msg {
                         tokio_tungstenite::tungstenite::Message::Close(frame) => {
-                            return Err(format!("Gemini Live 服务端关闭连接: {:?}", frame));
+                            return Err(format!("Gemini Live server closed connection: {:?}", frame));
                         }
                         tokio_tungstenite::tungstenite::Message::Ping(data) => {
                             let _ = ws
@@ -882,8 +867,8 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                             if let Some(server_msg) = GeminiLiveServerMessage::parse(&other) {
                                 if let Some(err) = server_msg.error {
                                     return Err(format!(
-                                        "Gemini Live Setup 握手失败: {}",
-                                        err.message.unwrap_or_else(|| "未知错误".to_string())
+                                        "Gemini Live setup failed: {}",
+                                        err.message.unwrap_or_else(|| "Unknown error".to_string())
                                     ));
                                 }
                                 if server_msg.setup_complete.is_some() {
@@ -893,20 +878,20 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                         }
                     },
                     Err(e) => {
-                        return Err(format!("Gemini Live 接收握手响应失败: {}", e));
+                        return Err(format!("Gemini Live failed to receive handshake response: {}", e));
                     }
                 }
             }
-            Err("Gemini Live 服务端在握手完成前断开连接".to_string())
+            Err("Gemini Live server disconnected before handshake completed".to_string())
         })
         .await;
 
         match setup_result {
             Ok(Ok(())) => {
-                log::info!("Gemini Live Setup 握手成功 (setupComplete 已就绪)");
+                log::info!("Gemini Live setup completed");
             }
             Ok(Err(e)) => return Err(e),
-            Err(_) => return Err("等待 Gemini Live setupComplete 握手超时 (10s)".to_string()),
+            Err(_) => return Err("Timed out waiting for Gemini Live setupComplete (10s)".to_string()),
         }
 
         let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -925,12 +910,10 @@ mod tests {
 
     #[test]
     fn test_encode_wav_in_memory_format_and_clamping() {
-        // 包含正常值、0值、以及超过 [-1.0, 1.0] 的极值
         let samples = vec![0.0f32, 0.5f32, -0.5f32, 1.5f32, -2.0f32];
         let wav_bytes =
             GeminiProvider::encode_wav_in_memory(&samples, 16000).expect("encoding should succeed");
 
-        // 验证生成的 WAV 二进制数据合法性
         let mut reader =
             hound::WavReader::new(Cursor::new(wav_bytes)).expect("WAV reader should parse output");
         let spec = reader.spec();
@@ -1064,7 +1047,7 @@ mod tests {
                     "content": [
                         {
                             "type": "text",
-                            "text": "这是一段通过 Gemini 3.5 Transcribe 模型转写完成的高准确度文本。"
+                            "text": "This is high-accuracy transcribed text from Gemini 3.5 Transcribe."
                         }
                     ]
                 }
@@ -1084,7 +1067,7 @@ mod tests {
             GeminiProvider::extract_text_from_response(&res).expect("should extract text");
         assert_eq!(
             extracted,
-            "这是一段通过 Gemini 3.5 Transcribe 模型转写完成的高准确度文本。"
+            "This is high-accuracy transcribed text from Gemini 3.5 Transcribe."
         );
     }
 
@@ -1265,7 +1248,7 @@ mod tests {
         let json_interim = r#"{
             "serverContent": {
                 "interimInputTranscription": {
-                    "text": "你好"
+                    "text": "hello"
                 }
             }
         }"#;
@@ -1275,12 +1258,12 @@ mod tests {
             .unwrap()
             .interim_input_transcription
             .unwrap();
-        assert_eq!(interim.text.as_deref(), Some("你好"));
+        assert_eq!(interim.text.as_deref(), Some("hello"));
 
         let json_final = r#"{
             "serverContent": {
                 "inputTranscription": {
-                    "text": "你好，世界！"
+                    "text": "hello, world!"
                 },
                 "turnComplete": true
             }
@@ -1289,7 +1272,7 @@ mod tests {
         let content = msg2.server_content.unwrap();
         assert_eq!(
             content.input_transcription.unwrap().text.as_deref(),
-            Some("你好，世界！")
+            Some("hello, world!")
         );
         assert_eq!(content.turn_complete, Some(true));
 
@@ -1336,11 +1319,9 @@ mod tests {
 
         let worker_handle = tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
 
-        // 1. 发送 1600 个静音采样（刚好 100ms）
         let samples = vec![0.0f32; 1600];
         audio_tx.send(samples).unwrap();
 
-        // 2. 服务端应当收到一个包含 realtimeInput.audio 的消息
         let msg = server_ws.next().await.unwrap().unwrap();
         if let Message::Text(text) = msg {
             assert!(text.contains("realtimeInput"));
@@ -1349,8 +1330,7 @@ mod tests {
             panic!("Expected text message from client");
         }
 
-        // 3. 服务端并发推送 interim 和 committed 消息
-        let interim_json = r#"{"serverContent":{"interimInputTranscription":{"text":"你好"}}}"#;
+        let interim_json = r#"{"serverContent":{"interimInputTranscription":{"text":"hello"}}}"#;
         server_ws
             .send(Message::Binary(interim_json.as_bytes().to_vec().into()))
             .await
@@ -1359,10 +1339,10 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         {
             let events = emitted.lock();
-            assert_eq!(events.last(), Some(&("".to_string(), "你好".to_string())));
+            assert_eq!(events.last(), Some(&("".to_string(), "hello".to_string())));
         }
 
-        let final_text_json = r#"{"serverContent":{"inputTranscription":{"text":"你好，世界！"}}}"#;
+        let final_text_json = r#"{"serverContent":{"inputTranscription":{"text":"hello, world!"}}}"#;
         server_ws
             .send(Message::Text(final_text_json.into()))
             .await
@@ -1373,15 +1353,13 @@ mod tests {
             let events = emitted.lock();
             assert_eq!(
                 events.last(),
-                Some(&("你好，世界！".to_string(), "".to_string()))
+                Some(&("hello, world!".to_string(), "".to_string()))
             );
         }
 
-        // 4. 客户端发起 finalize
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
         cmd_tx.send(SessionCmd::Finalize(reply_tx)).await.unwrap();
 
-        // 5. 服务端应当收到 audioStreamEnd 帧
         let end_msg = server_ws.next().await.unwrap().unwrap();
         if let Message::Text(text) = end_msg {
             assert!(text.contains("audioStreamEnd"));
@@ -1389,7 +1367,6 @@ mod tests {
             panic!("Expected audioStreamEnd frame");
         }
 
-        // 6. 服务端响应 turnComplete
         let turn_complete_json = r#"{"serverContent":{"turnComplete":true}}"#;
         server_ws
             .send(Message::Binary(
@@ -1398,9 +1375,8 @@ mod tests {
             .await
             .unwrap();
 
-        // 7. finalize 应当收到完整的最终转写结果
         let final_result = reply_rx.await.unwrap().unwrap();
-        assert_eq!(final_result, "你好，世界！");
+        assert_eq!(final_result, "hello, world!");
 
         worker_handle.await.unwrap();
     }
@@ -1416,21 +1392,18 @@ mod tests {
     fn test_gemini_live_server_message_parse_text_and_binary() {
         use tokio_tungstenite::tungstenite::Message;
 
-        // 1. 测试 Text 报文解析
         let text_msg = Message::Text(r#"{"setupComplete":{}}"#.into());
         let parsed_text = GeminiLiveServerMessage::parse(&text_msg);
         assert!(parsed_text.is_some());
         assert!(parsed_text.unwrap().setup_complete.is_some());
 
-        // 2. 测试 Binary 报文解析（Google 真实环境发送的是二进制 UTF-8 JSON 帧）
         let bin_msg = Message::Binary(b"{\n  \"setupComplete\": {}\n}\n".to_vec().into());
         let parsed_bin = GeminiLiveServerMessage::parse(&bin_msg);
         assert!(parsed_bin.is_some());
         assert!(parsed_bin.unwrap().setup_complete.is_some());
 
-        // 3. 测试二进制流式暂态文本（interimInputTranscription）
         let bin_interim = Message::Binary(
-            r#"{"serverContent":{"interimInputTranscription":{"text":"实际使用"}}}"#
+            r#"{"serverContent":{"interimInputTranscription":{"text":"test phrase"}}}"#
                 .as_bytes()
                 .to_vec()
                 .into(),
@@ -1440,10 +1413,9 @@ mod tests {
         let content = parsed_interim.unwrap().server_content.unwrap();
         assert_eq!(
             content.interim_input_transcription.unwrap().text.unwrap(),
-            "实际使用"
+            "test phrase"
         );
 
-        // 4. 非文本/二进制报文（如 Ping）应返回 None
         let ping_msg = Message::Ping(vec![1, 2, 3].into());
         assert!(GeminiLiveServerMessage::parse(&ping_msg).is_none());
     }

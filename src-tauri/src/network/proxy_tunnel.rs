@@ -13,7 +13,7 @@ use crate::settings::{ProxyMode, ProxyProtocol, ProxySettings};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// 统一的底层传输流抽象（支持明文 TCP 与 TLS 加密隧道）
+/// Underlying transport stream supporting plain TCP and TLS tunnels.
 pub enum TunnelStream {
     Plain(TcpStream),
     Tls(tokio_native_tls::TlsStream<TcpStream>),
@@ -59,7 +59,7 @@ impl AsyncWrite for TunnelStream {
     }
 }
 
-/// 解析生效的代理配置
+/// Effective proxy configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedProxy {
     Direct,
@@ -124,7 +124,6 @@ pub fn resolve_effective_proxy(settings: &ProxySettings) -> ResolvedProxy {
     }
 }
 
-/// 发起 HTTP CONNECT 隧道请求
 pub async fn establish_http_connect_tunnel(
     stream: &mut TcpStream,
     target_host: &str,
@@ -143,44 +142,42 @@ pub async fn establish_http_connect_tunnel(
 
     tokio::time::timeout(CONNECT_TIMEOUT, stream.write_all(req.as_bytes()))
         .await
-        .map_err(|_| "发送 HTTP CONNECT 隧道指令超时".to_string())?
-        .map_err(|e| format!("发送 HTTP CONNECT 隧道指令失败: {}", e))?;
+        .map_err(|_| "Timed out sending HTTP CONNECT directive".to_string())?
+        .map_err(|e| format!("Failed to send HTTP CONNECT directive: {}", e))?;
 
-    // 读取响应头直到 \r\n\r\n
     let mut header_buf = Vec::with_capacity(1024);
     let mut byte_buf = [0u8; 1];
     loop {
         let n = tokio::time::timeout(CONNECT_TIMEOUT, stream.read(&mut byte_buf))
             .await
-            .map_err(|_| "读取 HTTP CONNECT 响应超时".to_string())?
-            .map_err(|e| format!("读取 HTTP CONNECT 响应失败: {}", e))?;
+            .map_err(|_| "Timed out reading HTTP CONNECT response".to_string())?
+            .map_err(|e| format!("Failed to read HTTP CONNECT response: {}", e))?;
         if n == 0 {
-            return Err("HTTP 代理服务器在完成 CONNECT 握手前关闭了连接".to_string());
+            return Err("HTTP proxy closed connection before completing CONNECT handshake".to_string());
         }
         header_buf.push(byte_buf[0]);
         if header_buf.ends_with(b"\r\n\r\n") {
             break;
         }
         if header_buf.len() > 8192 {
-            return Err("HTTP 代理响应头超出 8KB 上限".to_string());
+            return Err("HTTP proxy response header exceeded 8KB limit".to_string());
         }
     }
 
     let header_str = String::from_utf8_lossy(&header_buf);
     let first_line = header_str.lines().next().unwrap_or_default().trim();
 
-    // 格式如 "HTTP/1.1 200 Connection established"
     let parts: Vec<&str> = first_line.split_whitespace().collect();
     if parts.len() < 2 {
-        return Err(format!("HTTP 代理返回了非法的响应行: {}", first_line));
+        return Err(format!("Invalid HTTP proxy response line: {}", first_line));
     }
     let status_code: u16 = parts[1]
         .parse()
-        .map_err(|_| format!("解析 HTTP 状态码失败: {}", parts[1]))?;
+        .map_err(|_| format!("Failed to parse HTTP status code: {}", parts[1]))?;
 
     if !(200..=299).contains(&status_code) {
         return Err(format!(
-            "HTTP CONNECT 代理握手失败，状态码: {}，详情: {}",
+            "HTTP CONNECT handshake failed with status {}: {}",
             status_code, first_line
         ));
     }
@@ -188,17 +185,14 @@ pub async fn establish_http_connect_tunnel(
     Ok(())
 }
 
-/// 执行 SOCKS5 握手并建立隧道 (RFC 1928 / 1929)
 pub async fn establish_socks5_tunnel(
     stream: &mut TcpStream,
     target_host: &str,
     target_port: u16,
     auth: Option<&(String, String)>,
 ) -> Result<(), String> {
-    // 1. 发送 Greeting 报文
     let (greeting, has_auth) = if let Some((user, _pass)) = auth {
         if !user.is_empty() {
-            // Version 5, 2 Methods: 0x00 (No Auth), 0x02 (User/Pass)
             (vec![0x05, 0x02, 0x00, 0x02], true)
         } else {
             (vec![0x05, 0x01, 0x00], false)
@@ -209,27 +203,25 @@ pub async fn establish_socks5_tunnel(
 
     tokio::time::timeout(CONNECT_TIMEOUT, stream.write_all(&greeting))
         .await
-        .map_err(|_| "发送 SOCKS5 握手报文超时".to_string())?
-        .map_err(|e| format!("发送 SOCKS5 握手失败: {}", e))?;
+        .map_err(|_| "Timed out sending SOCKS5 greeting".to_string())?
+        .map_err(|e| format!("Failed to send SOCKS5 greeting: {}", e))?;
 
     let mut method_resp = [0u8; 2];
     tokio::time::timeout(CONNECT_TIMEOUT, stream.read_exact(&mut method_resp))
         .await
-        .map_err(|_| "读取 SOCKS5 握手响应超时".to_string())?
-        .map_err(|e| format!("读取 SOCKS5 握手响应失败: {}", e))?;
+        .map_err(|_| "Timed out reading SOCKS5 handshake response".to_string())?
+        .map_err(|e| format!("Failed to read SOCKS5 handshake response: {}", e))?;
 
     if method_resp[0] != 0x05 {
-        return Err(format!("不兼容的 SOCKS 协议版本: 0x{:02X}", method_resp[0]));
+        return Err(format!("Incompatible SOCKS protocol version: 0x{:02X}", method_resp[0]));
     }
 
     match method_resp[1] {
-        0x00 => {
-            // 无需密码认证
-        }
+        0x00 => {}
         0x02 if has_auth => {
             if let Some((user, pass)) = auth {
                 let mut auth_req = Vec::with_capacity(3 + user.len() + pass.len());
-                auth_req.push(0x01); // 认证协议版本 1
+                auth_req.push(0x01);
                 auth_req.push(user.len() as u8);
                 auth_req.extend_from_slice(user.as_bytes());
                 auth_req.push(pass.len() as u8);
@@ -237,45 +229,43 @@ pub async fn establish_socks5_tunnel(
 
                 tokio::time::timeout(CONNECT_TIMEOUT, stream.write_all(&auth_req))
                     .await
-                    .map_err(|_| "发送 SOCKS5 认证凭据超时".to_string())?
-                    .map_err(|e| format!("发送 SOCKS5 认证凭据失败: {}", e))?;
+                    .map_err(|_| "Timed out sending SOCKS5 auth credentials".to_string())?
+                    .map_err(|e| format!("Failed to send SOCKS5 auth credentials: {}", e))?;
 
                 let mut auth_resp = [0u8; 2];
                 tokio::time::timeout(CONNECT_TIMEOUT, stream.read_exact(&mut auth_resp))
                     .await
-                    .map_err(|_| "读取 SOCKS5 认证响应超时".to_string())?
-                    .map_err(|e| format!("读取 SOCKS5 认证响应失败: {}", e))?;
+                    .map_err(|_| "Timed out reading SOCKS5 auth response".to_string())?
+                    .map_err(|e| format!("Failed to read SOCKS5 auth response: {}", e))?;
 
                 if auth_resp[1] != 0x00 {
-                    return Err("SOCKS5 认证失败: 账号或密码错误".to_string());
+                    return Err("SOCKS5 authentication failed: invalid username or password".to_string());
                 }
             } else {
-                return Err("SOCKS5 代理要求认证，但当前未配置用户名与密码".to_string());
+                return Err("SOCKS5 proxy requires authentication, but no credentials provided".to_string());
             }
         }
-        0xFF => return Err("SOCKS5 代理拒绝了所有支持的认证方式".to_string()),
+        0xFF => return Err("SOCKS5 proxy rejected all supported authentication methods".to_string()),
         other => {
             return Err(format!(
-                "SOCKS5 代理选定了未支持的认证方式: 0x{:02X}",
+                "SOCKS5 proxy selected unsupported authentication method: 0x{:02X}",
                 other
             ))
         }
     }
 
-    // 2. 发送 CONNECT 请求
     let mut connect_req = Vec::with_capacity(7 + target_host.len());
-    connect_req.push(0x05); // VER
-    connect_req.push(0x01); // CMD: 0x01 = CONNECT
-    connect_req.push(0x00); // RSV
+    connect_req.push(0x05);
+    connect_req.push(0x01);
+    connect_req.push(0x00);
 
     if let Ok(ipv4) = target_host.parse::<std::net::Ipv4Addr>() {
-        connect_req.push(0x01); // ATYP: IPv4
+        connect_req.push(0x01);
         connect_req.extend_from_slice(&ipv4.octets());
     } else if let Ok(ipv6) = target_host.parse::<std::net::Ipv6Addr>() {
-        connect_req.push(0x04); // ATYP: IPv6
+        connect_req.push(0x04);
         connect_req.extend_from_slice(&ipv6.octets());
     } else {
-        // ATYP: Domain name
         connect_req.push(0x03);
         connect_req.push(target_host.len() as u8);
         connect_req.extend_from_slice(target_host.as_bytes());
@@ -284,19 +274,18 @@ pub async fn establish_socks5_tunnel(
 
     tokio::time::timeout(CONNECT_TIMEOUT, stream.write_all(&connect_req))
         .await
-        .map_err(|_| "发送 SOCKS5 连接请求超时".to_string())?
-        .map_err(|e| format!("发送 SOCKS5 连接请求失败: {}", e))?;
+        .map_err(|_| "Timed out sending SOCKS5 connect request".to_string())?
+        .map_err(|e| format!("Failed to send SOCKS5 connect request: {}", e))?;
 
-    // 3. 读取 CONNECT 响应
     let mut resp_header = [0u8; 4];
     tokio::time::timeout(CONNECT_TIMEOUT, stream.read_exact(&mut resp_header))
         .await
-        .map_err(|_| "读取 SOCKS5 连接响应超时".to_string())?
-        .map_err(|e| format!("读取 SOCKS5 连接响应失败: {}", e))?;
+        .map_err(|_| "Timed out reading SOCKS5 connect response".to_string())?
+        .map_err(|e| format!("Failed to read SOCKS5 connect response: {}", e))?;
 
     if resp_header[0] != 0x05 {
         return Err(format!(
-            "SOCKS5 连接响应协议版本非法: 0x{:02X}",
+            "Invalid SOCKS5 connect response version: 0x{:02X}",
             resp_header[0]
         ));
     }
@@ -304,23 +293,21 @@ pub async fn establish_socks5_tunnel(
     let rep = resp_header[1];
     if rep != 0x00 {
         let msg = match rep {
-            0x01 => "常规 SOCKS 服务器故障",
-            0x02 => "规则集不允许该连接",
-            0x03 => "网络不可达",
-            0x04 => "主机不可达",
-            0x05 => "目标连接被拒绝",
-            0x06 => "TTL 已过期",
-            0x07 => "不支持的命令",
-            0x08 => "不支持的地址类型",
-            _ => "未知 SOCKS 错误",
+            0x01 => "general SOCKS server failure",
+            0x02 => "connection not allowed by ruleset",
+            0x03 => "network unreachable",
+            0x04 => "host unreachable",
+            0x05 => "connection refused",
+            0x06 => "TTL expired",
+            0x07 => "command not supported",
+            0x08 => "address type not supported",
+            _ => "unknown SOCKS error",
         };
-        return Err(format!("SOCKS5 连接目标失败: {} (代码 0x{:02X})", msg, rep));
+        return Err(format!("SOCKS5 connect failed: {} (code 0x{:02X})", msg, rep));
     }
 
-    // 消耗响应中的绑定地址（BND.ADDR 与 BND.PORT）
     match resp_header[3] {
         0x01 => {
-            // IPv4: 4 bytes IP + 2 bytes port
             let mut addr = [0u8; 6];
             stream
                 .read_exact(&mut addr)
@@ -328,7 +315,6 @@ pub async fn establish_socks5_tunnel(
                 .map_err(|e| e.to_string())?;
         }
         0x03 => {
-            // Domain: 1 byte len + len bytes domain + 2 bytes port
             let mut len_buf = [0u8; 1];
             stream
                 .read_exact(&mut len_buf)
@@ -342,34 +328,32 @@ pub async fn establish_socks5_tunnel(
                 .map_err(|e| e.to_string())?;
         }
         0x04 => {
-            // IPv6: 16 bytes IP + 2 bytes port
             let mut addr = [0u8; 18];
             stream
                 .read_exact(&mut addr)
                 .await
                 .map_err(|e| e.to_string())?;
         }
-        other => return Err(format!("SOCKS5 响应中未知的地址类型: 0x{:02X}", other)),
+        other => return Err(format!("Unknown address type in SOCKS5 response: 0x{:02X}", other)),
     }
 
     Ok(())
 }
 
-/// 通过网络代理隧道（或直连）建立 WebSocket 客户端全双工长连接
 pub async fn connect_websocket_tunnel(
     url_str: &str,
     proxy_settings: &ProxySettings,
 ) -> Result<WebSocketStream<TunnelStream>, String> {
-    let parsed_url = Url::parse(url_str).map_err(|e| format!("解析 WebSocket URL 失败: {}", e))?;
+    let parsed_url = Url::parse(url_str).map_err(|e| format!("Failed to parse WebSocket URL: {}", e))?;
 
     let host = parsed_url
         .host_str()
-        .ok_or_else(|| "WebSocket URL 缺少有效的主机名".to_string())?;
+        .ok_or_else(|| "WebSocket URL missing valid host".to_string())?;
 
     let is_secure = match parsed_url.scheme() {
         "wss" => true,
         "ws" => false,
-        other => return Err(format!("不支持的 WebSocket 协议方案: {}", other)),
+        other => return Err(format!("Unsupported WebSocket scheme: {}", other)),
     };
 
     let port = parsed_url
@@ -378,13 +362,12 @@ pub async fn connect_websocket_tunnel(
 
     let resolved = resolve_effective_proxy(proxy_settings);
 
-    // 1. 建立 TCP 流（直连或经由代理）
     let tcp_stream = match resolved {
         ResolvedProxy::Direct => {
             tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect((host, port)))
                 .await
-                .map_err(|_| format!("直连目标 {}:{} 超时", host, port))?
-                .map_err(|e| format!("直连目标 {}:{} 失败: {}", host, port, e))?
+                .map_err(|_| format!("Direct connection to {}:{} timed out", host, port))?
+                .map_err(|e| format!("Direct connection to {}:{} failed: {}", host, port, e))?
         }
         ResolvedProxy::Http {
             host: p_host,
@@ -396,8 +379,8 @@ pub async fn connect_websocket_tunnel(
                 TcpStream::connect((p_host.as_str(), p_port)),
             )
             .await
-            .map_err(|_| format!("连接 HTTP 代理 {}:{} 超时", p_host, p_port))?
-            .map_err(|e| format!("连接 HTTP 代理 {}:{} 失败: {}", p_host, p_port, e))?;
+            .map_err(|_| format!("Connection to HTTP proxy {}:{} timed out", p_host, p_port))?
+            .map_err(|e| format!("Connection to HTTP proxy {}:{} failed: {}", p_host, p_port, e))?;
 
             establish_http_connect_tunnel(&mut stream, host, port, auth.as_ref()).await?;
             stream
@@ -412,40 +395,38 @@ pub async fn connect_websocket_tunnel(
                 TcpStream::connect((p_host.as_str(), p_port)),
             )
             .await
-            .map_err(|_| format!("连接 SOCKS5 代理 {}:{} 超时", p_host, p_port))?
-            .map_err(|e| format!("连接 SOCKS5 代理 {}:{} 失败: {}", p_host, p_port, e))?;
+            .map_err(|_| format!("Connection to SOCKS5 proxy {}:{} timed out", p_host, p_port))?
+            .map_err(|e| format!("Connection to SOCKS5 proxy {}:{} failed: {}", p_host, p_port, e))?;
 
             establish_socks5_tunnel(&mut stream, host, port, auth.as_ref()).await?;
             stream
         }
     };
 
-    // 2. 根据协议判断是否需要进行 TLS 封装
     let tunnel_stream = if is_secure {
         let native_connector = native_tls::TlsConnector::builder()
             .build()
-            .map_err(|e| format!("初始化原生 TLS 连接器失败: {}", e))?;
+            .map_err(|e| format!("Failed to initialize TLS connector: {}", e))?;
         let async_connector = tokio_native_tls::TlsConnector::from(native_connector);
 
         let tls_stream =
             tokio::time::timeout(CONNECT_TIMEOUT, async_connector.connect(host, tcp_stream))
                 .await
-                .map_err(|_| format!("与目标主机 {} 进行 TLS 握手超时", host))?
-                .map_err(|e| format!("与目标主机 {} 进行 TLS 握手失败: {}", host, e))?;
+                .map_err(|_| format!("TLS handshake with {} timed out", host))?
+                .map_err(|e| format!("TLS handshake with {} failed: {}", host, e))?;
 
         TunnelStream::Tls(tls_stream)
     } else {
         TunnelStream::Plain(tcp_stream)
     };
 
-    // 3. 执行 WebSocket 握手
     let (ws_stream, _response) = tokio::time::timeout(
         CONNECT_TIMEOUT,
         tokio_tungstenite::client_async(url_str, tunnel_stream),
     )
     .await
-    .map_err(|_| "WebSocket 客户端协议握手超时".to_string())?
-    .map_err(|e| format!("WebSocket 客户端协议握手失败: {}", e))?;
+    .map_err(|_| "WebSocket client handshake timed out".to_string())?
+    .map_err(|e| format!("WebSocket client handshake failed: {}", e))?;
 
     Ok(ws_stream)
 }
@@ -513,7 +494,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_connect_tunnel_handshake_success() {
-        // 启动本地模拟 HTTP CONNECT 代理
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let proxy_port = listener.local_addr().unwrap().port();
 
@@ -525,7 +505,6 @@ mod tests {
             assert!(req_str.starts_with("CONNECT example.com:443 HTTP/1.1"));
             assert!(req_str.contains("Proxy-Authorization: Basic dXNlcjpwYXNz"));
 
-            // 返回 200 OK 响应
             socket
                 .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
                 .await
@@ -571,15 +550,12 @@ mod tests {
         tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
 
-            // 1. 读取 Greeting
             let mut greeting = [0u8; 4];
             socket.read_exact(&mut greeting).await.unwrap();
             assert_eq!(greeting[0], 0x05); // VER 5
 
-            // 返回 Method 选择: 0x02 (User/Pass)
             socket.write_all(&[0x05, 0x02]).await.unwrap();
 
-            // 2. 读取 User/Pass 认证请求
             let mut auth_head = [0u8; 2];
             socket.read_exact(&mut auth_head).await.unwrap();
             let ulen = auth_head[1] as usize;
@@ -594,10 +570,8 @@ mod tests {
             assert_eq!(String::from_utf8_lossy(&uname), "admin");
             assert_eq!(String::from_utf8_lossy(&pass), "secret");
 
-            // 返回认证成功: [0x01, 0x00]
             socket.write_all(&[0x01, 0x00]).await.unwrap();
 
-            // 3. 读取 CONNECT 请求
             let mut conn_head = [0u8; 4];
             socket.read_exact(&mut conn_head).await.unwrap();
             assert_eq!(conn_head[0], 0x05); // VER
@@ -613,7 +587,6 @@ mod tests {
             assert_eq!(String::from_utf8_lossy(&domain), "gemini.test");
             assert_eq!(u16::from_be_bytes(port_bytes), 443);
 
-            // 返回成功响应: [0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0x01, 0xBB]
             socket
                 .write_all(&[0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0x01, 0xBB])
                 .await

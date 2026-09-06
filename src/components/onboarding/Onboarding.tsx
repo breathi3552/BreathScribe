@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Cloud } from "lucide-react";
 import type { ModelInfo } from "@/bindings";
 import type { ModelCardStatus } from "./ModelCard";
 import ModelCard, { isLegacySource } from "./ModelCard";
@@ -182,7 +182,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-base">⚡</span>
+                  <Cloud className="w-4 h-4 text-logo-primary shrink-0" />
                   <span className="font-semibold text-sm text-text">
                     {t("onboarding.cloudBannerTitle")}
                   </span>

@@ -356,11 +356,8 @@ impl std::ops::DerefMut for SecretMap {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum ProxyMode {
-    /// 自动跟随操作系统代理（默认策略）
     System,
-    /// 用户自定义代理服务器
     Manual,
-    /// 强制不使用任何代理（直连）
     Direct,
 }
 
@@ -411,12 +408,10 @@ impl Default for ProxySettings {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
 #[serde(tag = "type", content = "config", rename_all = "snake_case")]
 pub enum TranscriptionMode {
-    /// 使用本地离线模型（Whisper / Parakeet 等）
     Local,
-    /// 使用云端 API 转写
     Cloud {
-        provider_id: String, // 例如 "gemini"
-        model_id: String,    // 例如 "gemini-2.5-flash"
+        provider_id: String,
+        model_id: String,
     },
 }
 
@@ -605,16 +600,12 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
-    /// 全局网络代理配置
     #[serde(default)]
     pub proxy: ProxySettings,
-    /// 当前激活的转写引擎模式（本地离线 / 云端 API）
     #[serde(default)]
     pub transcription_mode: TranscriptionMode,
-    /// 云端 STT 凭据字典 (provider_id -> api_key)，继承 SecretMap 自动 Debug 脱敏机制
     #[serde(default = "default_cloud_stt_api_keys")]
     pub cloud_stt_api_keys: SecretMap,
-    /// 云端提供商参数配置 (provider_id -> CloudSttProviderSettings)
     #[serde(default = "default_cloud_stt_providers")]
     pub cloud_stt_providers: HashMap<String, CloudSttProviderSettings>,
 }
@@ -624,7 +615,7 @@ pub const DEFAULT_CLOUD_STT_MODEL_ID: &str = "gemini-3.5-transcribe";
 pub const GEMINI_LIVE_MODEL_ID: &str = "gemini-3.5-transcribe-live";
 
 impl AppSettings {
-    /// 解析默认或当前激活的云端转写模式配置
+    /// Resolves active or default cloud transcription mode.
     pub fn resolve_cloud_transcription_mode(&self) -> TranscriptionMode {
         match &self.transcription_mode {
             TranscriptionMode::Cloud {

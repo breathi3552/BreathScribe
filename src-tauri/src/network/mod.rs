@@ -21,16 +21,14 @@ impl NetworkManager {
         })
     }
 
-    /// 获取共享连接池 HTTP Client 的克隆（reqwest::Client 内部自带 Arc）
     pub async fn client(&self) -> Client {
         self.client.read().await.clone()
     }
-    /// 获取当前生效的代理配置快照
+
     pub async fn proxy_settings(&self) -> ProxySettings {
         self.current_settings.read().await.clone()
     }
 
-    /// 更新代理配置并即时原子替换全局 Client
     pub async fn update_proxy_settings(&self, new_settings: ProxySettings) -> Result<(), String> {
         let new_client = build_reqwest_client(&new_settings)?;
         let mut client_lock = self.client.write().await;
@@ -95,7 +93,7 @@ pub fn build_reqwest_client(settings: &ProxySettings) -> Result<Client, String> 
         .map_err(|e| format!("Failed to build reqwest client: {}", e))
 }
 
-/// 发起网络连通性探测并返回往返延迟 RTT（毫秒）
+/// Probe network connectivity and return round-trip latency in ms
 pub async fn test_connectivity(client: &Client) -> Result<u64, String> {
     let test_urls = [
         "https://www.google.com/generate_204",
@@ -125,6 +123,6 @@ pub async fn test_connectivity(client: &Client) -> Result<u64, String> {
     }
 
     Err(last_err
-        .map(|e| format!("网络探测失败: {}", e))
-        .unwrap_or_else(|| "网络探测失败: 未知错误".to_string()))
+        .map(|e| format!("Connectivity probe failed: {}", e))
+        .unwrap_or_else(|| "Connectivity probe failed: unknown error".to_string()))
 }

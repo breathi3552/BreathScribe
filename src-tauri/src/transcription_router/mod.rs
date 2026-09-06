@@ -14,7 +14,7 @@ use crate::providers::{
 };
 use crate::settings::{AppSettings, TranscriptionMode};
 
-/// 基于 Tauri AppHandle 的流式文本事件接收器
+/// Stream text event sink backed by Tauri AppHandle.
 pub struct TauriStreamTextSink {
     app_handle: AppHandle,
 }
@@ -73,17 +73,13 @@ impl TranscriptionRouter {
         &self.gemini_provider
     }
 
-    /// 检查是否有正在运行的云端流式会话
+    /// Checks whether a cloud streaming session is active.
     pub fn has_active_cloud_stream(&self) -> bool {
         self.has_active_stream
             .load(std::sync::atomic::Ordering::Acquire)
     }
 
-    /// 启动云端流式会话，并将麦克风采集的音频旁路帧持续泵送至会话
-    ///
-    /// 此方法为同步非阻塞调用：立即打开 `StreamRouter` 麦克风旁路通道，
-    /// 保证从第 1 毫秒起录制的音频帧进入内存缓冲队列（零丢弃），
-    /// 随后在后台异步协程中完成长连接握手建连，并将前置缓冲与后续采样无缝推流至服务端。
+    /// Starts a cloud streaming session and pipes microphone audio frames to it.
     pub fn start_cloud_stream(
         &self,
         options: &TranscriptionOptions,
@@ -91,7 +87,6 @@ impl TranscriptionRouter {
     ) {
         self.cancel_cloud_stream();
 
-        // 1. 同步打开 StreamRouter 麦克风推流通道，建立内存缓冲队列（第 1 毫秒零丢弃）
         let rx = stream_router.open();
         *self.active_stream_router.lock() = Some(Arc::clone(&stream_router));
         self.has_active_stream
@@ -117,7 +112,7 @@ impl TranscriptionRouter {
             let session = match session_res {
                 Ok(s) => s,
                 Err(e) => {
-                    log::warn!("启动云端实时流式转写握手失败: {}", e);
+                    log::warn!("Failed to initiate cloud streaming handshake: {}", e);
                     has_stream.store(false, std::sync::atomic::Ordering::Release);
                     if let Some(r) = active_router.lock().take() {
                         r.clear();
@@ -131,7 +126,7 @@ impl TranscriptionRouter {
                 }
             };
 
-            log::info!("云端实时流式转写握手就绪，开始冲刷前置缓冲并实时推流");
+            log::info!("Cloud streaming session ready, streaming audio");
 
             let session_arc = Arc::new(tokio::sync::Mutex::new(Some(session)));
             let session_feed = Arc::clone(&session_arc);
@@ -149,7 +144,7 @@ impl TranscriptionRouter {
                             let guard = session_feed.blocking_lock();
                             if let Some(s) = guard.as_ref() {
                                 if let Err(e) = s.feed_audio(&samples) {
-                                    log::warn!("泵送音频采样至云端会话失败: {}", e);
+                                    log::warn!("Failed to feed audio samples to cloud session: {}", e);
                                     break;
                                 }
                             }
@@ -162,7 +157,6 @@ impl TranscriptionRouter {
 
             match ctrl_rx.recv().await {
                 Some(CloudStreamCtrl::Finalize(reply_tx)) => {
-                    // 等待 feed 任务把 rx 队列里的所有前置与残留音频全量泵送完毕（最多等待 3 秒）
                     let _ = tokio::time::timeout(Duration::from_secs(3), feed_finished.notified())
                         .await;
 
@@ -186,9 +180,8 @@ impl TranscriptionRouter {
         });
     }
 
-    /// 结束云端流式会话并返回最终转写文本
+    /// Finalizes cloud streaming session and returns the transcribed text.
     pub async fn finalize_cloud_stream(&self) -> Option<Result<String, String>> {
-        // 关闭旁路麦克风推流通道，通知 rx 管道在排空所有前置与实时音频帧后退出
         if let Some(router) = self.active_stream_router.lock().take() {
             router.clear();
         }
@@ -210,7 +203,7 @@ impl TranscriptionRouter {
             Ok(Ok(final_res)) => final_res,
             Ok(Err(_)) => None,
             Err(_) => {
-                log::warn!("等待云端流式会话收尾超时 (8s)，降级回退至批处理模式");
+                log::warn!("Cloud stream finalization timed out (8s), falling back to batch mode");
                 None
             }
         };
@@ -220,7 +213,7 @@ impl TranscriptionRouter {
         res
     }
 
-    /// 取消并释放当前的云端流式会话
+    /// Cancels the active cloud streaming session.
     pub fn cancel_cloud_stream(&self) {
         self.has_active_stream
             .store(false, std::sync::atomic::Ordering::Release);
@@ -234,7 +227,7 @@ impl TranscriptionRouter {
         }
     }
 
-    /// 检查当前设置下的转写模式与模型是否支持实时流式识别
+    /// Checks whether current settings support streaming transcription.
     pub fn is_streaming_supported(&self, settings: &AppSettings) -> bool {
         match &settings.transcription_mode {
             TranscriptionMode::Cloud {
@@ -253,7 +246,7 @@ impl TranscriptionRouter {
         }
     }
 
-    /// 开启实时流式转写会话（针对支持流式的云端提供商）
+    /// Starts a real-time streaming transcription session.
     pub async fn start_streaming(
         &self,
         options: &TranscriptionOptions,
@@ -267,17 +260,17 @@ impl TranscriptionRouter {
             } => match provider_id.as_str() {
                 "gemini" => {
                     if !self.gemini_provider.supports_streaming(model_id) {
-                        return Err(format!("当前配置的模型 {} 不支持流式转写", model_id));
+                        return Err(format!("Model {} does not support streaming", model_id));
                     }
                     let sink = custom_sink.unwrap_or_else(|| {
                         Arc::new(TauriStreamTextSink::new(self.app_handle.clone()))
                     });
                     self.gemini_provider.start_stream(options, sink).await
                 }
-                unknown => Err(format!("云端提供商 {} 不支持流式转写", unknown)),
+                unknown => Err(format!("Cloud provider {} does not support streaming", unknown)),
             },
             TranscriptionMode::Local => {
-                Err("本地模型流式由本地 TranscriptionManager 驱动".to_string())
+                Err("Local model streaming is handled by TranscriptionManager".to_string())
             }
         }
     }
@@ -292,7 +285,7 @@ impl TranscriptionRouter {
             TranscriptionMode::Local => self.local_provider.transcribe(audio, options).await,
             TranscriptionMode::Cloud { provider_id, .. } => match provider_id.as_str() {
                 "gemini" => self.gemini_provider.transcribe(audio, options).await,
-                unknown => Err(format!("未知的云端转写提供商: {}", unknown)),
+                unknown => Err(format!("Unknown cloud STT provider: {}", unknown)),
             },
         }
     }
@@ -306,15 +299,12 @@ mod tests {
     fn test_stream_router_pre_buffering_behavior() {
         let router = StreamRouter::new();
 
-        // 1. 未 open 时 feed，采样被安全静默丢弃（不积压任何无效数据）
         router.feed(&[1.0, 2.0]);
         assert!(!router.is_open());
 
-        // 2. 同步 open，推流通道开启
         let rx = router.open();
         assert!(router.is_open());
 
-        // 3. 模拟建连期间麦克风持续传入音频帧
         let frame1 = vec![0.1f32; 1600];
         let frame2 = vec![0.2f32; 1600];
         let frame3 = vec![0.3f32; 1600];
@@ -323,7 +313,6 @@ mod tests {
         router.feed(&frame2);
         router.feed(&frame3);
 
-        // 4. 模拟建连耗时后，消费者开始接收，验证前置缓冲全量保留且保序
         let received1 = rx.recv().expect("frame 1 should be buffered");
         if let StreamCmd::Feed(samples) = received1 {
             assert_eq!(samples.len(), 1600);
@@ -348,7 +337,6 @@ mod tests {
             panic!("Expected StreamCmd::Feed");
         }
 
-        // 5. take 后通道关闭，再 feed 不会增加
         let _ = router.take();
         assert!(!router.is_open());
         router.feed(&[9.9]);

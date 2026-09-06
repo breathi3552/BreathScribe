@@ -793,14 +793,14 @@ impl ShortcutAction for TranscribeAction {
 
                         match cloud_stream_res {
                             Some(Ok(text)) if !text.trim().is_empty() => {
-                                debug!("Gemini Live 实时流式转写成功交付: {}", text);
+                                debug!("Gemini Live streaming transcription delivered: {}", text);
                                 Ok(text)
                             }
                             other => {
                                 if let Some(Err(e)) = other {
-                                    warn!("Gemini Live 实时流式转写异常 ({}): 自动降级回退至云端批处理模式", e);
+                                    warn!("Gemini Live streaming transcription failed ({}): falling back to batch mode", e);
                                 } else {
-                                    debug!("Gemini Live 未产生有效流式文本，自动降级回退至云端批处理模式");
+                                    debug!("Gemini Live produced no text, falling back to batch mode");
                                 }
                                 if let Some(r) = &router {
                                     let options = TranscriptionOptions {

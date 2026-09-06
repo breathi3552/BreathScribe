@@ -15,7 +15,7 @@ pub async fn test_proxy_connectivity(
     } else {
         let network_manager = app
             .try_state::<Arc<NetworkManager>>()
-            .ok_or_else(|| "网络管理器未初始化".to_string())?;
+            .ok_or_else(|| "Network manager not initialized".to_string())?;
         let client = network_manager.client().await;
         network::test_connectivity(&client).await
     }
@@ -26,7 +26,7 @@ pub async fn test_proxy_connectivity(
 pub async fn update_proxy_settings(app: AppHandle, settings: ProxySettings) -> Result<(), String> {
     let network_manager = app
         .try_state::<Arc<NetworkManager>>()
-        .ok_or_else(|| "网络管理器未初始化".to_string())?;
+        .ok_or_else(|| "Network manager not initialized".to_string())?;
     network_manager
         .update_proxy_settings(settings.clone())
         .await?;

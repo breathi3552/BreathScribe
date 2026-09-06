@@ -7,8 +7,8 @@ pub struct DetectedProxy {
     pub protocol: ProxyProtocol,
 }
 
-/// 解析 Windows 注册表中的 ProxyServer 字符串
-/// 支持单代理格式如 "127.0.0.1:7890" 或多协议分流格式如 "http=127.0.0.1:7890;https=127.0.0.1:7890;socks=127.0.0.1:7891"
+/// Parses Windows registry ProxyServer string.
+/// Supports "host:port" or multi-protocol "http=host:port;https=host:port;socks=host:port".
 pub fn parse_windows_proxy_string(proxy_str: &str) -> Option<DetectedProxy> {
     let trimmed = proxy_str.trim();
     if trimmed.is_empty() {
@@ -35,7 +35,7 @@ pub fn parse_windows_proxy_string(proxy_str: &str) -> Option<DetectedProxy> {
             }
         }
 
-        // 优先次序：https -> http -> socks
+        // Priority: https -> http -> socks
         if let Some(addr) = https_proxy {
             if let Some(detected) = parse_host_port(addr, ProxyProtocol::Http) {
                 return Some(detected);
@@ -100,7 +100,7 @@ fn parse_host_port(addr: &str, protocol: ProxyProtocol) -> Option<DetectedProxy>
     }
 }
 
-/// 解析环境变量中的代理 URL，例如 "http://127.0.0.1:7890" 或 "socks5://user:pass@127.0.0.1:1080"
+/// Parses proxy URL from environment variables.
 pub fn parse_url_proxy(url_str: &str) -> Option<DetectedProxy> {
     let trimmed = url_str.trim();
     if trimmed.is_empty() {
@@ -138,7 +138,7 @@ pub fn get_system_proxy() -> Option<DetectedProxy> {
 
 #[cfg(not(target_os = "windows"))]
 pub fn get_system_proxy() -> Option<DetectedProxy> {
-    // macOS / Linux 编译存根：读取 http_proxy / all_proxy 环境变量
+    // Read proxy environment variables on Unix
     std::env::var("all_proxy")
         .or_else(|_| std::env::var("ALL_PROXY"))
         .or_else(|_| std::env::var("https_proxy"))

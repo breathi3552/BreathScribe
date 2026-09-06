@@ -34,7 +34,6 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
 
   return (
     <div className="absolute bottom-full start-0 mb-2 w-64 max-h-[60vh] overflow-y-auto bg-background border border-mid-gray/20 rounded-lg shadow-lg py-2 z-50">
-      {/* 1. Cloud Option (pinned to top) */}
       <div
         onClick={() => onSelectCloud?.()}
         onKeyDown={(e) => {
@@ -57,10 +56,7 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
                 {cloudModelName || formatCloudModelName(DEFAULT_CLOUD_MODEL_ID)}
               </div>
               <div className="text-xs text-text/40 italic pe-4">
-                {t(
-                  "modelSelector.cloudProviderGoogle",
-                  "Google Gemini 云端大模型转写",
-                )}
+                {t("modelSelector.cloudProviderGoogle")}
               </div>
             </div>
           </div>
@@ -71,8 +67,6 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
           )}
         </div>
       </div>
-
-      {/* 2. Downloaded Local Models */}
       {downloadedModels.length > 0 ? (
         <div>
           {downloadedModels.map((model) => (

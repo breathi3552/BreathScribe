@@ -9,7 +9,6 @@ pub struct TranscriptionOptions {
 
 #[async_trait::async_trait]
 pub trait BatchTranscriptionProvider: Send + Sync {
-    /// 执行整段音频转写。入参采用所有权移动 `audio: Vec<f32>`，解除生命周期限制与多余拷贝
     async fn transcribe(
         &self,
         audio: Vec<f32>,
@@ -19,34 +18,23 @@ pub trait BatchTranscriptionProvider: Send + Sync {
     fn provider_id(&self) -> &'static str;
 }
 
-/// 接收流式转写增量文本的输出汇（Sink）
+/// Sink for streaming transcription partial and committed text.
 pub trait StreamTextSink: Send + Sync {
-    /// 发送流式文本更新
-    /// `committed`: 权威分句确认文本（稳定前缀）
-    /// `tentative`: 毫秒级推测片段（暂态后缀）
     fn emit_text(&self, committed: String, tentative: String);
 }
 
-/// 单次实时流式会话生命周期
+/// Lifecycle of an active streaming transcription session.
 #[async_trait::async_trait]
 pub trait StreamingSession: Send + Sync {
-    /// 持续喂入 16kHz 单声道 f32 音频采样
     fn feed_audio(&self, samples: &[f32]) -> Result<(), String>;
-
-    /// 停止录音，冲刷缓冲区并等待最终文本输出
     async fn finalize(self: Box<Self>) -> Result<String, String>;
-
-    /// 放弃转写并清理长连接
     async fn cancel(self: Box<Self>);
 }
 
-/// 支持流式转写的服务商抽象 Trait
+/// Provider capable of real-time streaming transcription.
 #[async_trait::async_trait]
 pub trait StreamingTranscriptionProvider: Send + Sync {
-    /// 检查指定的模型标识是否支持流式实时转写
     fn supports_streaming(&self, model: &str) -> bool;
-
-    /// 开启实时流式转写会话
     async fn start_stream(
         &self,
         options: &TranscriptionOptions,
@@ -103,12 +91,12 @@ mod tests {
         fn feed_audio(&self, samples: &[f32]) -> Result<(), String> {
             self.fed_count
                 .fetch_add(samples.len(), std::sync::atomic::Ordering::Relaxed);
-            self.sink.emit_text("你好".to_string(), "世界".to_string());
+            self.sink.emit_text("hello".to_string(), "world".to_string());
             Ok(())
         }
 
         async fn finalize(self: Box<Self>) -> Result<String, String> {
-            Ok("你好世界，完整测试".to_string())
+            Ok("hello world, test complete".to_string())
         }
 
         async fn cancel(self: Box<Self>) {}
@@ -159,7 +147,7 @@ mod tests {
         });
 
         let options = TranscriptionOptions {
-            language: "zh".to_string(),
+            language: "en".to_string(),
             prompt: None,
         };
 
@@ -174,9 +162,9 @@ mod tests {
 
         let events = sink.events.lock().clone();
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0], ("你好".to_string(), "世界".to_string()));
+        assert_eq!(events[0], ("hello".to_string(), "world".to_string()));
 
         let final_text = session.finalize().await.expect("finalize should succeed");
-        assert_eq!(final_text, "你好世界，完整测试");
+        assert_eq!(final_text, "hello world, test complete");
     }
 }

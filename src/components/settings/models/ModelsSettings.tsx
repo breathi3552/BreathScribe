@@ -267,7 +267,7 @@ export const ModelsSettings: React.FC = () => {
           }`}
         >
           <Cpu className="w-3.5 h-3.5" />
-          <span>{t("settings.models.modes.local", "本地离线模型")}</span>
+          <span>{t("settings.models.modes.local")}</span>
         </button>
         <button
           type="button"
@@ -288,7 +288,7 @@ export const ModelsSettings: React.FC = () => {
           }`}
         >
           <Cloud className="w-3.5 h-3.5" />
-          <span>{t("settings.models.modes.cloud", "云端 API (Gemini)")}</span>
+          <span>{t("settings.models.modes.cloud")}</span>
         </button>
       </div>
 

@@ -91,7 +91,8 @@ mod tests {
         fn feed_audio(&self, samples: &[f32]) -> Result<(), String> {
             self.fed_count
                 .fetch_add(samples.len(), std::sync::atomic::Ordering::Relaxed);
-            self.sink.emit_text("hello".to_string(), "world".to_string());
+            self.sink
+                .emit_text("hello".to_string(), "world".to_string());
             Ok(())
         }
 

@@ -800,7 +800,9 @@ impl ShortcutAction for TranscribeAction {
                                 if let Some(Err(e)) = other {
                                     warn!("Gemini Live streaming transcription failed ({}): falling back to batch mode", e);
                                 } else {
-                                    debug!("Gemini Live produced no text, falling back to batch mode");
+                                    debug!(
+                                        "Gemini Live produced no text, falling back to batch mode"
+                                    );
                                 }
                                 if let Some(r) = &router {
                                     let options = TranscriptionOptions {

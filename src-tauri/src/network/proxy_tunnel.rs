@@ -153,7 +153,9 @@ pub async fn establish_http_connect_tunnel(
             .map_err(|_| "Timed out reading HTTP CONNECT response".to_string())?
             .map_err(|e| format!("Failed to read HTTP CONNECT response: {}", e))?;
         if n == 0 {
-            return Err("HTTP proxy closed connection before completing CONNECT handshake".to_string());
+            return Err(
+                "HTTP proxy closed connection before completing CONNECT handshake".to_string(),
+            );
         }
         header_buf.push(byte_buf[0]);
         if header_buf.ends_with(b"\r\n\r\n") {
@@ -213,7 +215,10 @@ pub async fn establish_socks5_tunnel(
         .map_err(|e| format!("Failed to read SOCKS5 handshake response: {}", e))?;
 
     if method_resp[0] != 0x05 {
-        return Err(format!("Incompatible SOCKS protocol version: 0x{:02X}", method_resp[0]));
+        return Err(format!(
+            "Incompatible SOCKS protocol version: 0x{:02X}",
+            method_resp[0]
+        ));
     }
 
     match method_resp[1] {
@@ -239,13 +244,19 @@ pub async fn establish_socks5_tunnel(
                     .map_err(|e| format!("Failed to read SOCKS5 auth response: {}", e))?;
 
                 if auth_resp[1] != 0x00 {
-                    return Err("SOCKS5 authentication failed: invalid username or password".to_string());
+                    return Err(
+                        "SOCKS5 authentication failed: invalid username or password".to_string()
+                    );
                 }
             } else {
-                return Err("SOCKS5 proxy requires authentication, but no credentials provided".to_string());
+                return Err(
+                    "SOCKS5 proxy requires authentication, but no credentials provided".to_string(),
+                );
             }
         }
-        0xFF => return Err("SOCKS5 proxy rejected all supported authentication methods".to_string()),
+        0xFF => {
+            return Err("SOCKS5 proxy rejected all supported authentication methods".to_string())
+        }
         other => {
             return Err(format!(
                 "SOCKS5 proxy selected unsupported authentication method: 0x{:02X}",
@@ -303,7 +314,10 @@ pub async fn establish_socks5_tunnel(
             0x08 => "address type not supported",
             _ => "unknown SOCKS error",
         };
-        return Err(format!("SOCKS5 connect failed: {} (code 0x{:02X})", msg, rep));
+        return Err(format!(
+            "SOCKS5 connect failed: {} (code 0x{:02X})",
+            msg, rep
+        ));
     }
 
     match resp_header[3] {
@@ -334,7 +348,12 @@ pub async fn establish_socks5_tunnel(
                 .await
                 .map_err(|e| e.to_string())?;
         }
-        other => return Err(format!("Unknown address type in SOCKS5 response: 0x{:02X}", other)),
+        other => {
+            return Err(format!(
+                "Unknown address type in SOCKS5 response: 0x{:02X}",
+                other
+            ))
+        }
     }
 
     Ok(())
@@ -344,7 +363,8 @@ pub async fn connect_websocket_tunnel(
     url_str: &str,
     proxy_settings: &ProxySettings,
 ) -> Result<WebSocketStream<TunnelStream>, String> {
-    let parsed_url = Url::parse(url_str).map_err(|e| format!("Failed to parse WebSocket URL: {}", e))?;
+    let parsed_url =
+        Url::parse(url_str).map_err(|e| format!("Failed to parse WebSocket URL: {}", e))?;
 
     let host = parsed_url
         .host_str()
@@ -380,7 +400,12 @@ pub async fn connect_websocket_tunnel(
             )
             .await
             .map_err(|_| format!("Connection to HTTP proxy {}:{} timed out", p_host, p_port))?
-            .map_err(|e| format!("Connection to HTTP proxy {}:{} failed: {}", p_host, p_port, e))?;
+            .map_err(|e| {
+                format!(
+                    "Connection to HTTP proxy {}:{} failed: {}",
+                    p_host, p_port, e
+                )
+            })?;
 
             establish_http_connect_tunnel(&mut stream, host, port, auth.as_ref()).await?;
             stream
@@ -396,7 +421,12 @@ pub async fn connect_websocket_tunnel(
             )
             .await
             .map_err(|_| format!("Connection to SOCKS5 proxy {}:{} timed out", p_host, p_port))?
-            .map_err(|e| format!("Connection to SOCKS5 proxy {}:{} failed: {}", p_host, p_port, e))?;
+            .map_err(|e| {
+                format!(
+                    "Connection to SOCKS5 proxy {}:{} failed: {}",
+                    p_host, p_port, e
+                )
+            })?;
 
             establish_socks5_tunnel(&mut stream, host, port, auth.as_ref()).await?;
             stream

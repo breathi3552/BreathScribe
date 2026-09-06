@@ -611,8 +611,9 @@ async fn run_gemini_live_worker<S>(
                     other => {
                         if let Some(server_msg) = GeminiLiveServerMessage::parse(&other) {
                             if let Some(err) = server_msg.error {
-                                let err_text =
-                                    err.message.unwrap_or_else(|| "Unknown server error".to_string());
+                                let err_text = err
+                                    .message
+                                    .unwrap_or_else(|| "Unknown server error".to_string());
                                 log::warn!("Gemini Live server error: {}", err_text);
                                 state_receiver.lock().session_error = Some(err_text);
                                 turn_notify_receiver.notify_waiters();
@@ -889,7 +890,10 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                 match msg_res {
                     Ok(msg) => match msg {
                         tokio_tungstenite::tungstenite::Message::Close(frame) => {
-                            return Err(format!("Gemini Live server closed connection: {:?}", frame));
+                            return Err(format!(
+                                "Gemini Live server closed connection: {:?}",
+                                frame
+                            ));
                         }
                         tokio_tungstenite::tungstenite::Message::Ping(data) => {
                             let _ = ws
@@ -911,7 +915,10 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                         }
                     },
                     Err(e) => {
-                        return Err(format!("Gemini Live failed to receive handshake response: {}", e));
+                        return Err(format!(
+                            "Gemini Live failed to receive handshake response: {}",
+                            e
+                        ));
                     }
                 }
             }
@@ -924,7 +931,9 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                 log::info!("Gemini Live setup completed");
             }
             Ok(Err(e)) => return Err(e),
-            Err(_) => return Err("Timed out waiting for Gemini Live setupComplete (10s)".to_string()),
+            Err(_) => {
+                return Err("Timed out waiting for Gemini Live setupComplete (10s)".to_string())
+            }
         }
 
         let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1375,7 +1384,8 @@ mod tests {
             assert_eq!(events.last(), Some(&("".to_string(), "hello".to_string())));
         }
 
-        let final_text_json = r#"{"serverContent":{"inputTranscription":{"text":"hello, world!"}}}"#;
+        let final_text_json =
+            r#"{"serverContent":{"inputTranscription":{"text":"hello, world!"}}}"#;
         server_ws
             .send(Message::Text(final_text_json.into()))
             .await
@@ -1425,9 +1435,11 @@ mod tests {
             emitted: Arc::clone(&emitted),
         });
 
-        let _worker_handle = tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
+        let _worker_handle =
+            tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
 
-        let final_text_json = r#"{"serverContent":{"inputTranscription":{"text":"instant transcription"}}}"#;
+        let final_text_json =
+            r#"{"serverContent":{"inputTranscription":{"text":"instant transcription"}}}"#;
         server_ws
             .send(Message::Text(final_text_json.into()))
             .await
@@ -1450,7 +1462,11 @@ mod tests {
         let final_result = reply_rx.await.unwrap().unwrap();
         let elapsed = start.elapsed();
         assert_eq!(final_result, "instant transcription");
-        assert!(elapsed < Duration::from_millis(500), "Finalize took too long: {:?}", elapsed);
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "Finalize took too long: {:?}",
+            elapsed
+        );
     }
 
     #[test]

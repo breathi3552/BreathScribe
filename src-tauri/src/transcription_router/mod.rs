@@ -144,7 +144,10 @@ impl TranscriptionRouter {
                             let guard = session_feed.blocking_lock();
                             if let Some(s) = guard.as_ref() {
                                 if let Err(e) = s.feed_audio(&samples) {
-                                    log::warn!("Failed to feed audio samples to cloud session: {}", e);
+                                    log::warn!(
+                                        "Failed to feed audio samples to cloud session: {}",
+                                        e
+                                    );
                                     break;
                                 }
                             }
@@ -267,7 +270,10 @@ impl TranscriptionRouter {
                     });
                     self.gemini_provider.start_stream(options, sink).await
                 }
-                unknown => Err(format!("Cloud provider {} does not support streaming", unknown)),
+                unknown => Err(format!(
+                    "Cloud provider {} does not support streaming",
+                    unknown
+                )),
             },
             TranscriptionMode::Local => {
                 Err("Local model streaming is handled by TranscriptionManager".to_string())

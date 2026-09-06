@@ -162,9 +162,9 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
       </SettingContainer>
       {draft.mode === "manual" && (
         <div className="mx-4 p-4 rounded-lg bg-mid-gray/5 border border-mid-gray/20 space-y-4 transition-all">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-12 gap-3">
             {/* Protocol */}
-            <div className="space-y-1">
+            <div className="col-span-3 space-y-1">
               <label className="text-xs font-medium text-text/80">
                 {t("settings.advanced.proxy.protocol.title")}
               </label>
@@ -182,7 +182,7 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
             </div>
 
             {/* Host */}
-            <div className="space-y-1 md:col-span-2">
+            <div className="col-span-6 space-y-1">
               <label className="text-xs font-medium text-text/80">
                 {t("settings.advanced.proxy.host.label")}
               </label>
@@ -195,27 +195,27 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
                 className="w-full"
               />
             </div>
-          </div>
 
-          {/* Port */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-text/80">
-              {t("settings.advanced.proxy.port.label")}
-            </label>
-            <Input
-              type="number"
-              min={1}
-              max={65535}
-              value={draft.port || ""}
-              placeholder={t("settings.advanced.proxy.port.placeholder")}
-              onChange={(e) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  port: parseInt(e.target.value, 10) || 0,
-                }))
-              }
-              className="w-48"
-            />
+            {/* Port */}
+            <div className="col-span-3 space-y-1">
+              <label className="text-xs font-medium text-text/80">
+                {t("settings.advanced.proxy.port.label")}
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={65535}
+                value={draft.port || ""}
+                placeholder={t("settings.advanced.proxy.port.placeholder")}
+                onChange={(e) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    port: parseInt(e.target.value, 10) || 0,
+                  }))
+                }
+                className="w-full"
+              />
+            </div>
           </div>
 
           {/* Authentication Checkbox */}
@@ -236,7 +236,7 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
             </label>
 
             {draft.auth_enabled && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-5 border-l-2 border-logo-primary/30">
+              <div className="grid grid-cols-2 gap-3 pl-5 border-l-2 border-logo-primary/30">
                 <div className="space-y-1">
                   <label className="text-xs text-text/70">
                     {t("settings.advanced.proxy.auth.username")}

@@ -290,7 +290,7 @@
           "keyFormatHint": "Hint: Standard Google Gemini API Keys usually start with 'AIzaSy' or 'AQ.'",
           "keyFormatNote": "Format hint: Standard Google Gemini API Keys typically start with 'AIzaSy' or 'AQ.'"
         },
-        "providerGoogleDesc": "Google Gemini 3.5 Transcribe & Flash"
+        "providerGoogleDesc": "Google Gemini 3.5 Transcribe"
       }
     },
     "sound": {

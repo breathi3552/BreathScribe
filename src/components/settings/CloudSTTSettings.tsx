@@ -81,16 +81,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
         label: "Gemini 3.5 Transcribe",
         description: t("settings.models.cloud.models.transcribeDesc"),
       },
-      {
-        value: "gemini-3.6-flash",
-        label: "Gemini 3.6 Flash",
-        description: t("settings.models.cloud.models.flash36Desc"),
-      },
-      {
-        value: "gemini-3.5-flash",
-        label: "Gemini 3.5 Flash",
-        description: t("settings.models.cloud.models.flash35Desc"),
-      },
     ],
     [t],
   );
@@ -102,7 +92,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
         label: "Google Gemini",
         description: t(
           "settings.models.cloud.providerGoogleDesc",
-          "Google Gemini 3.5 Transcribe & Flash",
+          "Google Gemini 3.5 Transcribe",
         ),
       },
     ],

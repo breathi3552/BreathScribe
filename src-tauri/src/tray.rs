@@ -801,11 +801,11 @@ mod tests {
             provider_id: "gemini".to_string(),
             model_id: "gemini-3.5-transcribe".to_string(),
         };
-        let mut input_flash = inputs(false);
-        input_flash.transcription_mode = TranscriptionMode::Cloud {
+        let mut input_live = inputs(false);
+        input_live.transcription_mode = TranscriptionMode::Cloud {
             provider_id: "gemini".to_string(),
-            model_id: "gemini-3.6-flash".to_string(),
+            model_id: "gemini-3.5-transcribe-live".to_string(),
         };
-        assert_ne!(input_transcribe, input_flash);
+        assert_ne!(input_transcribe, input_live);
     }
 }

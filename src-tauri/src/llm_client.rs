@@ -143,13 +143,13 @@ fn build_headers(provider: &PostProcessProvider, api_key: &str) -> Result<Header
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
         REFERER,
-        HeaderValue::from_static("https://github.com/cjpais/Handy"),
+        HeaderValue::from_static("https://github.com/breathi3552/Handy-Cloud"),
     );
     headers.insert(
         USER_AGENT,
-        HeaderValue::from_static("Handy/1.0 (+https://github.com/cjpais/Handy)"),
+        HeaderValue::from_static("BreathScribe/1.0 (+https://github.com/breathi3552/Handy-Cloud)"),
     );
-    headers.insert("X-Title", HeaderValue::from_static("Handy Cloud"));
+    headers.insert("X-Title", HeaderValue::from_static("BreathScribe"));
 
     // Provider-specific auth headers
     if !api_key.is_empty() {

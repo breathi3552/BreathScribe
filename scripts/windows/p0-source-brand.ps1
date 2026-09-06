@@ -19,17 +19,23 @@ function Replace-InFile {
   }
 }
 
-Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{} (Dev)", env!("CARGO_PKG_VERSION"))' 'format!("Handy Cloud v{} (Dev)", env!("CARGO_PKG_VERSION"))'
-Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{}", env!("CARGO_PKG_VERSION"))' 'format!("Handy Cloud v{}", env!("CARGO_PKG_VERSION"))'
+Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{} (Dev)", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{} (Dev)", env!("CARGO_PKG_VERSION"))'
+Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{}", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{}", env!("CARGO_PKG_VERSION"))'
+Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy Cloud v{} (Dev)", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{} (Dev)", env!("CARGO_PKG_VERSION"))'
+Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy Cloud v{}", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{}", env!("CARGO_PKG_VERSION"))'
 Replace-InFile "src/components/settings/about/AboutSettings.tsx" 'https://github.com/cjpais/Handy' 'https://github.com/breathi3552/Handy-Cloud'
-Replace-InFile "package.json" '"name": "handy-app"' '"name": "handy-cloud-app"'
-Replace-InFile "bun.lock" '"name": "handy-app"' '"name": "handy-cloud-app"'
-Replace-InFile "src-tauri/Cargo.toml" 'description = "Handy"' 'description = "Handy Cloud"'
+Replace-InFile "package.json" '"name": "handy-app"' '"name": "breath-scribe-app"'
+Replace-InFile "package.json" '"name": "handy-cloud-app"' '"name": "breath-scribe-app"'
+Replace-InFile "bun.lock" '"name": "handy-app"' '"name": "breath-scribe-app"'
+Replace-InFile "bun.lock" '"name": "handy-cloud-app"' '"name": "breath-scribe-app"'
+Replace-InFile "src-tauri/Cargo.toml" 'name = "handy"' 'name = "breath-scribe"'
+Replace-InFile "src-tauri/Cargo.toml" 'description = "Handy Cloud"' 'description = "BreathScribe"'
+Replace-InFile "src-tauri/Cargo.toml" 'description = "Handy"' 'description = "BreathScribe"'
 
 if (Test-Path "src-tauri/nsis/installer.nsi") {
   $path = "src-tauri/nsis/installer.nsi"
   $content = Get-Content $path -Raw
-  $updated = [regex]::Replace($content, 'Custom NSIS template for Handy(?: Cloud)*', 'Custom NSIS template for Handy Cloud')
+  $updated = [regex]::Replace($content, 'Custom NSIS template for (?:Handy Cloud|Handy)', 'Custom NSIS template for BreathScribe')
 
   $installerDefine = '!define INSTALLERICON "{{installer_icon}}"'
   $uninstallerDefine = '!define UNINSTALLERICON "{{uninstaller_icon}}"'
@@ -48,7 +54,7 @@ if (Test-Path "src-tauri/nsis/installer.nsi") {
   if ($updated -ne $content) {
     [System.IO.File]::WriteAllText((Resolve-Path $path), $updated, (New-Object System.Text.UTF8Encoding($false)))
     $changed = $true
-    Write-Host "Updated Handy Cloud NSIS icon wiring: $path"
+    Write-Host "Updated BreathScribe NSIS icon wiring: $path"
   }
 }
 
@@ -78,7 +84,7 @@ if ($content.StartsWith("# Handy`n") -or $content.StartsWith("# Handy`r`n")) {
   $changed = $true
 }
 
-$iconSource = "brand/handy-cloud-icon-source.png"
+$iconSource = "brand/breath-scribe-icon-source.svg"
 $iconMarker = "brand/P0_ICON_GENERATED.txt"
 if (-not (Test-Path $iconSource)) { throw "Missing approved brand icon source: $iconSource" }
 
@@ -95,7 +101,7 @@ $criticalIconsPresent = @($criticalIcons | Where-Object { -not (Test-Path $_) })
 $needsIconGeneration = $ForceIcons -or (-not $markerMatches) -or (-not $criticalIconsPresent)
 
 if ($needsIconGeneration) {
-  Write-Host "Generating Tauri icon matrix from approved Handy Cloud icon..."
+  Write-Host "Generating Tauri icon matrix from approved BreathScribe icon..."
   bun run tauri icon $iconSource
   if ($LASTEXITCODE -ne 0) { throw "tauri icon generation failed" }
 
@@ -129,7 +135,7 @@ if ($needsIconGeneration) {
 
   [System.IO.File]::WriteAllText((Join-Path (Get-Location) $iconMarker), $sourceHash, (New-Object System.Text.UTF8Encoding($false)))
   $changed = $true
-  Write-Host "Generated Handy Cloud icon, installer, and tray asset matrix."
+  Write-Host "Generated BreathScribe icon, installer, and tray asset matrix."
 }
 
 Write-Host "SOURCE_BRAND_CHANGED=$($changed.ToString().ToLowerInvariant())"

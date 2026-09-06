@@ -1,119 +1,146 @@
 import os
-from PIL import Image, ImageDraw
+import shutil
+import subprocess
+import tempfile
+
+TRAY_SVGS = {
+    "tray_idle.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>""",
+    "tray_idle_dark.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+</svg>""",
+    "tray_recording.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="48" cy="18" r="7" fill="#ef4444"/>
+</svg>""",
+    "tray_recording_dark.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="48" cy="18" r="7" fill="#dc2626"/>
+</svg>""",
+    "tray_transcribing.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="#0284c7" fill-opacity="0.4" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
+  <line x1="26" y1="33" x2="26" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="28" x2="32" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="31" x2="38" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>""",
+    "tray_transcribing_dark.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="#0284c7" fill-opacity="0.2" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
+  <line x1="26" y1="33" x2="26" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="28" x2="32" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="31" x2="38" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+</svg>""",
+    "tray_idle_warning.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="48" cy="18" r="7" fill="#f59e0b"/>
+  <line x1="48" y1="14" x2="48" y2="18" stroke="#000000" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="48" cy="21.5" r="1" fill="#000000"/>
+</svg>""",
+    "tray_idle_warning_dark.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="48" cy="18" r="7" fill="#d97706"/>
+  <line x1="48" y1="14" x2="48" y2="18" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="48" cy="21.5" r="1" fill="#ffffff"/>
+</svg>""",
+    "handy.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="url(#cloudGrad)"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>""",
+    "recording.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="url(#cloudGrad)"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="48" cy="18" r="7" fill="#ef4444"/>
+</svg>""",
+    "transcribing.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="url(#cloudGrad)"/>
+  <line x1="26" y1="33" x2="26" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="28" x2="32" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="31" x2="38" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>""",
+    "handy_warning.png": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="url(#cloudGrad)"/>
+  <line x1="26" y1="36" x2="26" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="32" y1="31" x2="32" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="34" x2="38" y2="42" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="48" cy="18" r="7" fill="#f59e0b"/>
+  <line x1="48" y1="14" x2="48" y2="18" stroke="#000000" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="48" cy="21.5" r="1" fill="#000000"/>
+</svg>""",
+}
 
 def generate_tray_icons():
-    resources_dir = 'src-tauri/resources'
-    os.makedirs(resources_dir, exist_ok=True)
+    dest_dir = os.path.abspath("src-tauri/resources")
+    os.makedirs(dest_dir, exist_ok=True)
+    temp_dir = tempfile.mkdtemp(prefix="tray_gen_")
 
-    # 1. Load the exact upstream hollow hand baseline (64x64)
-    orig_path = 'brand/upstream-tray_idle.png'
-    if not os.path.exists(orig_path):
-        import subprocess, io
-        data = subprocess.check_output(['git', 'show', '00d2554:src-tauri/resources/tray_idle.png'])
-        orig = Image.open(io.BytesIO(data)).convert('RGBA')
-        orig.save(orig_path)
-    else:
-        orig = Image.open(orig_path).convert('RGBA')
+    try:
+        for filename, svg_content in TRAY_SVGS.items():
+            svg_path = os.path.join(temp_dir, f"{filename}.svg")
+            out_dir = os.path.join(temp_dir, f"out_{filename}")
+            os.makedirs(out_dir, exist_ok=True)
+            with open(svg_path, "w", encoding="utf-8") as f:
+                f.write(svg_content)
 
-    w, h = orig.size  # 64, 64
+            cmd = ["bun", "run", "tauri", "icon", "--png", "64", svg_path, "-o", out_dir]
+            res = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+            if res.returncode != 0:
+                raise RuntimeError(f"tauri icon failed for {filename}: {res.stderr}")
 
-    # -------------------------------------------------------------
-    # Option 1-B: Exact Upstream Hollow Hand + Floating Cloud Cradle
-    # -------------------------------------------------------------
-    # In Option 1-B, the upstream hand and flat wrist block remain 100% intact.
-    # Beneath the wrist (y=48~61, x=13~53), a soft, puffy 3-lobe cloud cradle supports it.
-    
-    def make_base_cradle(fg_color):
-        base = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-        # Draw the hand in fg_color
-        for y in range(h):
-            for x in range(w):
-                r, g, b, a = orig.getpixel((x, y))
-                if a > 0:
-                    base.putpixel((x, y), (fg_color[0], fg_color[1], fg_color[2], a))
+            generated_png = os.path.join(out_dir, "64x64.png")
+            if not os.path.exists(generated_png):
+                raise FileNotFoundError(f"Expected generated PNG not found: {generated_png}")
 
-        # Add the cloud cradle beneath the wrist base (y=48 to 61)
-        draw = ImageDraw.Draw(base)
-        # Left cloud lobe
-        draw.ellipse([13, 49, 29, 61], fill=fg_color)
-        # Center cloud lobe (largest)
-        draw.ellipse([25, 47, 43, 62], fill=fg_color)
-        # Right cloud lobe
-        draw.ellipse([39, 49, 53, 61], fill=fg_color)
-        return base
+            dest_path = os.path.join(dest_dir, filename)
+            shutil.copyfile(generated_png, dest_path)
+            print(f"Generated {filename} -> {dest_path}")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
-    white = (255, 255, 255, 255)
-    dark_gray = (30, 41, 59, 255) # #1e293b for light taskbar
-
-    base_dark = make_base_cradle(white)      # for dark taskbars (white icons)
-    base_light = make_base_cradle(dark_gray) # for light taskbars (dark icons)
-
-    # 1. Idle States
-    base_dark.save(os.path.join(resources_dir, 'tray_idle.png'))
-    base_light.save(os.path.join(resources_dir, 'tray_idle_dark.png'))
-
-    # 2. Recording States (Vivid red dot & glow at fingertips: x=33, y=8)
-    def apply_recording(base_img, is_dark):
-        img = base_img.copy()
-        draw = ImageDraw.Draw(img)
-        # Red aura
-        aura_col = (239, 68, 68, 90) if is_dark else (220, 38, 38, 90)
-        dot_col = (239, 68, 68, 255) if is_dark else (220, 38, 38, 255)
-        draw.ellipse([27, 2, 39, 14], fill=aura_col)
-        draw.ellipse([29, 4, 37, 12], fill=dot_col)
-        draw.ellipse([32, 7, 34, 9], fill=(255, 255, 255, 255))
-        return img
-
-    apply_recording(base_dark, True).save(os.path.join(resources_dir, 'tray_recording.png'))
-    apply_recording(base_light, False).save(os.path.join(resources_dir, 'tray_recording_dark.png'))
-
-    # 3. Transcribing States (Electric sky-blue voice waves above fingertips)
-    def apply_transcribing(base_img, is_dark):
-        img = base_img.copy()
-        draw = ImageDraw.Draw(img)
-        arc_col1 = (56, 189, 248, 255) if is_dark else (2, 132, 199, 255) # #38bdf8 / #0284c7
-        arc_col2 = (14, 165, 233, 255) if is_dark else (3, 105, 161, 255) # #0ea5e9 / #0369a1
-        # Two clean arc waves centered over the dual fingertips
-        draw.arc([23, 2, 43, 14], start=200, end=340, fill=arc_col1, width=3)
-        draw.arc([20, -3, 46, 11], start=200, end=340, fill=arc_col2, width=2)
-        return img
-
-    apply_transcribing(base_dark, True).save(os.path.join(resources_dir, 'tray_transcribing.png'))
-    apply_transcribing(base_light, False).save(os.path.join(resources_dir, 'tray_transcribing_dark.png'))
-
-    # 4. Warning States (Amber badge at bottom right)
-    def apply_warning(base_img):
-        img = base_img.copy()
-        draw = ImageDraw.Draw(img)
-        # Amber badge (circle with exclamation point)
-        draw.ellipse([44, 43, 58, 57], fill=(245, 158, 11, 255))
-        draw.rectangle([50, 46, 52, 51], fill=(255, 255, 255, 255))
-        draw.rectangle([50, 53, 52, 54], fill=(255, 255, 255, 255))
-        return img
-
-    apply_warning(base_dark).save(os.path.join(resources_dir, 'tray_idle_warning.png'))
-    apply_warning(base_light).save(os.path.join(resources_dir, 'tray_idle_warning_dark.png'))
-
-    # 5. Linux Colored Icons (handy.png, recording.png, transcribing.png)
-    # Using classic candy pink hand outline with white cloud cradle
-    pink = (250, 162, 202, 255)
-    linux_base = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = orig.getpixel((x, y))
-            if a > 0:
-                linux_base.putpixel((x, y), (pink[0], pink[1], pink[2], a))
-
-    draw_linux = ImageDraw.Draw(linux_base)
-    draw_linux.ellipse([13, 49, 29, 61], fill=white)
-    draw_linux.ellipse([25, 47, 43, 62], fill=white)
-    draw_linux.ellipse([39, 49, 53, 61], fill=white)
-
-    linux_base.save(os.path.join(resources_dir, 'handy.png'))
-    apply_recording(linux_base, True).save(os.path.join(resources_dir, 'recording.png'))
-    apply_transcribing(linux_base, True).save(os.path.join(resources_dir, 'transcribing.png'))
-
-    print("Option 1-B tray icons successfully generated in src-tauri/resources/")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     generate_tray_icons()

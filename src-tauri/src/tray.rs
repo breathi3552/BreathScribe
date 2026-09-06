@@ -447,9 +447,9 @@ pub fn tray_tooltip() -> String {
 
 fn version_label() -> String {
     if cfg!(debug_assertions) {
-        format!("Handy Cloud v{} (Dev)", env!("CARGO_PKG_VERSION"))
+        format!("BreathScribe v{} (Dev)", env!("CARGO_PKG_VERSION"))
     } else {
-        format!("Handy Cloud v{}", env!("CARGO_PKG_VERSION"))
+        format!("BreathScribe v{}", env!("CARGO_PKG_VERSION"))
     }
 }
 

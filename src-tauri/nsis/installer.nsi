@@ -1,4 +1,4 @@
-; Custom NSIS template for Handy Cloud with portable mode support.
+; Custom NSIS template for BreathScribe with portable mode support.
 ; Based on tauri-apps/tauri@tauri-v2.9.1 crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
 ; Portable changes are marked with "; --- PORTABLE MODE ---" comments.
 ;
@@ -219,7 +219,7 @@ Function PageLeaveInstallType
   ${NSD_GetState} $InstallTypeRadioPortable $0
   ${If} $0 = ${BST_CHECKED}
     StrCpy $PortableMode 1
-    ; --- PORTABLE MODE --- Switch default directory to Desktop\Handy for portable
+    ; --- PORTABLE MODE --- Switch default directory to Desktop\BreathScribe for portable
     ${If} $INSTDIR == "${PLACEHOLDER_INSTALL_DIR}"
     ${OrIf} $INSTDIR == "$LOCALAPPDATA\${PRODUCTNAME}"
       StrCpy $INSTDIR "$DESKTOP\${PRODUCTNAME}"

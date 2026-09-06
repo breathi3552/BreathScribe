@@ -1,4 +1,4 @@
-name: "Handy Cloud P0 Windows x64"
+name: "BreathScribe P0 Windows x64"
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: handy-cloud-p0-windows-${{ github.ref }}
+  group: breath-scribe-p0-windows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
       - name: Install frontend tooling
         run: bun install --frozen-lockfile
 
-      - name: Materialize Handy Cloud brand assets
+      - name: Materialize BreathScribe brand assets
         shell: pwsh
         run: ./scripts/windows/p0-source-brand.ps1
 
@@ -54,13 +54,13 @@ jobs:
           if ($template -notmatch '!define MUI_UNICON \"\$\{UNINSTALLERICON\}\"') {
             throw "Custom NSIS template does not wire uninstaller icon into MUI_UNICON"
           }
-          Write-Host "PASS - custom NSIS template consumes installer and uninstaller Handy Cloud icon placeholders"
+          Write-Host "PASS - custom NSIS template consumes installer and uninstaller BreathScribe icon placeholders"
 
       - name: Commit generated binary brand assets when source changed
         id: commit
         shell: pwsh
         run: |
-          git add -- brand/handy-cloud-icon-source.png brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src-tauri/nsis/installer.nsi src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md
+          git add -- brand/breath-scribe-icon-source.svg brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src-tauri/nsis/installer.nsi src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
             "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -69,7 +69,7 @@ jobs:
           }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "fix: commit Handy Cloud platform icon assets"
+          git commit -m "fix: commit BreathScribe platform icon assets"
           if ($LASTEXITCODE -ne 0) { throw "Failed to commit generated brand assets" }
           git push origin HEAD:main
           if ($LASTEXITCODE -ne 0) { throw "Failed to push generated brand assets" }
@@ -83,7 +83,7 @@ jobs:
       platform: windows-latest
       target: x86_64-pc-windows-msvc
       build-args: ""
-      asset-prefix: handy-cloud
+      asset-prefix: breath-scribe
       upload-artifacts: true
       sign-binaries: false
       no-cache: false
@@ -102,7 +102,7 @@ jobs:
       - name: Download Windows build artifact
         uses: actions/download-artifact@v4
         with:
-          name: handy-cloud-x86_64-pc-windows-msvc
+          name: breath-scribe-x86_64-pc-windows-msvc
           path: artifacts
 
       - name: Verify source and packaged branding
@@ -147,7 +147,7 @@ jobs:
           set -euo pipefail
           rm -rf artifacts
           mkdir -p artifacts
-          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" --name "handy-cloud-x86_64-pc-windows-msvc" --dir artifacts
+          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" --name "breath-scribe-x86_64-pc-windows-msvc" --dir artifacts
 
       - name: Stage P0 installers and build record
         shell: bash
@@ -163,7 +163,7 @@ jobs:
           fi
           for package in "${packages[@]}"; do cp -v "$package" "$out/"; done
           {
-            echo "# Handy Cloud P0 Base Build"
+            echo "# BreathScribe P0 Base Build"
             echo
             echo "- Source commit: \`${GITHUB_SHA}\`"
             echo "- CI run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
@@ -177,7 +177,7 @@ jobs:
             echo "## Automated P0 verification"
             echo "- PASS — final tracked platform/tray icon assets differ byte-for-byte from cjpais/Handy and match the approved source marker."
             echo "- PASS — Windows x64 Tauri build completed and EXE/MSI artifacts were produced."
-            echo "- PASS — NSIS installer icon and installed app icons were compared against the committed Handy Cloud icon.ico; MSI ProductName and app executable metadata were also checked."
+            echo "- PASS — NSIS installer icon and installed app icons were compared against the committed BreathScribe icon.ico; MSI ProductName and app executable metadata were also checked."
             echo "- PASS — Win+H/blocking-hotkey source smoke guard and preserved core path checks completed without modifying core interaction logic."
             echo "- NOT INTERACTIVE-CI VERIFIED — physical global Win+H suppression, keydown/keyup delivery and end-to-end Push-To-Talk behavior require an interactive Windows desktop smoke test."
             echo
@@ -188,5 +188,5 @@ jobs:
       - name: Upload P0 base release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: handy-cloud-p0-base-windows
+          name: breath-scribe-p0-base-windows
           path: release-builds/p0-base/

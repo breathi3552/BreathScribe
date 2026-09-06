@@ -1,22 +1,23 @@
 <#
 .SYNOPSIS
-    从 release-builds/p0-base 中的构建产物解包生成免安装绿色便携版。
-.DESCRIPTION
+    从 release-builds/p0-base 中的构建产物解包生成免安装绿色便携版并打包为 ZIP。
+DESCRIPTION
     提取 MSI 或 NSIS Setup 安装包中的二进制和静态资源至目标目录，
-    写入 portable 标识文件并初始化 Data 目录，确保配置与数据隔离不污染系统环境。
+    写入 portable 隔离标识并初始化 Data 目录，打包为 breath-scribe-portable.zip。
 .PARAMETER OutputDir
     便携版输出目录，默认为 release-builds/portable。
 .PARAMETER PackagePath
     指定的安装包路径（.msi 或 .exe）。若不指定则自动探测 release-builds/p0-base。
 .PARAMETER Force
-    强制关闭正在运行的 handy 进程以完成文件覆盖。
+    强制关闭正在运行的 breath-scribe / handy 进程以完成文件覆盖。
 #>
 
 [CmdletBinding()]
 param (
     [string]$OutputDir = "release-builds/portable",
     [string]$PackagePath = "",
-    [switch]$Force
+    [switch]$Force,
+    [switch]$NoZip
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,14 +29,14 @@ $targetDir = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
 $baseDir = Join-Path $repoRoot "release-builds/p0-base"
 
 # 1. 检查运行中进程
-$runningProcesses = Get-Process -Name "handy" -ErrorAction SilentlyContinue
+$runningProcesses = Get-Process -Name "breath-scribe", "handy" -ErrorAction SilentlyContinue
 if ($runningProcesses) {
     if ($Force) {
-        Write-Host "检测到运行中的 handy 进程，正在终止..."
+        Write-Host "检测到运行中的进程，正在终止..."
         $runningProcesses | Stop-Process -Force
         Start-Sleep -Milliseconds 500
     } else {
-        Write-Warning "检测到 handy.exe 正在运行 (PID: $($runningProcesses.Id -join ', '))，可能导致文件占用。建议添加 -Force 参数或手动关闭应用。"
+        Write-Warning "检测到 breath-scribe / handy 正在运行 (PID: $($runningProcesses.Id -join ', '))，可能导致文件占用。建议添加 -Force 参数或手动关闭应用。"
     }
 }
 
@@ -75,14 +76,20 @@ if ($PackagePath.EndsWith(".msi", [System.StringComparison]::OrdinalIgnoreCase))
         Remove-Item -Recurse -Force $tempExtractDir -ErrorAction SilentlyContinue
         throw "msiexec 提取失败，退出代码: $($proc.ExitCode)"
     }
-    $sourceFilesDir = Join-Path $tempExtractDir "PFiles/Handy Cloud"
+    $sourceFilesDir = Join-Path $tempExtractDir "PFiles/BreathScribe"
     if (-not (Test-Path $sourceFilesDir)) {
-        $exeMatch = Get-ChildItem -Path $tempExtractDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1
+        $sourceFilesDir = Join-Path $tempExtractDir "PFiles/Handy Cloud"
+    }
+    if (-not (Test-Path $sourceFilesDir)) {
+        $exeMatch = Get-ChildItem -Path $tempExtractDir -Filter "breath-scribe.exe" -Recurse -File | Select-Object -First 1
+        if (-not $exeMatch) {
+            $exeMatch = Get-ChildItem -Path $tempExtractDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1
+        }
         if ($exeMatch) {
             $sourceFilesDir = $exeMatch.DirectoryName
         } else {
             Remove-Item -Recurse -Force $tempExtractDir -ErrorAction SilentlyContinue
-            throw "MSI 解包产物中未找到 handy.exe"
+            throw "MSI 解包产物中未找到 breath-scribe.exe 或 handy.exe"
         }
     }
 } else {
@@ -108,7 +115,7 @@ Get-ChildItem -Path $sourceFilesDir | ForEach-Object {
 Remove-Item -Recurse -Force $tempExtractDir -ErrorAction SilentlyContinue
 
 $markerFile = Join-Path $targetDir "portable"
-Set-Content -Path $markerFile -Value "Handy Portable Mode" -NoNewline -Encoding utf8
+Set-Content -Path $markerFile -Value "BreathScribe Portable Mode" -NoNewline -Encoding utf8
 
 $dataDir = Join-Path $targetDir "Data"
 if (-not (Test-Path $dataDir)) {
@@ -116,20 +123,38 @@ if (-not (Test-Path $dataDir)) {
 }
 
 # 5. 验证运行
-$handyExe = Join-Path $targetDir "handy.exe"
-if (-not (Test-Path $handyExe)) {
-    throw "便携目录中未生成 handy.exe: $handyExe"
+$mainExe = Join-Path $targetDir "breath-scribe.exe"
+if (-not (Test-Path $mainExe)) {
+    $fallbackExe = Join-Path $targetDir "handy.exe"
+    if (Test-Path $fallbackExe) {
+        $mainExe = $fallbackExe
+    } else {
+        throw "便携目录中未生成 breath-scribe.exe: $mainExe"
+    }
 }
 
-Write-Host "[4/4] 验证便携版本..."
-$testProc = Start-Process -FilePath $handyExe -ArgumentList @("--help") -Wait -PassThru -NoNewWindow
+Write-Host "[4/5] 验证便携版本..."
+$testProc = Start-Process -FilePath $mainExe -ArgumentList @("--help") -Wait -PassThru -NoNewWindow
 if ($testProc.ExitCode -ne 0) {
-    throw "handy.exe 执行自检失败，退出码: $($testProc.ExitCode)"
+    throw "$([System.IO.Path]::GetFileName($mainExe)) 执行自检失败，退出码: $($testProc.ExitCode)"
 }
 
+# 6. 打包为 ZIP 压缩归档
+if (-not $NoZip) {
+    $zipOutput = [System.IO.Path]::GetFullPath((Join-Path $targetDir "..\breath-scribe-portable.zip"))
+    Write-Host "[5/5] 打包生成便携压缩包: $zipOutput"
+    if (Test-Path $zipOutput) {
+        Remove-Item -Force $zipOutput
+    }
+    Compress-Archive -Path (Join-Path $targetDir "*") -DestinationPath $zipOutput -Force
+    Write-Host "压缩包创建成功: $zipOutput"
+}
 Write-Host "`n=========================================="
 Write-Host "🎉 便携版解包与部署完成！"
-Write-Host "主程序路径: $handyExe"
+Write-Host "主程序路径: $mainExe"
 Write-Host "数据隔离区: $dataDir"
+if (-not $NoZip) {
+    Write-Host "便携压缩包: $zipOutput"
+}
 Write-Host "运行验证:   已通过 --help 基础自检"
 Write-Host "==========================================`n"

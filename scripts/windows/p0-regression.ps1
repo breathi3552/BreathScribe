@@ -59,22 +59,22 @@ function Assert-ExecutableIconMatchesBrand {
 function Assert-AppExecutableBranding {
   param([System.IO.FileInfo]$Executable, [string]$Label)
   $metadata = @($Executable.VersionInfo.ProductName, $Executable.VersionInfo.FileDescription) -join " | "
-  Assert-True ($metadata -match "Handy Cloud") "$Label app executable metadata contains Handy Cloud"
+  Assert-True ($metadata -match "BreathScribe") "$Label app executable metadata contains BreathScribe"
   Assert-ExecutableIconMatchesBrand -ExecutablePath $Executable.FullName -Label "$Label app executable"
 }
 
 $configPath = "src-tauri/tauri.conf.json"
 Assert-FileExists $configPath
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
-Assert-True ($config.productName -eq "Handy Cloud") "Tauri productName is Handy Cloud"
-Assert-True ($config.identifier -eq "io.github.breathi3552.handycloud") "Tauri identifier is Handy Cloud identifier"
+Assert-True ($config.productName -eq "BreathScribe") "Tauri productName is BreathScribe"
+Assert-True ($config.identifier -eq "io.github.breathi3552.breathscribe") "Tauri identifier is BreathScribe identifier"
 $endpoint = [string]$config.plugins.updater.endpoints[0]
 Assert-True ($endpoint -like "*breathi3552/Handy-Cloud*") "updater points at Handy-Cloud fork"
 Assert-True ($endpoint -notlike "*cjpais/Handy*") "updater no longer points at upstream"
-Assert-True ([string]$config.bundle.windows.nsis.installerIcon -eq "icons/icon.ico") "NSIS installerIcon explicitly uses Handy Cloud icon.ico"
-Assert-True ([string]$config.bundle.windows.nsis.uninstallerIcon -eq "icons/icon.ico") "NSIS uninstallerIcon explicitly uses Handy Cloud icon.ico"
+Assert-True ([string]$config.bundle.windows.nsis.installerIcon -eq "icons/icon.ico") "NSIS installerIcon explicitly uses BreathScribe icon.ico"
+Assert-True ([string]$config.bundle.windows.nsis.uninstallerIcon -eq "icons/icon.ico") "NSIS uninstallerIcon explicitly uses BreathScribe icon.ico"
 
-$iconSource = "brand/handy-cloud-icon-source.png"
+$iconSource = "brand/breath-scribe-icon-source.svg"
 $marker = "brand/P0_ICON_GENERATED.txt"
 Assert-FileExists $iconSource
 Assert-FileExists $marker
@@ -145,9 +145,9 @@ $sourcePaths = @(
 foreach ($path in $sourcePaths) { Assert-FileExists $path }
 Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -match "<svg") "UI hand icon is pure SVG vector"
 Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -notmatch "<img") "UI hand icon does not rely on bitmap img"
-Assert-True ((Get-Content "src/components/icons/HandyTextLogo.tsx" -Raw) -match "Handy Cloud") "text logo displays Handy Cloud"
-Assert-True ((Get-Content "src/components/settings/about/AboutSettings.tsx" -Raw) -notmatch "github\.com/cjpais/Handy") "About source link uses fork"
-Assert-True ((Get-Content "src-tauri/src/tray.rs" -Raw) -match "Handy Cloud v") "Tray tooltip identifies Handy Cloud"
+Assert-True ((Get-Content "src/components/icons/HandyTextLogo.tsx" -Raw) -match "BreathScribe") "text logo displays BreathScribe"
+Assert-True ((Get-Content "src/components/settings/about/AboutSettings.tsx" -Raw) -match "github\.com/breathi3552/Handy-Cloud") "About source link uses fork"
+Assert-True ((Get-Content "src-tauri/src/tray.rs" -Raw) -match "BreathScribe v") "Tray tooltip identifies BreathScribe"
 
 Assert-True ((Get-Content "src-tauri/Cargo.toml" -Raw) -match 'handy-keys\s*=') "handy-keys dependency remains intact"
 Assert-True (Test-Path "LICENSE") "LICENSE/upstream attribution remains present"
@@ -161,7 +161,7 @@ foreach ($needle in $forbidden) {
 }
 
 $releaseText = Get-Content ".github/workflows/release.yml" -Raw
-Assert-True ($releaseText -match 'asset-prefix:\s*"handy-cloud"') "release artifact prefix is Handy Cloud branded"
+Assert-True ($releaseText -match 'asset-prefix:\s*"breath-scribe"') "release artifact prefix is BreathScribe branded"
 Assert-True ($releaseText -match 'sign-binaries:\s*false') "P0 fork release is unsigned"
 
 $corePaths = @(
@@ -180,7 +180,7 @@ if ($PackageDir) {
   $packages = @(Get-ChildItem $PackageDir -Recurse -File | Where-Object { $_.Extension -in @(".exe", ".msi") })
   Assert-True ($packages.Count -gt 0) "Windows EXE/MSI package artifacts exist"
   foreach ($pkg in $packages) {
-    Assert-True ($pkg.Name -match "Handy Cloud|Handy.Cloud|Handy_Cloud") "installer filename is Handy Cloud branded: $($pkg.Name)"
+    Assert-True ($pkg.Name -match "BreathScribe|breath-scribe") "installer filename is BreathScribe branded: $($pkg.Name)"
   }
 
   $msi = $packages | Where-Object Extension -eq ".msi" | Select-Object -First 1
@@ -192,7 +192,7 @@ if ($PackageDir) {
     $record = $view.Fetch()
     $productName = if ($record) { [string]$record.StringData(1) } else { "" }
     $view.Close()
-    Assert-True ($productName -eq "Handy Cloud") "MSI ProductName is Handy Cloud"
+    Assert-True ($productName -eq "BreathScribe") "MSI ProductName is BreathScribe"
 
     $extractDir = Join-Path ([System.IO.Path]::GetTempPath()) ("handy-cloud-msi-" + [System.Guid]::NewGuid().ToString())
     New-Item -ItemType Directory -Path $extractDir | Out-Null
@@ -201,8 +201,9 @@ if ($PackageDir) {
       $msiArgs = "/a `"$($msi.FullName)`" /qn /L*v `"$logFile`" TARGETDIR=`"$extractDir`""
       $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
       Assert-True ($proc.ExitCode -eq 0) "MSI administrative extraction succeeds"
-      $installedExe = Get-ChildItem $extractDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1
-      Assert-True ($null -ne $installedExe) "MSI payload contains handy.exe"
+      $installedExe = Get-ChildItem $extractDir -Filter "breath-scribe.exe" -Recurse -File | Select-Object -First 1
+      if (-not $installedExe) { $installedExe = Get-ChildItem $extractDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1 }
+      Assert-True ($null -ne $installedExe) "MSI payload contains breath-scribe.exe"
       Assert-AppExecutableBranding -Executable $installedExe -Label "MSI payload"
     } finally {
       Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue
@@ -213,7 +214,7 @@ if ($PackageDir) {
   if ($setup) {
     $vi = $setup.VersionInfo
     $metadata = @($vi.ProductName, $vi.FileDescription) -join " | "
-    Assert-True ($metadata -match "Handy Cloud") "NSIS EXE version metadata contains Handy Cloud"
+    Assert-True ($metadata -match "BreathScribe") "NSIS EXE version metadata contains BreathScribe"
     Assert-ExecutableIconMatchesBrand -ExecutablePath $setup.FullName -Label "NSIS installer"
 
     $portableDir = Join-Path ([System.IO.Path]::GetTempPath()) ("handy-cloud-nsis-" + [System.Guid]::NewGuid().ToString())
@@ -221,8 +222,9 @@ if ($PackageDir) {
     try {
       $proc = Start-Process -FilePath $setup.FullName -ArgumentList @("/S", "/PORTABLE", "/D=$portableDir") -Wait -PassThru
       Assert-True ($proc.ExitCode -eq 0) "NSIS silent portable extraction succeeds"
-      $installedExe = Get-ChildItem $portableDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1
-      Assert-True ($null -ne $installedExe) "NSIS payload contains handy.exe"
+      $installedExe = Get-ChildItem $portableDir -Filter "breath-scribe.exe" -Recurse -File | Select-Object -First 1
+      if (-not $installedExe) { $installedExe = Get-ChildItem $portableDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1 }
+      Assert-True ($null -ne $installedExe) "NSIS payload contains breath-scribe.exe"
       Assert-AppExecutableBranding -Executable $installedExe -Label "NSIS payload"
     } finally {
       Remove-Item -Recurse -Force $portableDir -ErrorAction SilentlyContinue

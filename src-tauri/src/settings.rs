@@ -1356,7 +1356,10 @@ fn apply_settings_migrations(
 pub fn update_checks_forced_disabled() -> bool {
     use std::sync::OnceLock;
     static IS_UPDATER_DISABLED: OnceLock<bool> = OnceLock::new();
-    *IS_UPDATER_DISABLED.get_or_init(|| utils::env_flag_enabled("HANDY_DISABLE_UPDATER"))
+    *IS_UPDATER_DISABLED.get_or_init(|| {
+        utils::env_flag_enabled("BREATHSCRIBE_DISABLE_UPDATER")
+            || utils::env_flag_enabled("HANDY_DISABLE_UPDATER")
+    })
 }
 
 /// Effective updater state: the user's stored preference, overridden to `false`

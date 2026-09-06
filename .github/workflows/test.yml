@@ -34,4 +34,6 @@ jobs:
 
       - name: Run Rust tests
         working-directory: src-tauri
-        run: cargo test
+        run: |
+          mkdir -p ../dist
+          cargo test

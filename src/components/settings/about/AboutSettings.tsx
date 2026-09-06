@@ -29,7 +29,6 @@ export const AboutSettings: React.FC = () => {
     fetchVersion();
   }, []);
 
-
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
       <SettingsGroup title={t("settings.about.title")}>
@@ -45,7 +44,6 @@ export const AboutSettings: React.FC = () => {
         </SettingContainer>
 
         <ShowWhatsNewOnUpdate descriptionMode="tooltip" grouped={true} />
-
 
         <SettingContainer
           title={t("settings.about.sourceCode.title")}
@@ -82,7 +80,7 @@ export const AboutSettings: React.FC = () => {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => openUrl("https://github.com/breathi3552/Handy-Cloud")}
+                onClick={() => openUrl("https://github.com/cjpais/Handy")}
               >
                 {t("settings.about.sourceCode.button")}
               </Button>

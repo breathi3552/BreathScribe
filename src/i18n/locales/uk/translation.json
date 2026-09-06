@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "Подяки",
         "handy": {
-          "title": "Handy Cloud",
+          "title": "Handy",
           "description": "Програма для перетворення мови в текст із відкритим вихідним кодом від @cjpais",
-          "details": "BreathScribe є форком Handy Cloud, що розширює його хмарними моделями та підтримкою проксі. Велика подяка CJ Pais та всім авторам оригінального проєкту Handy Cloud."
+          "details": "BreathScribe є форком Handy, що розширює його хмарними моделями та підтримкою проксі. Велика подяка CJ Pais та всім авторам оригінального проєкту Handy."
         },
         "ggml": {
           "title": "ggml",

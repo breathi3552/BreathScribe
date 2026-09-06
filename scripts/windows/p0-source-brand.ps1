@@ -23,7 +23,6 @@ Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{} (Dev)", env!("CARGO_P
 Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{}", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{}", env!("CARGO_PKG_VERSION"))'
 Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy Cloud v{} (Dev)", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{} (Dev)", env!("CARGO_PKG_VERSION"))'
 Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy Cloud v{}", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{}", env!("CARGO_PKG_VERSION"))'
-Replace-InFile "src/components/settings/about/AboutSettings.tsx" 'https://github.com/cjpais/Handy' 'https://github.com/breathi3552/Handy-Cloud'
 Replace-InFile "package.json" '"name": "handy-app"' '"name": "breath-scribe-app"'
 Replace-InFile "package.json" '"name": "handy-cloud-app"' '"name": "breath-scribe-app"'
 Replace-InFile "bun.lock" '"name": "handy-app"' '"name": "breath-scribe-app"'
@@ -58,37 +57,14 @@ if (Test-Path "src-tauri/nsis/installer.nsi") {
   }
 }
 
-$localeRoot = "src/i18n/locales"
-if (Test-Path $localeRoot) {
-  Get-ChildItem $localeRoot -Recurse -File -Filter "*.json" | ForEach-Object {
-    $content = Get-Content $_.FullName -Raw
-    $updated = [regex]::Replace($content, '(?<![\w-])Handy(?![\w-]| Cloud)', 'Handy Cloud')
-    if ($updated -ne $content) {
-      [System.IO.File]::WriteAllText($_.FullName, $updated, (New-Object System.Text.UTF8Encoding($false)))
-      $changed = $true
-      Write-Host "Updated locale branding: $($_.FullName)"
-    }
-  }
-}
-
-$readme = "README.md"
-$content = Get-Content $readme -Raw
-if ($content.StartsWith("# Handy`n") -or $content.StartsWith("# Handy`r`n")) {
-  $updated = [regex]::Replace(
-    $content,
-    '^# Handy\r?\n',
-    "# Handy Cloud`n`n> Handy Cloud is an independent fork of [cjpais/Handy](https://github.com/cjpais/Handy). P0 preserves Handy's local transcription and Windows interaction paths while establishing a separate package identity and build base.`n",
-    1
-  )
-  [System.IO.File]::WriteAllText((Resolve-Path $readme), $updated, (New-Object System.Text.UTF8Encoding($false)))
-  $changed = $true
-}
-
 $iconSource = "brand/breath-scribe-icon-source.svg"
 $iconMarker = "brand/P0_ICON_GENERATED.txt"
 if (-not (Test-Path $iconSource)) { throw "Missing approved brand icon source: $iconSource" }
 
-$sourceHash = (Get-FileHash $iconSource -Algorithm SHA256).Hash.ToLowerInvariant()
+$sourceContent = [System.IO.File]::ReadAllText((Resolve-Path $iconSource)).Replace("`r`n", "`n")
+$sha = [System.Security.Cryptography.SHA256]::Create()
+$sourceBytes = [System.Text.Encoding]::UTF8.GetBytes($sourceContent)
+$sourceHash = ([System.BitConverter]::ToString($sha.ComputeHash($sourceBytes))).Replace("-", "").ToLowerInvariant()
 $markerMatches = (Test-Path $iconMarker) -and ((Get-Content $iconMarker -Raw).Trim() -eq $sourceHash)
 $criticalIcons = @(
   "src-tauri/icons/32x32.png",

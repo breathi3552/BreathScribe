@@ -29,7 +29,8 @@ const handyAckMap: Record<
   },
   ja: {
     title: "Handy",
-    description: "@cjpais によるオープンソースのデスクトップ音声テキスト変換アプリ",
+    description:
+      "@cjpais によるオープンソースのデスクトップ音声テキスト変換アプリ",
     details:
       "BreathScribe は Handy のフォークであり、クラウドモデルとプロキシ機能を追加拡張しています。CJ Pais 氏および元の Handy プロジェクトのすべての貢献者に心より感謝申し上げます。",
   },
@@ -83,8 +84,7 @@ const handyAckMap: Record<
   },
   nl: {
     title: "Handy",
-    description:
-      "Open-source spraak-naar-tekst desktopapplicatie door @cjpais",
+    description: "Open-source spraak-naar-tekst desktopapplicatie door @cjpais",
     details:
       "BreathScribe is een fork van Handy, uitgebreid met cloudmodellen en proxymogelijkheden. Veel dank aan CJ Pais en alle bijdragers van het originele Handy-project.",
   },
@@ -145,8 +145,7 @@ const handyAckMap: Record<
   },
   ar: {
     title: "Handy",
-    description:
-      "تطبيق مكتبي مفتوح المصدر لتحويل الكلام إلى نص بواسطة @cjpais",
+    description: "تطبيق مكتبي مفتوح المصدر لتحويل الكلام إلى نص بواسطة @cjpais",
     details:
       "BreathScribe هو فرع مشتق من Handy، تم توسيعه بنماذج سحابية وقدرات وكيل البروكسي. شكراً جزيلاً لـ CJ Pais وجميع المساهمين في مشروع Handy الأصلي.",
   },
@@ -178,10 +177,7 @@ function rebrandString(val: string): string {
   // 1. Handy Cloud -> BreathScribe
   res = res.replace(/Handy\s+Cloud/g, "BreathScribe");
   // 2. HANDY_DISABLE_UPDATER -> BREATHSCRIBE_DISABLE_UPDATER
-  res = res.replace(
-    /HANDY_DISABLE_UPDATER/g,
-    "BREATHSCRIBE_DISABLE_UPDATER",
-  );
+  res = res.replace(/HANDY_DISABLE_UPDATER/g, "BREATHSCRIBE_DISABLE_UPDATER");
   // 3. Isolated Handy (e.g. Handy-genveje, Handy가, ל-Handy, etc.)
   res = res.replace(/Handy/g, "BreathScribe");
   return res;
@@ -192,7 +188,11 @@ function processObject(obj: Record<string, unknown>): Record<string, unknown> {
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === "string") {
       result[key] = rebrandString(value);
-    } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value)
+    ) {
       result[key] = processObject(value as Record<string, unknown>);
     } else {
       result[key] = value;

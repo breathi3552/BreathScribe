@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "謝辞",
         "handy": {
-          "title": "Handy Cloud",
+          "title": "Handy",
           "description": "@cjpais によるオープンソースのデスクトップ音声テキスト変換アプリ",
-          "details": "BreathScribe は Handy Cloud のフォークであり、クラウドモデルとプロキシ機能を追加拡張しています。CJ Pais 氏および元の Handy Cloud プロジェクトのすべての貢献者に心より感謝申し上げます。"
+          "details": "BreathScribe は Handy のフォークであり、クラウドモデルとプロキシ機能を追加拡張しています。CJ Pais 氏および元の Handy プロジェクトのすべての貢献者に心より感謝申し上げます。"
         },
         "ggml": {
           "title": "ggml",

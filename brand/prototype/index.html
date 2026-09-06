@@ -1,525 +1,1371 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BreathScribe 视觉图标与托盘资产原型评估系统 (Ticket #29)</title>
-  <style>
-    :root {
-      --bg-main: #0b0f19;
-      --card-bg: #131b2e;
-      --card-border: #1e293b;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --primary-cyan: #38bdf8;
-      --primary-blue: #0284c7;
-      --danger-red: #ef4444;
-      --warning-amber: #f59e0b;
-      --taskbar-dark: #202020;
-      --taskbar-light: #f3f3f3;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg-main); color: var(--text-main); padding: 32px 24px 64px; }
-    .header { max-width: 1200px; margin: 0 auto 32px; border-bottom: 1px solid var(--card-border); padding-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
-    .header h1 { font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #38bdf8, #0284c7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .header p { color: var(--text-muted); font-size: 14px; margin-top: 6px; }
-    .badge { background: #0369a1; color: #e0f2fe; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BreathScribe 视觉图标与托盘资产原型评估系统 (Ticket #29)</title>
+    <style>
+      :root {
+        --bg-main: #0b0f19;
+        --card-bg: #131b2e;
+        --card-border: #1e293b;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --primary-cyan: #38bdf8;
+        --primary-blue: #0284c7;
+        --danger-red: #ef4444;
+        --warning-amber: #f59e0b;
+        --taskbar-dark: #202020;
+        --taskbar-light: #f3f3f3;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      body {
+        background: var(--bg-main);
+        color: var(--text-main);
+        padding: 32px 24px 64px;
+      }
+      .header {
+        max-width: 1200px;
+        margin: 0 auto 32px;
+        border-bottom: 1px solid var(--card-border);
+        padding-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+      }
+      .header h1 {
+        font-size: 28px;
+        font-weight: 800;
+        background: linear-gradient(135deg, #38bdf8, #0284c7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .header p {
+        color: var(--text-muted);
+        font-size: 14px;
+        margin-top: 6px;
+      }
+      .badge {
+        background: #0369a1;
+        color: #e0f2fe;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
 
-    .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-    .variant-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: all 0.2s ease; }
-    .variant-card:hover { border-color: var(--primary-cyan); transform: translateY(-2px); box-shadow: 0 12px 24px -10px rgba(56, 189, 248, 0.15); }
-    .variant-header { padding: 18px 20px; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center; }
-    .variant-title { font-size: 18px; font-weight: 700; }
-    .variant-tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.1); color: var(--primary-cyan); }
-    
-    .section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; margin: 16px 20px 8px; }
-    
-    /* 512x512 Master Preview */
-    .master-preview { background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); padding: 32px; display: flex; justify-content: center; align-items: center; border-bottom: 1px solid var(--card-border); }
-    .master-svg-box { width: 160px; height: 160px; filter: drop-shadow(0 16px 20px rgba(0,0,0,0.4)); }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+      }
+      .variant-card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        transition: all 0.2s ease;
+      }
+      .variant-card:hover {
+        border-color: var(--primary-cyan);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 24px -10px rgba(56, 189, 248, 0.15);
+      }
+      .variant-header {
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--card-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .variant-title {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .variant-tag {
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: rgba(56, 189, 248, 0.1);
+        color: var(--primary-cyan);
+      }
 
-    /* Taskbar Simulations */
-    .sim-group { padding: 0 20px 16px; }
-    .taskbar-row { border-radius: 10px; padding: 10px 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
-    .taskbar-dark { background: var(--taskbar-dark); color: #fff; border: 1px solid #333; }
-    .taskbar-light { background: var(--taskbar-light); color: #1e293b; border: 1px solid #ddd; }
-    .taskbar-label { font-size: 12px; font-weight: 600; opacity: 0.8; }
-    .tray-icons { display: flex; gap: 14px; align-items: center; }
-    .tray-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .tray-item span { font-size: 10px; opacity: 0.6; }
-    .tray-box { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+      .section-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.5px;
+        margin: 16px 20px 8px;
+      }
 
-    /* Zoom Inspection */
-    .zoom-grid { background: #090d16; margin: 0 20px 16px; padding: 14px; border-radius: 10px; border: 1px dashed var(--card-border); display: flex; justify-content: space-around; align-items: center; }
-    .zoom-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-    .zoom-view { border: 1px solid #334155; border-radius: 4px; background: #1e293b; display: flex; align-items: center; justify-content: center; }
-    .zoom-item span { font-size: 11px; color: var(--text-muted); }
+      /* 512x512 Master Preview */
+      .master-preview {
+        background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+        padding: 32px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-bottom: 1px solid var(--card-border);
+      }
+      .master-svg-box {
+        width: 160px;
+        height: 160px;
+        filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.4));
+      }
 
-    /* Horizontal Logo Preview */
-    .brand-header-preview { background: #0f172a; border-top: 1px solid var(--card-border); padding: 16px 20px; display: flex; align-items: center; gap: 10px; }
+      /* Taskbar Simulations */
+      .sim-group {
+        padding: 0 20px 16px;
+      }
+      .taskbar-row {
+        border-radius: 10px;
+        padding: 10px 16px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .taskbar-dark {
+        background: var(--taskbar-dark);
+        color: #fff;
+        border: 1px solid #333;
+      }
+      .taskbar-light {
+        background: var(--taskbar-light);
+        color: #1e293b;
+        border: 1px solid #ddd;
+      }
+      .taskbar-label {
+        font-size: 12px;
+        font-weight: 600;
+        opacity: 0.8;
+      }
+      .tray-icons {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      .tray-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      .tray-item span {
+        font-size: 10px;
+        opacity: 0.6;
+      }
+      .tray-box {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
 
-    .desc-box { padding: 16px 20px; font-size: 13px; color: var(--text-muted); line-height: 1.6; border-top: 1px solid var(--card-border); flex-grow: 1; }
-    .desc-box strong { color: #f1f5f9; }
+      /* Zoom Inspection */
+      .zoom-grid {
+        background: #090d16;
+        margin: 0 20px 16px;
+        padding: 14px;
+        border-radius: 10px;
+        border: 1px dashed var(--card-border);
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+      }
+      .zoom-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+      }
+      .zoom-view {
+        border: 1px solid #334155;
+        border-radius: 4px;
+        background: #1e293b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .zoom-item span {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
 
-    /* Pulse Animations */
-    @keyframes recordingPulse {
-      0% { transform: scale(1); opacity: 0.9; }
-      50% { transform: scale(1.2); opacity: 1; filter: drop-shadow(0 0 6px #ef4444); }
-      100% { transform: scale(1); opacity: 0.9; }
-    }
-    @keyframes waveFlow {
-      0% { transform: translateY(0); }
-      50% { transform: translateY(-2px); }
-      100% { transform: translateY(0); }
-    }
-    .anim-recording { animation: recordingPulse 1.4s infinite ease-in-out; transform-origin: center; }
-    .anim-wave { animation: waveFlow 1.2s infinite ease-in-out; }
-  </style>
-</head>
-<body>
+      /* Horizontal Logo Preview */
+      .brand-header-preview {
+        background: #0f172a;
+        border-top: 1px solid var(--card-border);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
 
-  <div class="header">
-    <div>
-      <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 6px;">
-        <h1>BreathScribe 视觉图标资产原型方案</h1>
-        <span class="badge">Ticket #29 HITL Prototype</span>
+      .desc-box {
+        padding: 16px 20px;
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.6;
+        border-top: 1px solid var(--card-border);
+        flex-grow: 1;
+      }
+      .desc-box strong {
+        color: #f1f5f9;
+      }
+
+      /* Pulse Animations */
+      @keyframes recordingPulse {
+        0% {
+          transform: scale(1);
+          opacity: 0.9;
+        }
+        50% {
+          transform: scale(1.2);
+          opacity: 1;
+          filter: drop-shadow(0 0 6px #ef4444);
+        }
+        100% {
+          transform: scale(1);
+          opacity: 0.9;
+        }
+      }
+      @keyframes waveFlow {
+        0% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-2px);
+        }
+        100% {
+          transform: translateY(0);
+        }
+      }
+      .anim-recording {
+        animation: recordingPulse 1.4s infinite ease-in-out;
+        transform-origin: center;
+      }
+      .anim-wave {
+        animation: waveFlow 1.2s infinite ease-in-out;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div>
+        <div
+          style="
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 6px;
+          "
+        >
+          <h1>BreathScribe 视觉图标资产原型方案</h1>
+          <span class="badge">Ticket #29 HITL Prototype</span>
+        </div>
+        <p>
+          按“声波 + 云朵 (Soundwave & Cloud)”与天青蔚蓝渐变（#38bdf8 →
+          #0284c7）设计，彻底剔除上游卡通小手标识。
+        </p>
       </div>
-      <p>按“声波 + 云朵 (Soundwave & Cloud)”与天青蔚蓝渐变（#38bdf8 → #0284c7）设计，彻底剔除上游卡通小手标识。</p>
-    </div>
-    <div style="font-size: 13px; color: var(--text-muted); text-align: right;">
-      <span>高 DPI 测试基准: 64x64 RGBA</span><br>
-      <span>任务栏适配: Windows 11 深色/浅色模式</span>
-    </div>
-  </div>
-
-  <div class="container">
-
-    <!-- ========================================================================= -->
-    <!-- 方案 A: 极简几何声波云 (Geometric Flow) -->
-    <!-- ========================================================================= -->
-    <div class="variant-card">
-      <div class="variant-header">
-        <span class="variant-title">方案 A: 极简几何声波云</span>
-        <span class="variant-tag">推荐 / 高辨识度</span>
+      <div style="font-size: 13px; color: var(--text-muted); text-align: right">
+        <span>高 DPI 测试基准: 64x64 RGBA</span><br />
+        <span>任务栏适配: Windows 11 深色/浅色模式</span>
       </div>
+    </div>
 
-      <!-- 512x512 Master Preview -->
-      <div class="master-preview">
-        <svg class="master-svg-box" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="gradA" x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#0284c7" />
-              <stop offset="100%" stop-color="#38bdf8" />
-            </linearGradient>
-            <filter id="shadowA" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0284c7" flood-opacity="0.35"/>
-              <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.25"/>
-            </filter>
-          </defs>
-          <g filter="url(#shadowA)">
-            <!-- Outer Sticker Background -->
-            <rect x="36" y="36" width="440" height="440" rx="96" fill="#111827" stroke="#38bdf8" stroke-width="10" stroke-opacity="0.5"/>
-            
-            <!-- Cloud Base -->
-            <path d="M 140 350
+    <div class="container">
+      <!-- ========================================================================= -->
+      <!-- 方案 A: 极简几何声波云 (Geometric Flow) -->
+      <!-- ========================================================================= -->
+      <div class="variant-card">
+        <div class="variant-header">
+          <span class="variant-title">方案 A: 极简几何声波云</span>
+          <span class="variant-tag">推荐 / 高辨识度</span>
+        </div>
+
+        <!-- 512x512 Master Preview -->
+        <div class="master-preview">
+          <svg
+            class="master-svg-box"
+            viewBox="0 0 512 512"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient id="gradA" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#0284c7" />
+                <stop offset="100%" stop-color="#38bdf8" />
+              </linearGradient>
+              <filter id="shadowA" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow
+                  dx="0"
+                  dy="16"
+                  stdDeviation="16"
+                  flood-color="#0284c7"
+                  flood-opacity="0.35"
+                />
+                <feDropShadow
+                  dx="0"
+                  dy="4"
+                  stdDeviation="6"
+                  flood-color="#000"
+                  flood-opacity="0.25"
+                />
+              </filter>
+            </defs>
+            <g filter="url(#shadowA)">
+              <!-- Outer Sticker Background -->
+              <rect
+                x="36"
+                y="36"
+                width="440"
+                height="440"
+                rx="96"
+                fill="#111827"
+                stroke="#38bdf8"
+                stroke-width="10"
+                stroke-opacity="0.5"
+              />
+
+              <!-- Cloud Base -->
+              <path
+                d="M 140 350
                      C 105 350, 90 320, 105 285
                      C 100 240, 140 215, 175 225
                      C 200 170, 275 165, 310 210
                      C 345 195, 395 220, 390 265
                      C 425 290, 415 350, 365 350
-                     Z" fill="url(#gradA)" />
-            
-            <!-- Upward Soundwave Pillars -->
-            <rect x="180" y="240" width="22" height="70" rx="11" fill="#ffffff" />
-            <rect x="220" y="200" width="22" height="110" rx="11" fill="#ffffff" />
-            <rect x="260" y="170" width="22" height="140" rx="11" fill="#ffffff" />
-            <rect x="300" y="210" width="22" height="100" rx="11" fill="#ffffff" />
-            <rect x="340" y="250" width="22" height="60" rx="11" fill="#ffffff" />
-          </g>
-        </svg>
-      </div>
+                     Z"
+                fill="url(#gradA)"
+              />
 
-      <!-- Taskbar Deep / Light Simulation -->
-      <div class="section-label">Windows 11 系统托盘表现 (24px 实机模拟)</div>
-      <div class="sim-group">
-        <!-- Dark Taskbar -->
-        <div class="taskbar-row taskbar-dark">
-          <span class="taskbar-label">深色任务栏</span>
-          <div class="tray-icons">
-            <div class="tray-item">
-              <div class="tray-box">
-                <!-- Idle (White + Cyan) -->
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <line x1="26" y1="36" x2="26" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                  <line x1="32" y1="31" x2="32" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                  <line x1="38" y1="34" x2="38" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                </svg>
+              <!-- Upward Soundwave Pillars -->
+              <rect
+                x="180"
+                y="240"
+                width="22"
+                height="70"
+                rx="11"
+                fill="#ffffff"
+              />
+              <rect
+                x="220"
+                y="200"
+                width="22"
+                height="110"
+                rx="11"
+                fill="#ffffff"
+              />
+              <rect
+                x="260"
+                y="170"
+                width="22"
+                height="140"
+                rx="11"
+                fill="#ffffff"
+              />
+              <rect
+                x="300"
+                y="210"
+                width="22"
+                height="100"
+                rx="11"
+                fill="#ffffff"
+              />
+              <rect
+                x="340"
+                y="250"
+                width="22"
+                height="60"
+                rx="11"
+                fill="#ffffff"
+              />
+            </g>
+          </svg>
+        </div>
+
+        <!-- Taskbar Deep / Light Simulation -->
+        <div class="section-label">Windows 11 系统托盘表现 (24px 实机模拟)</div>
+        <div class="sim-group">
+          <!-- Dark Taskbar -->
+          <div class="taskbar-row taskbar-dark">
+            <span class="taskbar-label">深色任务栏</span>
+            <div class="tray-icons">
+              <div class="tray-item">
+                <div class="tray-box">
+                  <!-- Idle (White + Cyan) -->
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z"
+                      fill="none"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <line
+                      x1="26"
+                      y1="36"
+                      x2="26"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="32"
+                      y1="31"
+                      x2="32"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="38"
+                      y1="34"
+                      x2="38"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <span>空闲</span>
               </div>
-              <span>空闲</span>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <!-- Recording (Red indicator) -->
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z"
+                      fill="none"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <line
+                      x1="26"
+                      y1="36"
+                      x2="26"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="32"
+                      y1="31"
+                      x2="32"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="38"
+                      y1="34"
+                      x2="38"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                    <!-- Red dot top-right -->
+                    <circle
+                      cx="48"
+                      cy="18"
+                      r="7"
+                      fill="#ef4444"
+                      class="anim-recording"
+                    />
+                  </svg>
+                </div>
+                <span>录音中</span>
+              </div>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <!-- Transcribing (Cyan Pulse) -->
+                  <svg
+                    viewBox="0 0 64 64"
+                    width="20"
+                    height="20"
+                    class="anim-wave"
+                  >
+                    <path
+                      d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z"
+                      fill="#0284c7"
+                      fill-opacity="0.4"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <line
+                      x1="26"
+                      y1="33"
+                      x2="26"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="32"
+                      y1="28"
+                      x2="32"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="38"
+                      y1="31"
+                      x2="38"
+                      y2="42"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <span>转写中</span>
+              </div>
             </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <!-- Recording (Red indicator) -->
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <line x1="26" y1="36" x2="26" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                  <line x1="32" y1="31" x2="32" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                  <line x1="38" y1="34" x2="38" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                  <!-- Red dot top-right -->
-                  <circle cx="48" cy="18" r="7" fill="#ef4444" class="anim-recording"/>
-                </svg>
+          </div>
+
+          <!-- Light Taskbar -->
+          <div class="taskbar-row taskbar-light">
+            <span class="taskbar-label">浅色任务栏</span>
+            <div class="tray-icons">
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z"
+                      fill="none"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <line
+                      x1="26"
+                      y1="36"
+                      x2="26"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="32"
+                      y1="31"
+                      x2="32"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="38"
+                      y1="34"
+                      x2="38"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <span>空闲</span>
               </div>
-              <span>录音中</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <!-- Transcribing (Cyan Pulse) -->
-                <svg viewBox="0 0 64 64" width="20" height="20" class="anim-wave">
-                  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="#0284c7" fill-opacity="0.4" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <line x1="26" y1="33" x2="26" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                  <line x1="32" y1="28" x2="32" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                  <line x1="38" y1="31" x2="38" y2="42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                </svg>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z"
+                      fill="none"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <line
+                      x1="26"
+                      y1="36"
+                      x2="26"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="32"
+                      y1="31"
+                      x2="32"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="38"
+                      y1="34"
+                      x2="38"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <circle
+                      cx="48"
+                      cy="18"
+                      r="7"
+                      fill="#dc2626"
+                      class="anim-recording"
+                    />
+                  </svg>
+                </div>
+                <span>录音中</span>
               </div>
-              <span>转写中</span>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z"
+                      fill="#0284c7"
+                      fill-opacity="0.2"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <line
+                      x1="26"
+                      y1="33"
+                      x2="26"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="32"
+                      y1="28"
+                      x2="32"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1="38"
+                      y1="31"
+                      x2="38"
+                      y2="42"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <span>转写中</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Light Taskbar -->
-        <div class="taskbar-row taskbar-light">
-          <span class="taskbar-label">浅色任务栏</span>
-          <div class="tray-icons">
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <line x1="26" y1="36" x2="26" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                  <line x1="32" y1="31" x2="32" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                  <line x1="38" y1="34" x2="38" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                </svg>
-              </div>
-              <span>空闲</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <line x1="26" y1="36" x2="26" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                  <line x1="32" y1="31" x2="32" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                  <line x1="38" y1="34" x2="38" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                  <circle cx="48" cy="18" r="7" fill="#dc2626" class="anim-recording"/>
-                </svg>
-              </div>
-              <span>录音中</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="#0284c7" fill-opacity="0.2" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <line x1="26" y1="33" x2="26" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                  <line x1="32" y1="28" x2="32" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                  <line x1="38" y1="31" x2="38" y2="42" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round"/>
-                </svg>
-              </div>
-              <span>转写中</span>
-            </div>
+        <!-- Horizontal Logo -->
+        <div class="brand-header-preview">
+          <svg width="28" height="28" viewBox="0 0 64 64">
+            <path
+              d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z"
+              fill="url(#gradA)"
+            />
+            <line
+              x1="26"
+              y1="34"
+              x2="26"
+              y2="42"
+              stroke="#fff"
+              stroke-width="3.5"
+              stroke-linecap="round"
+            />
+            <line
+              x1="32"
+              y1="29"
+              x2="32"
+              y2="42"
+              stroke="#fff"
+              stroke-width="3.5"
+              stroke-linecap="round"
+            />
+            <line
+              x1="38"
+              y1="33"
+              x2="38"
+              y2="42"
+              stroke="#fff"
+              stroke-width="3.5"
+              stroke-linecap="round"
+            />
+          </svg>
+          <div
+            style="font-size: 16px; font-weight: 800; letter-spacing: -0.5px"
+          >
+            <span>Breath</span
+            ><span
+              style="
+                color: var(--primary-cyan);
+                font-weight: 600;
+                margin-left: 2px;
+              "
+              >Scribe</span
+            >
           </div>
         </div>
-      </div>
 
-      <!-- Horizontal Logo -->
-      <div class="brand-header-preview">
-        <svg width="28" height="28" viewBox="0 0 64 64">
-          <path d="M18 46 C12 46, 10 40, 13 36 C12 30, 17 27, 22 28 C25 21, 35 21, 40 27 C45 25, 52 28, 51 34 C56 37, 54 46, 47 46 Z" fill="url(#gradA)" />
-          <line x1="26" y1="34" x2="26" y2="42" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-          <line x1="32" y1="29" x2="32" y2="42" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-          <line x1="38" y1="33" x2="38" y2="42" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-        </svg>
-        <div style="font-size: 16px; font-weight: 800; letter-spacing: -0.5px;">
-          <span>Breath</span><span style="color: var(--primary-cyan); font-weight: 600; margin-left: 2px;">Scribe</span>
+        <div class="desc-box">
+          <strong>设计特点：</strong>云朵底座承托 5
+          根竖向节律声波柱，结构稳定，具有极高的几何秩序美。在 16x16
+          极小托盘尺寸下绝不糊边，辨识度最高。
         </div>
       </div>
 
-      <div class="desc-box">
-        <strong>设计特点：</strong>云朵底座承托 5 根竖向节律声波柱，结构稳定，具有极高的几何秩序美。在 16x16 极小托盘尺寸下绝不糊边，辨识度最高。
-      </div>
-    </div>
+      <!-- ========================================================================= -->
+      <!-- 方案 B: 环抱弧形音纹云 (Enclosing Sound-Arc Cloud) -->
+      <!-- ========================================================================= -->
+      <div class="variant-card">
+        <div class="variant-header">
+          <span class="variant-title">方案 B: 环抱弧形音纹云</span>
+          <span class="variant-tag">律动感 / 传播意象</span>
+        </div>
 
-    <!-- ========================================================================= -->
-    <!-- 方案 B: 环抱弧形音纹云 (Enclosing Sound-Arc Cloud) -->
-    <!-- ========================================================================= -->
-    <div class="variant-card">
-      <div class="variant-header">
-        <span class="variant-title">方案 B: 环抱弧形音纹云</span>
-        <span class="variant-tag">律动感 / 传播意象</span>
-      </div>
+        <div class="master-preview">
+          <svg
+            class="master-svg-box"
+            viewBox="0 0 512 512"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient id="gradB" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#0369a1" />
+                <stop offset="100%" stop-color="#38bdf8" />
+              </linearGradient>
+              <filter id="shadowB" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow
+                  dx="0"
+                  dy="16"
+                  stdDeviation="16"
+                  flood-color="#0284c7"
+                  flood-opacity="0.35"
+                />
+                <feDropShadow
+                  dx="0"
+                  dy="4"
+                  stdDeviation="6"
+                  flood-color="#000"
+                  flood-opacity="0.25"
+                />
+              </filter>
+            </defs>
+            <g filter="url(#shadowB)">
+              <rect
+                x="36"
+                y="36"
+                width="440"
+                height="440"
+                rx="96"
+                fill="#111827"
+                stroke="#38bdf8"
+                stroke-width="10"
+                stroke-opacity="0.5"
+              />
 
-      <div class="master-preview">
-        <svg class="master-svg-box" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="gradB" x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#0369a1" />
-              <stop offset="100%" stop-color="#38bdf8" />
-            </linearGradient>
-            <filter id="shadowB" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0284c7" flood-opacity="0.35"/>
-              <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.25"/>
-            </filter>
-          </defs>
-          <g filter="url(#shadowB)">
-            <rect x="36" y="36" width="440" height="440" rx="96" fill="#111827" stroke="#38bdf8" stroke-width="10" stroke-opacity="0.5"/>
-            
-            <!-- Left-bottom Cloud Body -->
-            <path d="M 120 360
+              <!-- Left-bottom Cloud Body -->
+              <path
+                d="M 120 360
                      C 80 360, 70 310, 95 270
                      C 90 220, 140 190, 180 210
                      C 210 160, 280 160, 310 210
                      C 350 200, 380 230, 370 270
                      C 400 300, 390 360, 330 360
-                     Z" fill="url(#gradB)" />
-            
-            <!-- 3 Concentric Sound Arcs radiating to top-right -->
-            <path d="M 280 150 A 110 110 0 0 1 390 260" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" />
-            <path d="M 310 110 A 160 160 0 0 1 440 240" fill="none" stroke="#38bdf8" stroke-width="20" stroke-linecap="round" />
-            <path d="M 340 70 A 210 210 0 0 1 480 220" fill="none" stroke="#7dd3fc" stroke-width="18" stroke-linecap="round" opacity="0.8"/>
-          </g>
-        </svg>
-      </div>
+                     Z"
+                fill="url(#gradB)"
+              />
 
-      <div class="section-label">Windows 11 系统托盘表现 (24px 实机模拟)</div>
-      <div class="sim-group">
-        <div class="taskbar-row taskbar-dark">
-          <span class="taskbar-label">深色任务栏</span>
-          <div class="tray-icons">
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <path d="M35 22 A 16 16 0 0 1 47 34" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-                  <path d="M39 16 A 24 24 0 0 1 54 31" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/>
-                </svg>
+              <!-- 3 Concentric Sound Arcs radiating to top-right -->
+              <path
+                d="M 280 150 A 110 110 0 0 1 390 260"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="20"
+                stroke-linecap="round"
+              />
+              <path
+                d="M 310 110 A 160 160 0 0 1 440 240"
+                fill="none"
+                stroke="#38bdf8"
+                stroke-width="20"
+                stroke-linecap="round"
+              />
+              <path
+                d="M 340 70 A 210 210 0 0 1 480 220"
+                fill="none"
+                stroke="#7dd3fc"
+                stroke-width="18"
+                stroke-linecap="round"
+                opacity="0.8"
+              />
+            </g>
+          </svg>
+        </div>
+
+        <div class="section-label">Windows 11 系统托盘表现 (24px 实机模拟)</div>
+        <div class="sim-group">
+          <div class="taskbar-row taskbar-dark">
+            <span class="taskbar-label">深色任务栏</span>
+            <div class="tray-icons">
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z"
+                      fill="none"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M35 22 A 16 16 0 0 1 47 34"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M39 16 A 24 24 0 0 1 54 31"
+                      fill="none"
+                      stroke="#7dd3fc"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <span>空闲</span>
               </div>
-              <span>空闲</span>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z"
+                      fill="none"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M35 22 A 16 16 0 0 1 47 34"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M39 16 A 24 24 0 0 1 54 31"
+                      fill="none"
+                      stroke="#7dd3fc"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
+                    <circle
+                      cx="52"
+                      cy="14"
+                      r="7"
+                      fill="#ef4444"
+                      class="anim-recording"
+                    />
+                  </svg>
+                </div>
+                <span>录音中</span>
+              </div>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg
+                    viewBox="0 0 64 64"
+                    width="20"
+                    height="20"
+                    class="anim-wave"
+                  >
+                    <path
+                      d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z"
+                      fill="#0284c7"
+                      fill-opacity="0.4"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M35 22 A 16 16 0 0 1 47 34"
+                      fill="none"
+                      stroke="#38bdf8"
+                      stroke-width="4"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M39 16 A 24 24 0 0 1 54 31"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <span>转写中</span>
+              </div>
             </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <path d="M35 22 A 16 16 0 0 1 47 34" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-                  <path d="M39 16 A 24 24 0 0 1 54 31" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/>
-                  <circle cx="52" cy="14" r="7" fill="#ef4444" class="anim-recording"/>
-                </svg>
+          </div>
+
+          <div class="taskbar-row taskbar-light">
+            <span class="taskbar-label">浅色任务栏</span>
+            <div class="tray-icons">
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z"
+                      fill="none"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M35 22 A 16 16 0 0 1 47 34"
+                      fill="none"
+                      stroke="#0284c7"
+                      stroke-width="4"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M39 16 A 24 24 0 0 1 54 31"
+                      fill="none"
+                      stroke="#38bdf8"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <span>空闲</span>
               </div>
-              <span>录音中</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20" class="anim-wave">
-                  <path d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z" fill="#0284c7" fill-opacity="0.4" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <path d="M35 22 A 16 16 0 0 1 47 34" fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
-                  <path d="M39 16 A 24 24 0 0 1 54 31" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-                </svg>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z"
+                      fill="none"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M35 22 A 16 16 0 0 1 47 34"
+                      fill="none"
+                      stroke="#0284c7"
+                      stroke-width="4"
+                      stroke-linecap="round"
+                    />
+                    <circle
+                      cx="52"
+                      cy="14"
+                      r="7"
+                      fill="#dc2626"
+                      class="anim-recording"
+                    />
+                  </svg>
+                </div>
+                <span>录音中</span>
               </div>
-              <span>转写中</span>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z"
+                      fill="#0284c7"
+                      fill-opacity="0.2"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M35 22 A 16 16 0 0 1 47 34"
+                      fill="none"
+                      stroke="#0284c7"
+                      stroke-width="4"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <span>转写中</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="taskbar-row taskbar-light">
-          <span class="taskbar-label">浅色任务栏</span>
-          <div class="tray-icons">
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <path d="M35 22 A 16 16 0 0 1 47 34" fill="none" stroke="#0284c7" stroke-width="4" stroke-linecap="round"/>
-                  <path d="M39 16 A 24 24 0 0 1 54 31" fill="none" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round"/>
-                </svg>
-              </div>
-              <span>空闲</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <path d="M35 22 A 16 16 0 0 1 47 34" fill="none" stroke="#0284c7" stroke-width="4" stroke-linecap="round"/>
-                  <circle cx="52" cy="14" r="7" fill="#dc2626" class="anim-recording"/>
-                </svg>
-              </div>
-              <span>录音中</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z" fill="#0284c7" fill-opacity="0.2" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <path d="M35 22 A 16 16 0 0 1 47 34" fill="none" stroke="#0284c7" stroke-width="4" stroke-linecap="round"/>
-                </svg>
-              </div>
-              <span>转写中</span>
-            </div>
+        <div class="brand-header-preview">
+          <svg width="28" height="28" viewBox="0 0 64 64">
+            <path
+              d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z"
+              fill="url(#gradB)"
+            />
+            <path
+              d="M35 22 A 16 16 0 0 1 47 34"
+              fill="none"
+              stroke="#38bdf8"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+          </svg>
+          <div
+            style="font-size: 16px; font-weight: 800; letter-spacing: -0.5px"
+          >
+            <span>Breath</span
+            ><span
+              style="
+                color: var(--primary-cyan);
+                font-weight: 600;
+                margin-left: 2px;
+              "
+              >Scribe</span
+            >
           </div>
         </div>
-      </div>
 
-      <div class="brand-header-preview">
-        <svg width="28" height="28" viewBox="0 0 64 64">
-          <path d="M16 46 C11 46, 9 41, 12 37 C11 31, 16 28, 20 29 C23 23, 31 23, 35 28 C39 27, 44 30, 43 35 C47 38, 45 46, 39 46 Z" fill="url(#gradB)" />
-          <path d="M35 22 A 16 16 0 0 1 47 34" fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
-        </svg>
-        <div style="font-size: 16px; font-weight: 800; letter-spacing: -0.5px;">
-          <span>Breath</span><span style="color: var(--primary-cyan); font-weight: 600; margin-left: 2px;">Scribe</span>
+        <div class="desc-box">
+          <strong>设计特点：</strong
+          >云朵与向右上扩散的同心圆弧音纹咬合，寓意“声音与呼吸向外流淌”，徽标感非常鲜明。
         </div>
       </div>
 
-      <div class="desc-box">
-        <strong>设计特点：</strong>云朵与向右上扩散的同心圆弧音纹咬合，寓意“声音与呼吸向外流淌”，徽标感非常鲜明。
-      </div>
-    </div>
+      <!-- ========================================================================= -->
+      <!-- 方案 C: 核心声波脉冲云 (Heartbeat Pulse Cloud) -->
+      <!-- ========================================================================= -->
+      <div class="variant-card">
+        <div class="variant-header">
+          <span class="variant-title">方案 C: 核心声波脉冲云</span>
+          <span class="variant-tag">极简 / 扁平现代</span>
+        </div>
 
-    <!-- ========================================================================= -->
-    <!-- 方案 C: 核心声波脉冲云 (Heartbeat Pulse Cloud) -->
-    <!-- ========================================================================= -->
-    <div class="variant-card">
-      <div class="variant-header">
-        <span class="variant-title">方案 C: 核心声波脉冲云</span>
-        <span class="variant-tag">极简 / 扁平现代</span>
-      </div>
+        <div class="master-preview">
+          <svg
+            class="master-svg-box"
+            viewBox="0 0 512 512"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient id="gradC" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#38bdf8" />
+                <stop offset="100%" stop-color="#0284c7" />
+              </linearGradient>
+              <filter id="shadowC" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow
+                  dx="0"
+                  dy="16"
+                  stdDeviation="16"
+                  flood-color="#0284c7"
+                  flood-opacity="0.35"
+                />
+                <feDropShadow
+                  dx="0"
+                  dy="4"
+                  stdDeviation="6"
+                  flood-color="#000"
+                  flood-opacity="0.25"
+                />
+              </filter>
+            </defs>
+            <g filter="url(#shadowC)">
+              <rect
+                x="36"
+                y="36"
+                width="440"
+                height="440"
+                rx="96"
+                fill="#111827"
+                stroke="#38bdf8"
+                stroke-width="10"
+                stroke-opacity="0.5"
+              />
 
-      <div class="master-preview">
-        <svg class="master-svg-box" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="gradC" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#38bdf8" />
-              <stop offset="100%" stop-color="#0284c7" />
-            </linearGradient>
-            <filter id="shadowC" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0284c7" flood-opacity="0.35"/>
-              <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.25"/>
-            </filter>
-          </defs>
-          <g filter="url(#shadowC)">
-            <rect x="36" y="36" width="440" height="440" rx="96" fill="#111827" stroke="#38bdf8" stroke-width="10" stroke-opacity="0.5"/>
-            
-            <!-- Full Cloud Outline -->
-            <path d="M 140 370
+              <!-- Full Cloud Outline -->
+              <path
+                d="M 140 370
                      C 90 370, 70 310, 105 265
                      C 95 210, 150 170, 200 190
                      C 235 130, 320 130, 360 190
                      C 410 180, 450 220, 440 270
                      C 470 310, 450 370, 390 370
-                     Z" fill="url(#gradC)" />
-            
-            <!-- Central Audio Pulse Line (Cutout) -->
-            <path d="M 120 280
+                     Z"
+                fill="url(#gradC)"
+              />
+
+              <!-- Central Audio Pulse Line (Cutout) -->
+              <path
+                d="M 120 280
                      L 190 280
                      L 220 230
                      L 250 330
                      L 280 210
                      L 310 320
                      L 330 280
-                     L 410 280" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
-          </g>
-        </svg>
-      </div>
+                     L 410 280"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="22"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </g>
+          </svg>
+        </div>
 
-      <div class="section-label">Windows 11 系统托盘表现 (24px 实机模拟)</div>
-      <div class="sim-group">
-        <div class="taskbar-row taskbar-dark">
-          <span class="taskbar-label">深色任务栏</span>
-          <div class="tray-icons">
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <path d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+        <div class="section-label">Windows 11 系统托盘表现 (24px 实机模拟)</div>
+        <div class="sim-group">
+          <div class="taskbar-row taskbar-dark">
+            <span class="taskbar-label">深色任务栏</span>
+            <div class="tray-icons">
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z"
+                      fill="none"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+                <span>空闲</span>
               </div>
-              <span>空闲</span>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z"
+                      fill="none"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <circle
+                      cx="50"
+                      cy="18"
+                      r="7"
+                      fill="#ef4444"
+                      class="anim-recording"
+                    />
+                  </svg>
+                </div>
+                <span>录音中</span>
+              </div>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg
+                    viewBox="0 0 64 64"
+                    width="20"
+                    height="20"
+                    class="anim-wave"
+                  >
+                    <path
+                      d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z"
+                      fill="#0284c7"
+                      fill-opacity="0.4"
+                      stroke="#38bdf8"
+                      stroke-width="4.5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M18 36 L25 36 L29 28 L33 44 L37 26 L41 41 L44 36 L48 36"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+                <span>转写中</span>
+              </div>
             </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z" fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <path d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                  <circle cx="50" cy="18" r="7" fill="#ef4444" class="anim-recording"/>
-                </svg>
+          </div>
+
+          <div class="taskbar-row taskbar-light">
+            <span class="taskbar-label">浅色任务栏</span>
+            <div class="tray-icons">
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z"
+                      fill="none"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36"
+                      fill="none"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+                <span>空闲</span>
               </div>
-              <span>录音中</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20" class="anim-wave">
-                  <path d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z" fill="#0284c7" fill-opacity="0.4" stroke="#38bdf8" stroke-width="4.5" stroke-linejoin="round"/>
-                  <path d="M18 36 L25 36 L29 28 L33 44 L37 26 L41 41 L44 36 L48 36" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z"
+                      fill="none"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36"
+                      fill="none"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <circle
+                      cx="50"
+                      cy="18"
+                      r="7"
+                      fill="#dc2626"
+                      class="anim-recording"
+                    />
+                  </svg>
+                </div>
+                <span>录音中</span>
               </div>
-              <span>转写中</span>
+              <div class="tray-item">
+                <div class="tray-box">
+                  <svg viewBox="0 0 64 64" width="20" height="20">
+                    <path
+                      d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z"
+                      fill="#0284c7"
+                      fill-opacity="0.2"
+                      stroke="#0f172a"
+                      stroke-width="5"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36"
+                      fill="none"
+                      stroke="#0284c7"
+                      stroke-width="3.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+                <span>转写中</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="taskbar-row taskbar-light">
-          <span class="taskbar-label">浅色任务栏</span>
-          <div class="tray-icons">
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <path d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36" fill="none" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
-              <span>空闲</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z" fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <path d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36" fill="none" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <circle cx="50" cy="18" r="7" fill="#dc2626" class="anim-recording"/>
-                </svg>
-              </div>
-              <span>录音中</span>
-            </div>
-            <div class="tray-item">
-              <div class="tray-box">
-                <svg viewBox="0 0 64 64" width="20" height="20">
-                  <path d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z" fill="#0284c7" fill-opacity="0.2" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"/>
-                  <path d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36" fill="none" stroke="#0284c7" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
-              <span>转写中</span>
-            </div>
+        <div class="brand-header-preview">
+          <svg width="28" height="28" viewBox="0 0 64 64">
+            <path
+              d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z"
+              fill="url(#gradC)"
+            />
+            <path
+              d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36"
+              fill="none"
+              stroke="#fff"
+              stroke-width="3.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <div
+            style="font-size: 16px; font-weight: 800; letter-spacing: -0.5px"
+          >
+            <span>Breath</span
+            ><span
+              style="
+                color: var(--primary-cyan);
+                font-weight: 600;
+                margin-left: 2px;
+              "
+              >Scribe</span
+            >
           </div>
         </div>
-      </div>
 
-      <div class="brand-header-preview">
-        <svg width="28" height="28" viewBox="0 0 64 64">
-          <path d="M16 46 C10 46, 8 40, 12 35 C11 29, 17 25, 22 27 C26 20, 36 20, 40 27 C46 25, 52 29, 51 35 C55 39, 53 46, 46 46 Z" fill="url(#gradC)" />
-          <path d="M18 36 L25 36 L29 30 L33 42 L37 28 L41 39 L44 36 L48 36" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <div style="font-size: 16px; font-weight: 800; letter-spacing: -0.5px;">
-          <span>Breath</span><span style="color: var(--primary-cyan); font-weight: 600; margin-left: 2px;">Scribe</span>
+        <div class="desc-box">
+          <strong>设计特点：</strong
+          >云朵中央穿过一道心电/音频脉冲连线，象征“呼吸与声音的生命线”，科技与生物感并重。
         </div>
       </div>
+    </div>
 
-      <div class="desc-box">
-        <strong>设计特点：</strong>云朵中央穿过一道心电/音频脉冲连线，象征“呼吸与声音的生命线”，科技与生物感并重。
+    <div
+      style="
+        max-width: 1200px;
+        margin: 32px auto 0;
+        padding: 20px;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        font-size: 13px;
+        color: var(--text-muted);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      "
+    >
+      <div>
+        <strong style="color: #f1f5f9">交互提示：</strong> 可在本地直接双击打开
+        <code>brand/prototype/index.html</code> 查看高清无损矢量渲染与动效。
+      </div>
+      <div style="color: var(--primary-cyan); font-weight: 600">
+        Wayfinder Ticket #29 · HITL 评估中
       </div>
     </div>
-
-  </div>
-
-  <div style="max-width: 1200px; margin: 32px auto 0; padding: 20px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; font-size: 13px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
-    <div>
-      <strong style="color: #f1f5f9;">交互提示：</strong> 可在本地直接双击打开 <code>brand/prototype/index.html</code> 查看高清无损矢量渲染与动效。
-    </div>
-    <div style="color: var(--primary-cyan); font-weight: 600;">
-      Wayfinder Ticket #29 · HITL 评估中
-    </div>
-  </div>
-
-</body>
+  </body>
 </html>

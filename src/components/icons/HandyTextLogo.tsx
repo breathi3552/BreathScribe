@@ -34,7 +34,15 @@ const HandyTextLogo: React.FC<HandyTextLogoProps> = ({
 
     {/* Brand Icon Badge */}
     <g transform="translate(4, 4)">
-      <rect width="48" height="48" rx="12" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.5" strokeOpacity="0.4" />
+      <rect
+        width="48"
+        height="48"
+        rx="12"
+        fill="#0f172a"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+        strokeOpacity="0.4"
+      />
       {/* Cloud silhouette */}
       <path
         d="M 13 33 C 9.5 33 8 30 9.5 26.5 C 9 22 13 19.5 16.5 20.5 C 19 15 26.5 14.5 30 19 C 33.5 17.5 38.5 20 38 24.5 C 41.5 27 40.5 33 35.5 33 Z"

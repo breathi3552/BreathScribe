@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "Ringraziamenti",
         "handy": {
-          "title": "Handy Cloud",
+          "title": "Handy",
           "description": "Applicazione desktop open-source di sintesi vocale da testo di @cjpais",
-          "details": "BreathScribe è un fork di Handy Cloud, arricchito con modelli cloud e funzionalità proxy. Un ringraziamento speciale a CJ Pais e a tutti i collaboratori del progetto originale Handy Cloud."
+          "details": "BreathScribe è un fork di Handy, arricchito con modelli cloud e funzionalità proxy. Un ringraziamento speciale a CJ Pais e a tutti i collaboratori del progetto originale Handy."
         },
         "ggml": {
           "title": "ggml",

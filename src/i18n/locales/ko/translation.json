@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "감사의 말",
         "handy": {
-          "title": "Handy Cloud",
+          "title": "Handy",
           "description": "@cjpais가 개발한 오픈 소스 데스크톱 음성 텍스트 변환 애플리케이션",
-          "details": "BreathScribe는 Handy의 포크 버전으로, 클라우드 모델 및 프록시 기능을 확장했습니다. CJ Pais 님과 원래 Handy Cloud 프로젝트의 모든 기여자분들께 깊은 감사를 드립니다."
+          "details": "BreathScribe는 Handy의 포크 버전으로, 클라우드 모델 및 프록시 기능을 확장했습니다. CJ Pais 님과 원래 Handy 프로젝트의 모든 기여자분들께 깊은 감사를 드립니다."
         },
         "ggml": {
           "title": "ggml",

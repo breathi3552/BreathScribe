@@ -647,9 +647,9 @@
       "acknowledgments": {
         "title": "شكر وتقدير",
         "handy": {
-          "title": "Handy Cloud",
+          "title": "Handy",
           "description": "تطبيق مكتبي مفتوح المصدر لتحويل الكلام إلى نص بواسطة @cjpais",
-          "details": "BreathScribe هو فرع مشتق من Handy Cloud، تم توسيعه بنماذج سحابية وقدرات وكيل البروكسي. شكراً جزيلاً لـ CJ Pais وجميع المساهمين في مشروع Handy Cloud الأصلي."
+          "details": "BreathScribe هو فرع مشتق من Handy، تم توسيعه بنماذج سحابية وقدرات وكيل البروكسي. شكراً جزيلاً لـ CJ Pais وجميع المساهمين في مشروع Handy الأصلي."
         },
         "ggml": {
           "title": "ggml",

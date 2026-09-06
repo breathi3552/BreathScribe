@@ -74,6 +74,16 @@
             inherit system;
             overlays = [
               bun2nix.overlays.default
+              (final: prev: {
+                fetchurl =
+                  args:
+                  prev.fetchurl (
+                    args
+                    // {
+                      curlOpts = (args.curlOpts or "") + " -A BreathScribe-Nix/0.9.6";
+                    }
+                  );
+              })
             ];
           };
           lib = pkgs.lib;
@@ -172,6 +182,7 @@
                 # Self-update can't work against an immutable /nix/store install
                 # (downloadAndInstall would try to overwrite the store path), so
                 # the Nix-built package always disables the updater.
+                --set BREATHSCRIBE_DISABLE_UPDATER 1
                 --set HANDY_DISABLE_UPDATER 1
               )
             '';
@@ -180,7 +191,7 @@
               description = "A free, open source, and extensible speech-to-text application that works completely offline";
               homepage = "https://github.com/cjpais/Handy";
               license = lib.licenses.mit;
-              mainProgram = "handy";
+              mainProgram = "breath-scribe";
               platforms = supportedSystems;
             };
           };

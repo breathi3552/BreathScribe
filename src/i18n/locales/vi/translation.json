@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "Lời cảm ơn",
         "handy": {
-          "title": "Handy Cloud",
+          "title": "Handy",
           "description": "Ứng dụng chuyển giọng nói thành văn bản mã nguồn mở trên máy tính bởi @cjpais",
-          "details": "BreathScribe là một bản phân nhánh của Handy Cloud, mở rộng thêm các mô hình đám mây và khả năng proxy. Xin chân thành cảm ơn CJ Pais và tất cả những người đóng góp cho dự án Handy Cloud ban đầu."
+          "details": "BreathScribe là một bản phân nhánh của Handy, mở rộng thêm các mô hình đám mây và khả năng proxy. Xin chân thành cảm ơn CJ Pais và tất cả những người đóng góp cho dự án Handy ban đầu."
         },
         "ggml": {
           "title": "ggml",

@@ -727,9 +727,9 @@
       "acknowledgments": {
         "title": "Poděkování",
         "handy": {
-          "title": "Handy Cloud",
+          "title": "Handy",
           "description": "Open-source desktopová aplikace pro převod řeči na text od @cjpais",
-          "details": "BreathScribe je fork projektu Handy Cloud, rozšířený o cloudové modely a funkce proxy. Velké díky patří CJ Paisovi a všem přispěvatelům původního projektu Handy Cloud."
+          "details": "BreathScribe je fork projektu Handy, rozšířený o cloudové modely a funkce proxy. Velké díky patří CJ Paisovi a všem přispěvatelům původního projektu Handy."
         },
         "ggml": {
           "title": "ggml",

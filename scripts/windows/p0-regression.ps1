@@ -78,7 +78,10 @@ $iconSource = "brand/breath-scribe-icon-source.svg"
 $marker = "brand/P0_ICON_GENERATED.txt"
 Assert-FileExists $iconSource
 Assert-FileExists $marker
-$sourceHash = (Get-FileHash $iconSource -Algorithm SHA256).Hash.ToLowerInvariant()
+$sourceContent = [System.IO.File]::ReadAllText((Resolve-Path $iconSource)).Replace("`r`n", "`n")
+$sha = [System.Security.Cryptography.SHA256]::Create()
+$sourceBytes = [System.Text.Encoding]::UTF8.GetBytes($sourceContent)
+$sourceHash = ([System.BitConverter]::ToString($sha.ComputeHash($sourceBytes))).Replace("-", "").ToLowerInvariant()
 $markerHash = (Get-Content $marker -Raw).Trim().ToLowerInvariant()
 Assert-True ($sourceHash -eq $markerHash) "icon marker matches approved source SHA-256"
 

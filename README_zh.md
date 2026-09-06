@@ -24,7 +24,7 @@ BreathScribe 是一款基于 [cjpais/Handy](https://github.com/cjpais/Handy) 开
 
 ## 使用方式
 
-1. 从 [Releases](https://github.com/breathi3552/Handy-Cloud/releases) 下载可执行文件。
+1. 从 [Releases](https://github.com/breathi3552/BreathScribe/releases) 下载可执行文件。
 2. 打开「设置 > 云端语音转写 (Cloud STT)」填入 Gemini API Key 并选择模型。
 3. 按下录音快捷键（默认 `Ctrl+Space`）进行输入。
 

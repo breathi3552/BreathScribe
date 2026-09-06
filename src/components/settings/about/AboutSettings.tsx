@@ -54,7 +54,7 @@ export const AboutSettings: React.FC = () => {
             variant="secondary"
             size="md"
             onClick={() =>
-              openUrl("https://github.com/breathi3552/Handy-Cloud")
+              openUrl("https://github.com/breathi3552/BreathScribe")
             }
           >
             {t("settings.about.sourceCode.button")}

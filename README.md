@@ -24,7 +24,7 @@ A Google Gemini API key is required. Configure the key and select a model in **S
 
 ## Usage
 
-1. Download the binary from [Releases](https://github.com/breathi3552/Handy-Cloud/releases).
+1. Download the binary from [Releases](https://github.com/breathi3552/BreathScribe/releases).
 2. Set your Gemini API key in **Settings > Cloud STT**.
 3. Trigger recording with the hotkey (default: `Ctrl+Space`).
 

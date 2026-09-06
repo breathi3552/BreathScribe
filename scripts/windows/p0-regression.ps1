@@ -69,7 +69,7 @@ $config = Get-Content $configPath -Raw | ConvertFrom-Json
 Assert-True ($config.productName -eq "BreathScribe") "Tauri productName is BreathScribe"
 Assert-True ($config.identifier -eq "io.github.breathi3552.breathscribe") "Tauri identifier is BreathScribe identifier"
 $endpoint = [string]$config.plugins.updater.endpoints[0]
-Assert-True ($endpoint -like "*breathi3552/Handy-Cloud*") "updater points at Handy-Cloud fork"
+Assert-True ($endpoint -like "*breathi3552/BreathScribe*") "updater points at BreathScribe fork"
 Assert-True ($endpoint -notlike "*cjpais/Handy*") "updater no longer points at upstream"
 Assert-True ([string]$config.bundle.windows.nsis.installerIcon -eq "icons/icon.ico") "NSIS installerIcon explicitly uses BreathScribe icon.ico"
 Assert-True ([string]$config.bundle.windows.nsis.uninstallerIcon -eq "icons/icon.ico") "NSIS uninstallerIcon explicitly uses BreathScribe icon.ico"
@@ -149,7 +149,7 @@ foreach ($path in $sourcePaths) { Assert-FileExists $path }
 Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -match "<svg") "UI hand icon is pure SVG vector"
 Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -notmatch "<img") "UI hand icon does not rely on bitmap img"
 Assert-True ((Get-Content "src/components/icons/HandyTextLogo.tsx" -Raw) -match "BreathScribe") "text logo displays BreathScribe"
-Assert-True ((Get-Content "src/components/settings/about/AboutSettings.tsx" -Raw) -match "github\.com/breathi3552/Handy-Cloud") "About source link uses fork"
+Assert-True ((Get-Content "src/components/settings/about/AboutSettings.tsx" -Raw) -match "github\.com/breathi3552/BreathScribe") "About source link uses fork"
 Assert-True ((Get-Content "src-tauri/src/tray.rs" -Raw) -match "BreathScribe v") "Tray tooltip identifies BreathScribe"
 
 Assert-True ((Get-Content "src-tauri/Cargo.toml" -Raw) -match 'handy-keys\s*=') "handy-keys dependency remains intact"

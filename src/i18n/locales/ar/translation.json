@@ -102,7 +102,7 @@
     },
     "permissions": {
       "title": "الأذونات المطلوبة",
-      "description": ".يحتاج Handy Cloud إلى بعض الأذونات ليعمل بشكل صحيح",
+      "description": ".يحتاج BreathScribe إلى بعض الأذونات ليعمل بشكل صحيح",
       "microphone": {
         "title": "الوصول إلى الميكروفون",
         "description": ".مطلوب لسماع صوتك من أجل التفريغ الصوتي"
@@ -165,7 +165,7 @@
     "general": {
       "title": "عام",
       "shortcut": {
-        "title": "اختصارات Handy Cloud",
+        "title": "اختصارات BreathScribe",
         "description": "إعداد اختصارات لوحة المفاتيح لبدء تسجيل التفريغ الصوتي",
         "loading": "...جاري تحميل الاختصارات",
         "none": "لا توجد اختصارات مجهزة",
@@ -278,11 +278,11 @@
       },
       "autostart": {
         "label": "التشغيل عند بدء التشغيل",
-        "description": ".بدء تشغيل Handy Cloud تلقائياً عند تسجيل الدخول إلى جهاز الكمبيوتر الخاص بك"
+        "description": ".بدء تشغيل BreathScribe تلقائياً عند تسجيل الدخول إلى جهاز الكمبيوتر الخاص بك"
       },
       "showTrayIcon": {
         "label": "إظهار أيقونة شريط النظام",
-        "description": ".عرض أيقونة Handy Cloud في شريط النظام"
+        "description": ".عرض أيقونة BreathScribe في شريط النظام"
       },
       "overlay": {
         "style": {
@@ -520,8 +520,8 @@
       },
       "updateChecks": {
         "label": "التحقق من وجود تحديثات",
-        "description": "التحقق تلقائياً من وجود إصدارات جديدة من Handy Cloud",
-        "lockedDescription": "معطّل بواسطة إعدادات النظام (HANDY_DISABLE_UPDATER)"
+        "description": "التحقق تلقائياً من وجود إصدارات جديدة من BreathScribe",
+        "lockedDescription": "معطّل بواسطة إعدادات النظام (BREATHSCRIBE_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "سمة الصوت",
@@ -598,7 +598,7 @@
       },
       "keyboardDiagnostic": {
         "title": "تشخيص لوحة المفاتيح",
-        "description": "يتحقق مما إذا كانت أحداث لوحة المفاتيح تصل إلى Handy Cloud. يُسجَّل عدد الأحداث فقط — ولا تُسجَّل أبدًا المفاتيح التي تضغط عليها.",
+        "description": "يتحقق مما إذا كانت أحداث لوحة المفاتيح تصل إلى BreathScribe. يُسجَّل عدد الأحداث فقط — ولا تُسجَّل أبدًا المفاتيح التي تضغط عليها.",
         "run": "تشغيل تشخيص لمدة 10 ثوانٍ",
         "running": "جارٍ الاستماع… اضغط اختصارك عدة مرات (مثل Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -612,7 +612,7 @@
         "mouse": "الماوس",
         "verdictBlocked": "يحجب Secure Input أحداث المفاتيح — لا يمكن للاختصارات التي تتضمن مفتاحًا عاديًا أن تعمل حتى تُحلّ المشكلة.",
         "verdictSuspicious": "وصلت أحداث مفاتيح التعديل لكن لم يصل أي حدث مفتاح — هناك شيء يمنع المفاتيح رغم أن Secure Input يظهر معطلاً. يُرجى الإبلاغ عن ذلك على GitHub.",
-        "verdictOk": "أحداث المفاتيح تصل إلى Handy Cloud بشكل طبيعي.",
+        "verdictOk": "أحداث المفاتيح تصل إلى BreathScribe بشكل طبيعي.",
         "verdictNoEvents": "لم يُسجَّل أي حدث — هل ضغطت أي مفاتيح أثناء الاختبار؟",
         "failed": "فشل التشخيص: {{error}}"
       },
@@ -628,11 +628,11 @@
       "title": "حول",
       "version": {
         "title": "الإصدار",
-        "description": "الإصدار الحالي من Handy Cloud"
+        "description": "الإصدار الحالي من BreathScribe"
       },
       "appDataDirectory": {
         "title": "مجلد بيانات التطبيق",
-        "description": "الموقع الذي يخزن فيه Handy Cloud بياناته"
+        "description": "الموقع الذي يخزن فيه BreathScribe بياناته"
       },
       "sourceCode": {
         "title": "كود المصدر",
@@ -641,20 +641,25 @@
       },
       "supportDevelopment": {
         "title": "دعم التطوير",
-        "description": "ساعدنا في مواصلة بناء Handy Cloud",
+        "description": "ساعدنا في مواصلة بناء BreathScribe",
         "button": "تبرع"
       },
       "acknowledgments": {
         "title": "شكر وتقدير",
+        "handy": {
+          "title": "Handy",
+          "description": "تطبيق مكتبي مفتوح المصدر لتحويل الكلام إلى نص بواسطة @cjpais",
+          "details": "BreathScribe هو فرع مشتق من Handy، تم توسيعه بنماذج سحابية وقدرات وكيل البروكسي. شكراً جزيلاً لـ CJ Pais وجميع المساهمين في مشروع Handy الأصلي."
+        },
         "ggml": {
           "title": "ggml",
           "description": "استنتاج عالي الأداء لنموذج التعرف التلقائي على الكلام Whisper من OpenAI",
-          "details": ".يستخدم Handy Cloud برنامج ggml لمعالجة سريعة ومحلية لتحويل الكلام إلى نص. شكراً للعمل الرائع الذي قام به Georgi Gerganov والمساهمون"
+          "details": ".يستخدم BreathScribe برنامج ggml لمعالجة سريعة ومحلية لتحويل الكلام إلى نص. شكراً للعمل الرائع الذي قام به Georgi Gerganov والمساهمون"
         }
       },
       "whatsNewUpdates": {
         "label": "إظهار الجديد",
-        "description": "إظهار ملاحظات الإصدار بعد تحديثات Handy Cloud"
+        "description": "إظهار ملاحظات الإصدار بعد تحديثات BreathScribe"
       }
     },
     "modelSettings": {
@@ -677,7 +682,7 @@
       "searchPlaceholder": "ابحث عن النماذج بالاسم…",
       "rescan": {
         "label": "إعادة الفحص",
-        "tooltip": "إعادة الفحص بحثًا عن النماذج المضافة إلى مجلد النماذج أو ذاكرة Hugging Face التخزينية المؤقتة خارج Handy Cloud"
+        "tooltip": "إعادة الفحص بحثًا عن النماذج المضافة إلى مجلد النماذج أو ذاكرة Hugging Face التخزينية المؤقتة خارج BreathScribe"
       },
       "modes": {
         "local": "Local Offline Models",
@@ -768,7 +773,7 @@
     "noOptionsFound": "لم يتم العثور على خيارات"
   },
   "accessibility": {
-    "permissionsDescription": ".يحتاج Handy Cloud إلى أذونات إمكانية الوصول لكتابة النص المفرغ",
+    "permissionsDescription": ".يحتاج BreathScribe إلى أذونات إمكانية الوصول لكتابة النص المفرغ",
     "openSettings": "فتح إعدادات النظام"
   },
   "errors": {
@@ -792,11 +797,11 @@
   },
   "appLanguage": {
     "title": "لغة التطبيق",
-    "description": "تغيير لغة واجهة Handy Cloud"
+    "description": "تغيير لغة واجهة BreathScribe"
   },
   "theme": {
     "title": "سمة التطبيق",
-    "description": "اختر ما إذا كان Handy Cloud يتبع مظهر النظام أو يبقى فاتحًا أو داكنًا",
+    "description": "اختر ما إذا كان BreathScribe يتبع مظهر النظام أو يبقى فاتحًا أو داكنًا",
     "options": {
       "system": "النظام",
       "light": "فاتح",
@@ -808,7 +813,7 @@
     "processing": "...جاري المعالجة"
   },
   "whatsNew": {
-    "title": "الجديد في Handy Cloud v{{version}}"
+    "title": "الجديد في BreathScribe v{{version}}"
   },
   "secureInput": {
     "blockedWithCulprit_one": "قد يحظر {{name}} اختصارًا واحدًا",

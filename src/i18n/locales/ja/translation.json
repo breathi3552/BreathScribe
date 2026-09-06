@@ -102,7 +102,7 @@
     },
     "permissions": {
       "title": "権限が必要です",
-      "description": "Handy Cloud が正常に動作するにはいくつかの権限が必要です。",
+      "description": "BreathScribe が正常に動作するにはいくつかの権限が必要です。",
       "microphone": {
         "title": "マイクへのアクセス",
         "description": "文字起こしのためにあなたの声を聞くために必要です。"
@@ -182,7 +182,7 @@
       "searchPlaceholder": "モデルを名前で検索…",
       "rescan": {
         "label": "再スキャン",
-        "tooltip": "Handy Cloud を使わずに models フォルダーまたは Hugging Face キャッシュに追加されたモデルを再スキャンします"
+        "tooltip": "BreathScribe を使わずに models フォルダーまたは Hugging Face キャッシュに追加されたモデルを再スキャンします"
       },
       "modes": {
         "local": "Local Offline Models",
@@ -245,7 +245,7 @@
     "general": {
       "title": "一般",
       "shortcut": {
-        "title": "Handy Cloud ショートカット",
+        "title": "BreathScribe ショートカット",
         "description": "音声録音を開始するキーボードショートカットを設定",
         "loading": "ショートカットを読み込み中…",
         "none": "ショートカットが設定されていません",
@@ -358,11 +358,11 @@
       },
       "autostart": {
         "label": "起動時に実行",
-        "description": "コンピューターにログインしたときに Handy Cloud を自動的に起動。"
+        "description": "コンピューターにログインしたときに BreathScribe を自動的に起動。"
       },
       "showTrayIcon": {
         "label": "トレイアイコンを表示",
-        "description": "システムトレイに Handy Cloud のアイコンを表示します。"
+        "description": "システムトレイに BreathScribe のアイコンを表示します。"
       },
       "overlay": {
         "style": {
@@ -600,8 +600,8 @@
       },
       "updateChecks": {
         "label": "アップデートを確認",
-        "description": "Handy Cloud の新しいバージョンを自動的にチェック",
-        "lockedDescription": "システム設定により無効化されています (HANDY_DISABLE_UPDATER)"
+        "description": "BreathScribe の新しいバージョンを自動的にチェック",
+        "lockedDescription": "システム設定により無効化されています (BREATHSCRIBE_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "サウンドテーマ",
@@ -678,7 +678,7 @@
       },
       "keyboardDiagnostic": {
         "title": "キーボード診断",
-        "description": "キーボードイベントが Handy Cloud に届いているかを確認します。記録されるのはイベント数のみで、押したキーの内容は記録されません。",
+        "description": "キーボードイベントが BreathScribe に届いているかを確認します。記録されるのはイベント数のみで、押したキーの内容は記録されません。",
         "run": "10 秒間の診断を実行",
         "running": "待機中… ショートカットを数回押してください (例: Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -692,7 +692,7 @@
         "mouse": "マウス",
         "verdictBlocked": "Secure Input がキーイベントをブロックしています。解消されるまで、通常キーを含むショートカットは動作しません。",
         "verdictSuspicious": "修飾キーのイベントは届いていますが、キーイベントは届いていません。Secure Input は無効と報告されているのに、何かがキーを抑制しています。GitHub で報告してください。",
-        "verdictOk": "キーイベントは Handy Cloud に正常に届いています。",
+        "verdictOk": "キーイベントは BreathScribe に正常に届いています。",
         "verdictNoEvents": "イベントを検出できませんでした。テスト中にキーを押しましたか？",
         "failed": "診断に失敗しました: {{error}}"
       },
@@ -708,11 +708,11 @@
       "title": "概要",
       "version": {
         "title": "バージョン",
-        "description": "Handy Cloud の現在のバージョン"
+        "description": "BreathScribe の現在のバージョン"
       },
       "appDataDirectory": {
         "title": "アプリデータディレクトリ",
-        "description": "Handy Cloud がデータを保存する場所"
+        "description": "BreathScribe がデータを保存する場所"
       },
       "sourceCode": {
         "title": "ソースコード",
@@ -721,20 +721,25 @@
       },
       "supportDevelopment": {
         "title": "開発を支援",
-        "description": "Handy Cloud の開発を支援してください",
+        "description": "BreathScribe の開発を支援してください",
         "button": "寄付する"
       },
       "acknowledgments": {
         "title": "謝辞",
+        "handy": {
+          "title": "Handy",
+          "description": "@cjpais によるオープンソースのデスクトップ音声テキスト変換アプリ",
+          "details": "BreathScribe は Handy のフォークであり、クラウドモデルとプロキシ機能を追加拡張しています。CJ Pais 氏および元の Handy プロジェクトのすべての貢献者に心より感謝申し上げます。"
+        },
         "ggml": {
           "title": "ggml",
           "description": "オンデバイス機械学習推論のための高性能テンソルライブラリ",
-          "details": "Handy Cloud のローカルの音声からテキストへの文字起こしは transcribe.cpp と ggml を基盤としています。Georgi Gerganov 氏と貢献者の皆様の素晴らしい仕事に感謝します。"
+          "details": "BreathScribe のローカルの音声からテキストへの文字起こしは transcribe.cpp と ggml を基盤としています。Georgi Gerganov 氏と貢献者の皆様の素晴らしい仕事に感謝します。"
         }
       },
       "whatsNewUpdates": {
         "label": "新機能を表示",
-        "description": "Handy Cloud のアップデート後にリリースノートを表示"
+        "description": "BreathScribe のアップデート後にリリースノートを表示"
       }
     }
   },
@@ -768,7 +773,7 @@
     "noOptionsFound": "オプションが見つかりません"
   },
   "accessibility": {
-    "permissionsDescription": "Handy Cloud が文字起こしテキストを入力するには、アクセシビリティ権限が必要です。",
+    "permissionsDescription": "BreathScribe が文字起こしテキストを入力するには、アクセシビリティ権限が必要です。",
     "openSettings": "システム設定を開く"
   },
   "errors": {
@@ -792,11 +797,11 @@
   },
   "appLanguage": {
     "title": "アプリの言語",
-    "description": "Handy Cloud インターフェースの言語を変更"
+    "description": "BreathScribe インターフェースの言語を変更"
   },
   "theme": {
     "title": "アプリのテーマ",
-    "description": "Handy Cloud をシステムのテーマに合わせるか、ライトまたはダークで固定するかを選択します",
+    "description": "BreathScribe をシステムのテーマに合わせるか、ライトまたはダークで固定するかを選択します",
     "options": {
       "system": "システム",
       "light": "ライト",
@@ -808,7 +813,7 @@
     "processing": "処理中…"
   },
   "whatsNew": {
-    "title": "Handy Cloud v{{version}} の新機能"
+    "title": "BreathScribe v{{version}} の新機能"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} が1個のショートカットをブロックしている可能性があります",

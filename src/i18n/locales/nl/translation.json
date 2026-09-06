@@ -16,7 +16,7 @@
     "postProcessing": "Naverwerking",
     "history": "Geschiedenis",
     "debug": "Probleemoplossing",
-    "about": "Over Handy Cloud"
+    "about": "Over BreathScribe"
   },
   "onboarding": {
     "subtitle": "Kies een transcriptiemodel om aan de slag te gaan",
@@ -102,7 +102,7 @@
     },
     "permissions": {
       "title": "Machtigingen vereist",
-      "description": "Handy Cloud heeft een aantal machtigingen nodig om goed te kunnen werken.",
+      "description": "BreathScribe heeft een aantal machtigingen nodig om goed te kunnen werken.",
       "microphone": {
         "title": "Microfoontoegang",
         "description": "Vereist om je stem op te nemen voor transcriptie."
@@ -232,7 +232,7 @@
       },
       "rescan": {
         "label": "Opnieuw scannen",
-        "tooltip": "Scannen naar modellen die buiten Handy Cloud om zijn toegevoegd aan de modellenmap of Hugging Face-cache"
+        "tooltip": "Scannen naar modellen die buiten BreathScribe om zijn toegevoegd aan de modellenmap of Hugging Face-cache"
       },
       "noModelsMatch": "Geen modellen voldoen aan dit filter.",
       "modes": {
@@ -358,11 +358,11 @@
       },
       "autostart": {
         "label": "Starten bij opstarten",
-        "description": "Handy Cloud automatisch starten zodra je inlogt op je computer."
+        "description": "BreathScribe automatisch starten zodra je inlogt op je computer."
       },
       "showTrayIcon": {
         "label": "Pictogram in systeemvak tonen",
-        "description": "Toon het Handy-pictogram in het systeemvak."
+        "description": "Toon het BreathScribe-pictogram in het systeemvak."
       },
       "overlay": {
         "style": {
@@ -600,8 +600,8 @@
       },
       "updateChecks": {
         "label": "Controleren op updates",
-        "description": "Automatisch controleren op nieuwe versies van Handy Cloud",
-        "lockedDescription": "Uitgeschakeld door systeemconfiguratie (HANDY_DISABLE_UPDATER)"
+        "description": "Automatisch controleren op nieuwe versies van BreathScribe",
+        "lockedDescription": "Uitgeschakeld door systeemconfiguratie (BREATHSCRIBE_DISABLE_UPDATER)"
       },
       "whatsNewPreview": {
         "title": "Voorbeeld van release-notes",
@@ -685,7 +685,7 @@
       },
       "keyboardDiagnostic": {
         "title": "Toetsenborddiagnose",
-        "description": "Controleert of toetsenbordgebeurtenissen Handy Cloud bereiken. Alleen het aantal gebeurtenissen wordt vastgelegd — nooit welke toetsen je indrukt.",
+        "description": "Controleert of toetsenbordgebeurtenissen BreathScribe bereiken. Alleen het aantal gebeurtenissen wordt vastgelegd — nooit welke toetsen je indrukt.",
         "run": "Diagnose van 10 s uitvoeren",
         "running": "Luisteren… druk je sneltoets een paar keer in (bijv. Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -699,24 +699,24 @@
         "mouse": "Muis",
         "verdictBlocked": "Secure Input blokkeert toetsgebeurtenissen — sneltoetsen met een gewone toets kunnen pas weer werken als dit is opgelost.",
         "verdictSuspicious": "Er kwamen wel modificatiegebeurtenissen binnen, maar geen toetsgebeurtenissen — iets onderdrukt toetsen terwijl Secure Input als uitgeschakeld wordt gemeld. Meld dit op GitHub.",
-        "verdictOk": "Toetsgebeurtenissen bereiken Handy Cloud normaal.",
+        "verdictOk": "Toetsgebeurtenissen bereiken BreathScribe normaal.",
         "verdictNoEvents": "Geen gebeurtenissen vastgelegd — heb je tijdens de test toetsen ingedrukt?",
         "failed": "Diagnose mislukt: {{error}}"
       }
     },
     "about": {
-      "title": "Over Handy Cloud",
+      "title": "Over BreathScribe",
       "version": {
         "title": "Versie",
-        "description": "Huidige versie van Handy Cloud"
+        "description": "Huidige versie van BreathScribe"
       },
       "whatsNewUpdates": {
         "label": "Toon 'Wat is er nieuw'",
-        "description": "Release-notes tonen nadat Handy Cloud is bijgewerkt"
+        "description": "Release-notes tonen nadat BreathScribe is bijgewerkt"
       },
       "appDataDirectory": {
         "title": "App-datamap",
-        "description": "Locatie waar Handy Cloud de gegevens opslaat"
+        "description": "Locatie waar BreathScribe de gegevens opslaat"
       },
       "sourceCode": {
         "title": "Broncode",
@@ -725,15 +725,20 @@
       },
       "supportDevelopment": {
         "title": "Ontwikkeling ondersteunen",
-        "description": "Help ons om te blijven bouwen aan Handy Cloud",
+        "description": "Help ons om te blijven bouwen aan BreathScribe",
         "button": "Doneren"
       },
       "acknowledgments": {
         "title": "Dankbetuigingen",
+        "handy": {
+          "title": "Handy",
+          "description": "Open-source spraak-naar-tekst desktopapplicatie door @cjpais",
+          "details": "BreathScribe is een fork van Handy, uitgebreid met cloudmodellen en proxymogelijkheden. Veel dank aan CJ Pais en alle bijdragers van het originele Handy-project."
+        },
         "ggml": {
           "title": "ggml",
           "description": "Krachtige tensorbibliotheek voor lokale AI-verwerking",
-          "details": "Handy Cloud's lokale spraak-naar-tekst is gebouwd op transcribe.cpp en ggml. Met dank aan het geweldige werk van Georgi Gerganov en alle bijdragers."
+          "details": "BreathScribe's lokale spraak-naar-tekst is gebouwd op transcribe.cpp en ggml. Met dank aan het geweldige werk van Georgi Gerganov en alle bijdragers."
         }
       }
     }
@@ -759,7 +764,7 @@
     }
   },
   "whatsNew": {
-    "title": "Nieuw in Handy Cloud v{{version}}"
+    "title": "Nieuw in BreathScribe v{{version}}"
   },
   "common": {
     "loading": "Laden...",
@@ -771,7 +776,7 @@
     "noOptionsFound": "Geen opties gevonden"
   },
   "accessibility": {
-    "permissionsDescription": "Handy Cloud heeft toegankelijkheidsmachtigingen nodig om getranscribeerde tekst te kunnen typen.",
+    "permissionsDescription": "BreathScribe heeft toegankelijkheidsmachtigingen nodig om getranscribeerde tekst te kunnen typen.",
     "openSettings": "Systeeminstellingen openen"
   },
   "errors": {
@@ -795,11 +800,11 @@
   },
   "appLanguage": {
     "title": "Interfacetaal",
-    "description": "Wijzig de taal van de Handy-interface"
+    "description": "Wijzig de taal van de BreathScribe-interface"
   },
   "theme": {
     "title": "App-thema",
-    "description": "Kies of Handy Cloud het systeemthema volgt of licht of donker blijft",
+    "description": "Kies of BreathScribe het systeemthema volgt of licht of donker blijft",
     "options": {
       "system": "Systeem",
       "light": "Licht",

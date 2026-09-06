@@ -102,7 +102,7 @@
     },
     "permissions": {
       "title": "Необходими разрешения",
-      "description": "Handy Cloud се нуждае от няколко разрешения, за да работи правилно.",
+      "description": "BreathScribe се нуждае от няколко разрешения, за да работи правилно.",
       "microphone": {
         "title": "Достъп до микрофон",
         "description": "Необходим е, за да чуе гласа ви при транскрипция."
@@ -168,7 +168,7 @@
     "general": {
       "title": "Общи",
       "shortcut": {
-        "title": "Бързи клавиши на Handy Cloud",
+        "title": "Бързи клавиши на BreathScribe",
         "description": "Настройте клавишни комбинации за стартиране на запис за реч към текст",
         "loading": "Зареждане на бързите клавиши...",
         "none": "Няма настроени бързи клавиши",
@@ -233,7 +233,7 @@
       "searchPlaceholder": "Търсене на модели по име…",
       "rescan": {
         "label": "Сканиране отново",
-        "tooltip": "Сканиране отново за модели, добавени в папката с модели или кеша на Hugging Face извън Handy Cloud"
+        "tooltip": "Сканиране отново за модели, добавени в папката с модели или кеша на Hugging Face извън BreathScribe"
       },
       "modes": {
         "local": "Local Offline Models",
@@ -358,11 +358,11 @@
       },
       "autostart": {
         "label": "Стартиране със системата",
-        "description": "Автоматично стартиране на Handy Cloud при влизане в профила ви."
+        "description": "Автоматично стартиране на BreathScribe при влизане в профила ви."
       },
       "showTrayIcon": {
         "label": "Икона в системната област",
-        "description": "Показване на иконата на Handy Cloud в системната област."
+        "description": "Показване на иконата на BreathScribe в системната област."
       },
       "overlay": {
         "style": {
@@ -600,8 +600,8 @@
       },
       "updateChecks": {
         "label": "Проверка за актуализации",
-        "description": "Автоматична проверка за нови версии на Handy Cloud",
-        "lockedDescription": "Деактивирано от системната конфигурация (HANDY_DISABLE_UPDATER)"
+        "description": "Автоматична проверка за нови версии на BreathScribe",
+        "lockedDescription": "Деактивирано от системната конфигурация (BREATHSCRIBE_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "Звукова тема",
@@ -678,7 +678,7 @@
       },
       "keyboardDiagnostic": {
         "title": "Диагностика на клавиатурата",
-        "description": "Проверява дали клавиатурните събития достигат до Handy Cloud. Записва се само броят на събитията — никога кои клавиши натискате.",
+        "description": "Проверява дали клавиатурните събития достигат до BreathScribe. Записва се само броят на събитията — никога кои клавиши натискате.",
         "run": "Стартиране на 10-секундна диагностика",
         "running": "Слушане… натиснете бързия си клавиш няколко пъти (напр. Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -692,7 +692,7 @@
         "mouse": "Мишка",
         "verdictBlocked": "Secure Input блокира клавишните събития — бързите клавиши с обикновен клавиш не могат да работят, докато това не бъде решено.",
         "verdictSuspicious": "Пристигнаха събития от модификатори, но нито едно клавишно събитие — нещо потиска клавишите, въпреки че Secure Input се отчита като изключен. Моля, съобщете за това в GitHub.",
-        "verdictOk": "Клавишните събития достигат до Handy Cloud нормално.",
+        "verdictOk": "Клавишните събития достигат до BreathScribe нормално.",
         "verdictNoEvents": "Не са уловени събития — натиснахте ли някакви клавиши по време на теста?",
         "failed": "Диагностиката е неуспешна: {{error}}"
       },
@@ -708,11 +708,11 @@
       "title": "За приложението",
       "version": {
         "title": "Версия",
-        "description": "Текуща версия на Handy Cloud"
+        "description": "Текуща версия на BreathScribe"
       },
       "appDataDirectory": {
         "title": "Папка с данни на приложението",
-        "description": "Мястото, където Handy Cloud съхранява данните си"
+        "description": "Мястото, където BreathScribe съхранява данните си"
       },
       "sourceCode": {
         "title": "Изходен код",
@@ -721,20 +721,25 @@
       },
       "supportDevelopment": {
         "title": "Подкрепете разработката",
-        "description": "Помогнете ни да продължим да развиваме Handy Cloud",
+        "description": "Помогнете ни да продължим да развиваме BreathScribe",
         "button": "Дарение"
       },
       "acknowledgments": {
         "title": "Благодарности",
+        "handy": {
+          "title": "Handy",
+          "description": "Настолно приложение за преобразуване на реч в текст с отворен код от @cjpais",
+          "details": "BreathScribe е разклонение на Handy, надградено с облачни модели и прокси възможности. Огромни благодарности на CJ Pais и всички сътрудници на оригиналния проект Handy."
+        },
         "ggml": {
           "title": "ggml",
           "description": "Високопроизводително изпълнение на автоматичния модел за разпознаване на реч Whisper на OpenAI",
-          "details": "Handy Cloud използва ggml за бързо локално реч-към-текст. Благодарности на Georgi Gerganov и сътрудниците за отличната работа."
+          "details": "BreathScribe използва ggml за бързо локално реч-към-текст. Благодарности на Georgi Gerganov и сътрудниците за отличната работа."
         }
       },
       "whatsNewUpdates": {
         "label": "Показвай новостите",
-        "description": "Показвай бележки към изданието след актуализации на Handy Cloud"
+        "description": "Показвай бележки към изданието след актуализации на BreathScribe"
       }
     }
   },
@@ -768,7 +773,7 @@
     "noOptionsFound": "Няма намерени опции"
   },
   "accessibility": {
-    "permissionsDescription": "Handy Cloud се нуждае от разрешения за достъпност, за да въвежда транскрибирания текст.",
+    "permissionsDescription": "BreathScribe се нуждае от разрешения за достъпност, за да въвежда транскрибирания текст.",
     "openSettings": "Отваряне на системните настройки"
   },
   "errors": {
@@ -792,11 +797,11 @@
   },
   "appLanguage": {
     "title": "Език на приложението",
-    "description": "Промяна на езика на интерфейса на Handy Cloud"
+    "description": "Промяна на езика на интерфейса на BreathScribe"
   },
   "theme": {
     "title": "Тема на приложението",
-    "description": "Изберете дали Handy Cloud да следва системната тема, или да остане светла или тъмна",
+    "description": "Изберете дали BreathScribe да следва системната тема, или да остане светла или тъмна",
     "options": {
       "system": "Системна",
       "light": "Светла",
@@ -808,7 +813,7 @@
     "processing": "Обработка..."
   },
   "whatsNew": {
-    "title": "Ново в Handy Cloud v{{version}}"
+    "title": "Ново в BreathScribe v{{version}}"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} може да блокира 1 бърз клавиш",

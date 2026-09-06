@@ -18,32 +18,34 @@ const HandyTextLogo: React.FC<HandyTextLogoProps> = ({
     height={height}
     viewBox="0 0 280 56"
     role="img"
-    aria-label="Handy Cloud"
+    aria-label="BreathScribe"
     className={className}
     preserveAspectRatio="xMidYMid meet"
     xmlns="http://www.w3.org/2000/svg"
     {...props}
   >
-    <title>Handy Cloud</title>
+    <title>BreathScribe</title>
     <defs>
       <linearGradient id="textLogoIconBg" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#38bdf8" />
-        <stop offset="100%" stop-color="#2563eb" />
+        <stop offset="0%" stop-color="#0284c7" />
+        <stop offset="100%" stop-color="#38bdf8" />
       </linearGradient>
     </defs>
 
     {/* Brand Icon Badge */}
     <g transform="translate(4, 4)">
-      <rect width="48" height="48" rx="12" fill="url(#textLogoIconBg)" />
+      <rect width="48" height="48" rx="12" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.5" strokeOpacity="0.4" />
       {/* Cloud silhouette */}
       <path
-        d="M 13 33 C 8 33 6 28 6 25 C 6 21 9 18 13 17 C 14 12 19 9 25 9 C 30 9 35 12 36 16 C 40 16 43 19 43 23 C 43 27 40 33 35 33 Z"
-        fill="#ffffff"
+        d="M 13 33 C 9.5 33 8 30 9.5 26.5 C 9 22 13 19.5 16.5 20.5 C 19 15 26.5 14.5 30 19 C 33.5 17.5 38.5 20 38 24.5 C 41.5 27 40.5 33 35.5 33 Z"
+        fill="url(#textLogoIconBg)"
       />
       {/* Voice soundwave bars */}
-      <rect x="19" y="20" width="2.2" height="9" rx="1.1" fill="#0284c7" />
-      <rect x="23.5" y="16" width="2.2" height="13" rx="1.1" fill="#0284c7" />
-      <rect x="28" y="20" width="2.2" height="9" rx="1.1" fill="#0284c7" />
+      <rect x="17" y="22" width="2" height="7" rx="1" fill="#ffffff" />
+      <rect x="21" y="18" width="2" height="11" rx="1" fill="#ffffff" />
+      <rect x="25" y="15" width="2" height="14" rx="1" fill="#ffffff" />
+      <rect x="29" y="19" width="2" height="10" rx="1" fill="#ffffff" />
+      <rect x="33" y="23" width="2" height="6" rx="1" fill="#ffffff" />
     </g>
 
     {/* Brand Typography */}
@@ -54,10 +56,10 @@ const HandyTextLogo: React.FC<HandyTextLogoProps> = ({
         letterSpacing="-0.03em"
       >
         <tspan fill="var(--color-text)" fontWeight="800">
-          Handy
+          Breath
         </tspan>
-        <tspan dx="8" fill="var(--color-logo-primary)" fontWeight="600">
-          Cloud
+        <tspan dx="4" fill="var(--color-logo-primary)" fontWeight="600">
+          Scribe
         </tspan>
       </text>
     </g>

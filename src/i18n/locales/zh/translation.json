@@ -102,7 +102,7 @@
     },
     "permissions": {
       "title": "需要权限",
-      "description": "Handy Cloud 需要一些权限才能正常工作。",
+      "description": "BreathScribe 需要一些权限才能正常工作。",
       "microphone": {
         "title": "麦克风访问",
         "description": "需要听取您的语音进行转录。"
@@ -182,7 +182,7 @@
       "searchPlaceholder": "按名称搜索模型…",
       "rescan": {
         "label": "重新扫描",
-        "tooltip": "重新扫描在 Handy Cloud 之外添加到模型文件夹或 Hugging Face 缓存中的模型"
+        "tooltip": "重新扫描在 BreathScribe 之外添加到模型文件夹或 Hugging Face 缓存中的模型"
       },
       "modes": {
         "local": "本地离线模型",
@@ -245,7 +245,7 @@
     "general": {
       "title": "通用",
       "shortcut": {
-        "title": "Handy Cloud 快捷键",
+        "title": "BreathScribe 快捷键",
         "description": "配置启动语音转文字录制的键盘快捷键",
         "loading": "加载快捷键中...",
         "none": "未配置快捷键",
@@ -358,11 +358,11 @@
       },
       "autostart": {
         "label": "开机启动",
-        "description": "登录计算机时自动启动 Handy Cloud。"
+        "description": "登录计算机时自动启动 BreathScribe。"
       },
       "showTrayIcon": {
         "label": "显示托盘图标",
-        "description": "在系统托盘中显示 Handy Cloud 图标。"
+        "description": "在系统托盘中显示 BreathScribe 图标。"
       },
       "overlay": {
         "style": {
@@ -600,8 +600,8 @@
       },
       "updateChecks": {
         "label": "检查更新",
-        "description": "自动检查 Handy Cloud 的新版本",
-        "lockedDescription": "已被系统配置禁用 (HANDY_DISABLE_UPDATER)"
+        "description": "自动检查 BreathScribe 的新版本",
+        "lockedDescription": "已被系统配置禁用 (BREATHSCRIBE_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "声音主题",
@@ -678,7 +678,7 @@
       },
       "keyboardDiagnostic": {
         "title": "键盘诊断",
-        "description": "检查键盘事件是否能到达 Handy Cloud。仅记录事件数量，绝不记录您按了哪些键。",
+        "description": "检查键盘事件是否能到达 BreathScribe。仅记录事件数量，绝不记录您按了哪些键。",
         "run": "运行 10 秒诊断",
         "running": "正在监听… 请按几次您的快捷键（例如 Option+Space）",
         "secureInputLabel": "Secure Input",
@@ -692,7 +692,7 @@
         "mouse": "鼠标",
         "verdictBlocked": "Secure Input 正在阻止按键事件——在问题解决前，包含普通按键的快捷键无法工作。",
         "verdictSuspicious": "收到了修饰键事件，但没有按键事件——尽管 Secure Input 报告为已禁用，仍有程序在抑制按键。请在 GitHub 上反馈此问题。",
-        "verdictOk": "按键事件正常到达 Handy Cloud。",
+        "verdictOk": "按键事件正常到达 BreathScribe。",
         "verdictNoEvents": "未捕获到任何事件——测试期间您按过键吗？",
         "failed": "诊断失败：{{error}}"
       },
@@ -708,11 +708,11 @@
       "title": "关于",
       "version": {
         "title": "版本",
-        "description": "Handy Cloud 的当前版本"
+        "description": "BreathScribe 的当前版本"
       },
       "appDataDirectory": {
         "title": "应用数据目录",
-        "description": "Handy Cloud 存储数据的位置"
+        "description": "BreathScribe 存储数据的位置"
       },
       "sourceCode": {
         "title": "源代码",
@@ -721,20 +721,25 @@
       },
       "supportDevelopment": {
         "title": "支持开发",
-        "description": "帮助我们继续开发 Handy Cloud",
+        "description": "帮助我们继续开发 BreathScribe",
         "button": "捐赠"
       },
       "acknowledgments": {
         "title": "致谢",
+        "handy": {
+          "title": "Handy",
+          "description": "由 @cjpais 开源的桌面语音转文字应用",
+          "details": "BreathScribe 是 Handy 的衍生分支，扩展了云端大模型通道与网络代理等能力。特别感谢 CJ Pais 及原 Handy 项目的所有贡献者。"
+        },
         "ggml": {
           "title": "ggml",
           "description": "OpenAI Whisper 自动语音识别模型的高性能推理",
-          "details": "Handy Cloud 使用 ggml 进行快速的本地语音转文字处理。感谢 Georgi Gerganov 和贡献者们的出色工作。"
+          "details": "BreathScribe 使用 ggml 进行快速的本地语音转文字处理。感谢 Georgi Gerganov 和贡献者们的出色工作。"
         }
       },
       "whatsNewUpdates": {
         "label": "显示新功能",
-        "description": "Handy Cloud 更新后显示发行说明"
+        "description": "BreathScribe 更新后显示发行说明"
       }
     }
   },
@@ -768,7 +773,7 @@
     "noOptionsFound": "未找到选项"
   },
   "accessibility": {
-    "permissionsDescription": "Handy Cloud 需要辅助功能权限才能输入转录的文字。",
+    "permissionsDescription": "BreathScribe 需要辅助功能权限才能输入转录的文字。",
     "openSettings": "打开系统设置"
   },
   "errors": {
@@ -792,11 +797,11 @@
   },
   "appLanguage": {
     "title": "应用语言",
-    "description": "更改 Handy Cloud 界面的语言"
+    "description": "更改 BreathScribe 界面的语言"
   },
   "theme": {
     "title": "应用主题",
-    "description": "选择 Handy Cloud 跟随系统主题，还是保持浅色或深色",
+    "description": "选择 BreathScribe 跟随系统主题，还是保持浅色或深色",
     "options": {
       "system": "跟随系统",
       "light": "浅色",
@@ -808,7 +813,7 @@
     "processing": "处理中..."
   },
   "whatsNew": {
-    "title": "Handy Cloud v{{version}} 新功能"
+    "title": "BreathScribe v{{version}} 新功能"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} 可能正在阻止 1 个快捷键",

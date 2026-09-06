@@ -102,7 +102,7 @@
     },
     "permissions": {
       "title": "Permissions Required",
-      "description": "Handy Cloud needs a couple of permissions to work properly.",
+      "description": "BreathScribe needs a couple of permissions to work properly.",
       "microphone": {
         "title": "Microphone Access",
         "description": "Required to hear your voice for transcription."
@@ -168,7 +168,7 @@
     "general": {
       "title": "General",
       "shortcut": {
-        "title": "Handy Cloud Shortcuts",
+        "title": "BreathScribe Shortcuts",
         "description": "Configure keyboard shortcuts to trigger speech-to-text recording",
         "loading": "Loading shortcuts...",
         "none": "No shortcuts configured",
@@ -232,7 +232,7 @@
       },
       "rescan": {
         "label": "Rescan",
-        "tooltip": "Rescan for models added to the models folder or Hugging Face cache outside Handy Cloud"
+        "tooltip": "Rescan for models added to the models folder or Hugging Face cache outside BreathScribe"
       },
       "noModelsMatch": "No models match this filter.",
       "modes": {
@@ -358,11 +358,11 @@
       },
       "autostart": {
         "label": "Launch on Startup",
-        "description": "Automatically start Handy Cloud when you log in to your computer."
+        "description": "Automatically start BreathScribe when you log in to your computer."
       },
       "showTrayIcon": {
         "label": "Show Tray Icon",
-        "description": "Display the Handy Cloud icon in the system tray."
+        "description": "Display the BreathScribe icon in the system tray."
       },
       "overlay": {
         "style": {
@@ -600,8 +600,8 @@
       },
       "updateChecks": {
         "label": "Check for Updates",
-        "description": "Automatically check for new versions of Handy Cloud",
-        "lockedDescription": "Disabled by system configuration (HANDY_DISABLE_UPDATER)"
+        "description": "Automatically check for new versions of BreathScribe",
+        "lockedDescription": "Disabled by system configuration (BREATHSCRIBE_DISABLE_UPDATER)"
       },
       "whatsNewPreview": {
         "title": "Preview What's New",
@@ -685,7 +685,7 @@
       },
       "keyboardDiagnostic": {
         "title": "Keyboard Diagnostic",
-        "description": "Checks whether keyboard events reach Handy Cloud. Only event counts are recorded — never which keys you press.",
+        "description": "Checks whether keyboard events reach BreathScribe. Only event counts are recorded — never which keys you press.",
         "run": "Run 10s diagnostic",
         "running": "Listening… press your shortcut a few times (e.g. Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -699,7 +699,7 @@
         "mouse": "Mouse",
         "verdictBlocked": "Secure Input is blocking key events — keyed shortcuts cannot work until it is resolved.",
         "verdictSuspicious": "Modifier events arrived but no key events — something is suppressing keys even though Secure Input reports disabled. Please report this on GitHub.",
-        "verdictOk": "Key events are reaching Handy Cloud normally.",
+        "verdictOk": "Key events are reaching BreathScribe normally.",
         "verdictNoEvents": "No events captured — did you press any keys during the test?",
         "failed": "Diagnostic failed: {{error}}"
       }
@@ -708,15 +708,15 @@
       "title": "About",
       "version": {
         "title": "Version",
-        "description": "Current version of Handy Cloud"
+        "description": "Current version of BreathScribe"
       },
       "whatsNewUpdates": {
         "label": "Show What's New",
-        "description": "Show release notes after Handy Cloud updates"
+        "description": "Show release notes after BreathScribe updates"
       },
       "appDataDirectory": {
         "title": "App Data Directory",
-        "description": "Location where Handy Cloud stores its data"
+        "description": "Location where BreathScribe stores its data"
       },
       "sourceCode": {
         "title": "Source Code",
@@ -725,15 +725,20 @@
       },
       "supportDevelopment": {
         "title": "Support Development",
-        "description": "Help us continue building Handy Cloud",
+        "description": "Help us continue building BreathScribe",
         "button": "Donate"
       },
       "acknowledgments": {
         "title": "Acknowledgments",
+        "handy": {
+          "title": "Handy",
+          "description": "Open-source speech-to-text desktop application by @cjpais",
+          "details": "BreathScribe is a fork of Handy, extending it with cloud models and proxy capabilities. Huge thanks to CJ Pais and all contributors of the original Handy project."
+        },
         "ggml": {
           "title": "ggml",
           "description": "High-performance tensor library for on-device machine learning inference",
-          "details": "Handy Cloud's local speech-to-text is built on transcribe.cpp and ggml. Thanks to the amazing work by Georgi Gerganov and contributors."
+          "details": "BreathScribe's local speech-to-text is built on transcribe.cpp and ggml. Thanks to the amazing work by Georgi Gerganov and contributors."
         }
       }
     }
@@ -759,7 +764,7 @@
     }
   },
   "whatsNew": {
-    "title": "New in Handy Cloud v{{version}}"
+    "title": "New in BreathScribe v{{version}}"
   },
   "common": {
     "loading": "Loading...",
@@ -771,7 +776,7 @@
     "noOptionsFound": "No options found"
   },
   "accessibility": {
-    "permissionsDescription": "Handy Cloud needs accessibility permissions to type transcribed text.",
+    "permissionsDescription": "BreathScribe needs accessibility permissions to type transcribed text.",
     "openSettings": "Open System Settings"
   },
   "errors": {
@@ -795,11 +800,11 @@
   },
   "appLanguage": {
     "title": "Application Language",
-    "description": "Change the language of the Handy Cloud interface"
+    "description": "Change the language of the BreathScribe interface"
   },
   "theme": {
     "title": "Application Theme",
-    "description": "Choose whether Handy Cloud follows your system theme or stays light or dark",
+    "description": "Choose whether BreathScribe follows your system theme or stays light or dark",
     "options": {
       "system": "System",
       "light": "Light",

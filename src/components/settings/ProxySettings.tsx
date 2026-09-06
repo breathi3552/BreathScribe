@@ -162,9 +162,9 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
       </SettingContainer>
       {draft.mode === "manual" && (
         <div className="mx-4 p-4 rounded-lg bg-mid-gray/5 border border-mid-gray/20 space-y-4 transition-all">
-          <div className="grid grid-cols-12 gap-3">
+          <div className="flex gap-3">
             {/* Protocol */}
-            <div className="col-span-3 space-y-1">
+            <div className="w-28 shrink-0 space-y-1">
               <label className="text-xs font-medium text-text/80">
                 {t("settings.advanced.proxy.protocol.title")}
               </label>
@@ -177,12 +177,13 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
                     protocol: val as ProxyProtocol,
                   }))
                 }
+                buttonClassName="min-w-0"
                 className="w-full"
               />
             </div>
 
             {/* Host */}
-            <div className="col-span-6 space-y-1">
+            <div className="flex-1 min-w-0 space-y-1">
               <label className="text-xs font-medium text-text/80">
                 {t("settings.advanced.proxy.host.label")}
               </label>
@@ -197,7 +198,7 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
             </div>
 
             {/* Port */}
-            <div className="col-span-3 space-y-1">
+            <div className="w-24 shrink-0 space-y-1">
               <label className="text-xs font-medium text-text/80">
                 {t("settings.advanced.proxy.port.label")}
               </label>

@@ -32,7 +32,6 @@
 | **云端大模型转写** (Gemini Transcribe 批处理)       |        ❌ 仅离线        |        ✅ 支持         |
 | **实时流式听写** (Gemini Live WebSocket 边说边出字) |        ❌ 仅离线        |  ✅ 支持 (毫秒级响应)  |
 | **网络代理支持** (HTTP/HTTPS/SOCKS5 / 系统嗅探)     |       ❌ 无需网络       | ✅ 支持 (智能自动嗅探) |
-| **免安装便携版** (`Data/` 目录本地隔离)             |     ⚠️ 依赖系统路径     |   ✅ 支持 (解压即用)   |
 | **核心维护平台**                                    | macOS / Linux / Windows | **专注 Windows (x64)** |
 
 ---
@@ -100,7 +99,6 @@ bun run build:portable  # 编译 Windows 绿色便携版产物
 
 ---
 
-## 📄 开源许可与品牌说明 (License & Trademark)
+## 📄 开源许可(License)
 
 - **代码许可**：本项目代码继承遵循 [MIT License](LICENSE)，保留原作者 Copyright (c) 2025 CJ Pais 与本项目的相关增量提交；
-- **品牌资产**：上游 Handy 的名称、徽标与原版图标归原作者所有；本项目采用的 **BreathScribe** 名称、声波云朵图形资产及衍生界面受独立开源维护，与原作者无关，不暗示任何官方背书。

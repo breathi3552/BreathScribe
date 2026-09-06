@@ -130,8 +130,7 @@ impl TranscriptionRouter {
 
             let session_arc = Arc::new(tokio::sync::Mutex::new(Some(session)));
             let session_feed = Arc::clone(&session_arc);
-            let feed_finished = Arc::new(tokio::sync::Notify::new());
-            let feed_finished_clone = Arc::clone(&feed_finished);
+            let (feed_done_tx, feed_done_rx) = tokio::sync::oneshot::channel::<()>();
             let has_stream_feed = Arc::clone(&has_stream);
 
             tokio::task::spawn_blocking(move || {
@@ -155,13 +154,12 @@ impl TranscriptionRouter {
                         _ => break,
                     }
                 }
-                feed_finished_clone.notify_waiters();
+                let _ = feed_done_tx.send(());
             });
 
             match ctrl_rx.recv().await {
                 Some(CloudStreamCtrl::Finalize(reply_tx)) => {
-                    let _ = tokio::time::timeout(Duration::from_secs(3), feed_finished.notified())
-                        .await;
+                    let _ = tokio::time::timeout(Duration::from_millis(500), feed_done_rx).await;
 
                     let maybe_session = session_arc.lock().await.take();
                     if let Some(s) = maybe_session {

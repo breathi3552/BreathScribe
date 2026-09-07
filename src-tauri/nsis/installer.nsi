@@ -1,9 +1,5 @@
-; Custom NSIS template for BreathScribe with portable mode support.
+; Custom NSIS template for BreathScribe.
 ; Based on tauri-apps/tauri@tauri-v2.9.1 crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
-; Portable changes are marked with "; --- PORTABLE MODE ---" comments.
-;
-; When upgrading Tauri, diff this file against the new upstream template and
-; merge changes while preserving the portable sections.
 
 Unicode true
 ManifestDPIAware true
@@ -76,8 +72,6 @@ Var NoShortcutMode
 Var WixMode
 Var OldMainBinaryName
 
-; --- PORTABLE MODE ---
-Var PortableMode
 
 Name "${PRODUCTNAME}"
 BrandingText "${COPYRIGHT}"
@@ -169,80 +163,11 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
   !insertmacro MULTIUSER_PAGE_INSTALLMODE
 !endif
 
-; --- PORTABLE MODE --- 4. Install type selection page (Normal vs Portable)
-Var InstallTypeRadioNormal
-Var InstallTypeRadioPortable
-Page custom PageInstallType PageLeaveInstallType
-
-Function PageInstallType
-  ; Skip for passive/silent/update modes — portable flag is handled via /PORTABLE
-  ${If} $PassiveMode = 1
-  ${OrIf} ${Silent}
-  ${OrIf} $UpdateMode = 1
-    Abort
-  ${EndIf}
-
-  !insertmacro MUI_HEADER_TEXT "Choose Install Type" "Select how you want to install ${PRODUCTNAME}."
-
-  nsDialogs::Create 1018
-  Pop $0
-  ${If} $0 == error
-    Abort
-  ${EndIf}
-
-  ${NSD_CreateLabel} 0 0 100% 24u "Choose whether to perform a normal installation or a portable installation."
-  Pop $0
-
-  ${NSD_CreateRadioButton} 30u 35u -30u 12u "Normal Installation (recommended)"
-  Pop $InstallTypeRadioNormal
-
-  ${NSD_CreateLabel} 44u 49u -44u 20u "Installs to your system with Start Menu shortcuts, uninstaller, and auto-update support."
-  Pop $0
-
-  ${NSD_CreateRadioButton} 30u 75u -30u 12u "Portable Installation"
-  Pop $InstallTypeRadioPortable
-
-  ${NSD_CreateLabel} 44u 89u -44u 20u "Self-contained folder with no registry changes, shortcuts, or uninstaller. Data stored next to the app."
-  Pop $0
-
-  ; Pre-select based on current state
-  ${If} $PortableMode = 1
-    ${NSD_Check} $InstallTypeRadioPortable
-  ${Else}
-    ${NSD_Check} $InstallTypeRadioNormal
-  ${EndIf}
-
-  nsDialogs::Show
-FunctionEnd
-
-Function PageLeaveInstallType
-  ${NSD_GetState} $InstallTypeRadioPortable $0
-  ${If} $0 = ${BST_CHECKED}
-    StrCpy $PortableMode 1
-    ; --- PORTABLE MODE --- Switch default directory to Desktop\BreathScribe for portable
-    ${If} $INSTDIR == "${PLACEHOLDER_INSTALL_DIR}"
-    ${OrIf} $INSTDIR == "$LOCALAPPDATA\${PRODUCTNAME}"
-      StrCpy $INSTDIR "$DESKTOP\${PRODUCTNAME}"
-    ${EndIf}
-  ${Else}
-    StrCpy $PortableMode 0
-    ; Restore normal default if user switched back from portable
-    ${If} $INSTDIR == "$DESKTOP\${PRODUCTNAME}"
-      StrCpy $INSTDIR "$LOCALAPPDATA\${PRODUCTNAME}"
-    ${EndIf}
-  ${EndIf}
-FunctionEnd
-; --- END PORTABLE MODE ---
-
-; 5. (was 4) Custom page to ask user if he wants to reinstall/uninstall
+; 4. Custom page to ask user if he wants to reinstall/uninstall
 ;    only if a previous installation was detected
 Var ReinstallPageCheck
 Page custom PageReinstall PageLeaveReinstall
 Function PageReinstall
-  ; --- PORTABLE MODE --- Skip reinstall page for portable installs
-  ${If} $PortableMode = 1
-    Abort
-  ${EndIf}
 
   ; Uninstall previous WiX installation if exists.
   ;
@@ -449,8 +374,7 @@ FunctionEnd
 ; 6. Start menu shortcut page
 Var AppStartMenuFolder
 !if "${STARTMENUFOLDER}" != ""
-  ; --- PORTABLE MODE --- Also skip start menu page for portable installs
-  !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassiveOrPortable
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
   !define MUI_STARTMENUPAGE_DEFAULTFOLDER "${STARTMENUFOLDER}"
 !else
   !define MUI_PAGE_CUSTOMFUNCTION_PRE Skip
@@ -549,11 +473,6 @@ Function .onInit
     StrCpy $UpdateMode 1
   ${EndIf}
 
-  ; --- PORTABLE MODE --- Parse /PORTABLE flag for silent/passive installs
-  ${GetOptions} $CMDLINE "/PORTABLE" $PortableMode
-  ${IfNot} ${Errors}
-    StrCpy $PortableMode 1
-  ${EndIf}
 
   !if "${DISPLAYLANGUAGESELECTOR}" == "true"
     !insertmacro MUI_LANGDLL_DISPLAY
@@ -579,33 +498,9 @@ Function .onInit
       StrCpy $INSTDIR "$LOCALAPPDATA\${PRODUCTNAME}"
     !endif
 
-    ; --- PORTABLE MODE --- Override default dir for silent/passive portable installs
-    ${If} $PortableMode = 1
-      StrCpy $INSTDIR "$DESKTOP\${PRODUCTNAME}"
-    ${Else}
-      Call RestorePreviousInstallLocation
-    ${EndIf}
+    Call RestorePreviousInstallLocation
   ${EndIf}
 
-
-  ; --- PORTABLE MODE --- Auto-detect portable mode during updates.
-  ; Preserve portable installs that use either the current magic-string marker
-  ; or the legacy empty marker created by older Handy releases. Require Data/
-  ; for the legacy empty-marker case so stale scoop side-effect files do not
-  ; accidentally opt an updater run into portable mode.
-  ${If} $PortableMode <> 1
-  ${AndIf} $UpdateMode = 1
-  ${AndIf} ${FileExists} "$INSTDIR\portable"
-    FileOpen $1 "$INSTDIR\portable" r
-    FileRead $1 $2
-    FileClose $1
-    ${If} $2 == "Handy Portable Mode"
-      StrCpy $PortableMode 1
-    ${OrIf} $2 == ""
-    ${AndIf} ${FileExists} "$INSTDIR\Data"
-      StrCpy $PortableMode 1
-    ${EndIf}
-  ${EndIf}
 
   !if "${INSTALLMODE}" == "both"
     !insertmacro MULTIUSER_INIT
@@ -749,8 +644,6 @@ Section Install
     File /a "/oname={{this}}" "{{no-escape @key}}"
   {{/each}}
 
-  ; --- PORTABLE MODE --- Skip file associations and deep links for portable installs
-  ${If} $PortableMode <> 1
     ; Create file associations
     {{#each file_associations as |association| ~}}
       {{#each association.ext as |ext| ~}}
@@ -765,19 +658,6 @@ Section Install
       WriteRegStr SHCTX "Software\Classes\\{{protocol}}\DefaultIcon" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\",0"
       WriteRegStr SHCTX "Software\Classes\\{{protocol}}\shell\open\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
     {{/each}}
-  ${EndIf}
-
-  ; --- PORTABLE MODE --- Create portable marker and Data directory
-  ${If} $PortableMode = 1
-    FileOpen $0 "$INSTDIR\portable" w
-    FileWrite $0 "Handy Portable Mode"
-    FileClose $0
-    CreateDirectory "$INSTDIR\Data"
-    DetailPrint "Portable mode: created marker file and Data directory."
-  ${EndIf}
-
-  ; --- PORTABLE MODE --- Skip uninstaller, registry, and shortcuts for portable installs
-  ${If} $PortableMode <> 1
     ; Create uninstaller
     WriteUninstaller "$INSTDIR\uninstall.exe"
 
@@ -832,7 +712,6 @@ Section Install
     ${OrIf} ${Silent}
       Call CreateOrUpdateDesktopShortcut
     ${EndIf}
-  ${EndIf} ; --- END PORTABLE MODE guard ---
 
   !ifmacrodef NSIS_HOOK_POSTINSTALL
     !insertmacro NSIS_HOOK_POSTINSTALL
@@ -1012,11 +891,6 @@ Function SkipIfPassive
   ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
 FunctionEnd
 
-; --- PORTABLE MODE ---
-Function SkipIfPassiveOrPortable
-  ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
-  ${IfThen} $PortableMode = 1  ${|} Abort ${|}
-FunctionEnd
 Function un.SkipIfPassive
   ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
 FunctionEnd

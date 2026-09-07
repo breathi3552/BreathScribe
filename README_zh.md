@@ -2,7 +2,7 @@
 
 中文 | [English](README.md)
 
-BreathScribe 是一款基于 [cjpais/Handy](https://github.com/cjpais/Handy) 开发的桌面语音输入工具，增加了云端语音转写支持。
+BreathScribe 是一款专注于高精度转写的桌面语音输入工具，支持本地离线 AI 模型与云端大模型语音识别。
 
 ## 云端语音转写 (Cloud Transcription)
 

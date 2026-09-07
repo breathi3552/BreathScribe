@@ -1,6 +1,6 @@
 [package]
 name = "breath-scribe"
-version = "0.9.6"
+version = "0.1.0"
 description = "BreathScribe"
 authors = ["breathi3552"]
 edition = "2021"

@@ -220,17 +220,17 @@ if ($PackageDir) {
     Assert-True ($metadata -match "BreathScribe") "NSIS EXE version metadata contains BreathScribe"
     Assert-ExecutableIconMatchesBrand -ExecutablePath $setup.FullName -Label "NSIS installer"
 
-    $portableDir = Join-Path ([System.IO.Path]::GetTempPath()) ("handy-cloud-nsis-" + [System.Guid]::NewGuid().ToString())
-    New-Item -ItemType Directory -Path $portableDir | Out-Null
+    $tempInstallDir = Join-Path ([System.IO.Path]::GetTempPath()) ("breath-scribe-nsis-" + [System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Path $tempInstallDir | Out-Null
     try {
-      $proc = Start-Process -FilePath $setup.FullName -ArgumentList @("/S", "/PORTABLE", "/D=$portableDir") -Wait -PassThru
-      Assert-True ($proc.ExitCode -eq 0) "NSIS silent portable extraction succeeds"
-      $installedExe = Get-ChildItem $portableDir -Filter "breath-scribe.exe" -Recurse -File | Select-Object -First 1
-      if (-not $installedExe) { $installedExe = Get-ChildItem $portableDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1 }
+      $proc = Start-Process -FilePath $setup.FullName -ArgumentList @("/S", "/D=$tempInstallDir") -Wait -PassThru
+      Assert-True ($proc.ExitCode -eq 0) "NSIS silent extraction succeeds"
+      $installedExe = Get-ChildItem $tempInstallDir -Filter "breath-scribe.exe" -Recurse -File | Select-Object -First 1
+      if (-not $installedExe) { $installedExe = Get-ChildItem $tempInstallDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1 }
       Assert-True ($null -ne $installedExe) "NSIS payload contains breath-scribe.exe"
       Assert-AppExecutableBranding -Executable $installedExe -Label "NSIS payload"
     } finally {
-      Remove-Item -Recurse -Force $portableDir -ErrorAction SilentlyContinue
+      Remove-Item -Recurse -Force $tempInstallDir -ErrorAction SilentlyContinue
     }
   }
 }

@@ -49,7 +49,7 @@ __pycache__/
 # Temporary and local scratch files
 .scratch/
 
-# Release packages and portable builds
+# Release packages
 release-builds/
 
 # Design prototypes and assets

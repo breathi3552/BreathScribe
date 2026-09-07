@@ -2,7 +2,7 @@
 
 [中文](README_zh.md) | English
 
-BreathScribe is a desktop speech-to-text tool forked from [cjpais/Handy](https://github.com/cjpais/Handy), adding cloud transcription support.
+BreathScribe is a high-performance desktop speech-to-text application with cloud transcription support and local AI models.
 
 ## Cloud Transcription
 

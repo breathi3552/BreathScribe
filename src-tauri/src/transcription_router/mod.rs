@@ -117,10 +117,8 @@ impl TranscriptionRouter {
                     if let Some(r) = active_router.lock().take() {
                         r.clear();
                     }
-                    if let Some(cmd) = ctrl_rx.recv().await {
-                        if let CloudStreamCtrl::Finalize(reply_tx) = cmd {
-                            let _ = reply_tx.send(Some(Err(e)));
-                        }
+                    if let Some(CloudStreamCtrl::Finalize(reply_tx)) = ctrl_rx.recv().await {
+                        let _ = reply_tx.send(Some(Err(e)));
                     }
                     return;
                 }

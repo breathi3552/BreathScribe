@@ -97,7 +97,7 @@ fn stage_vc_runtime_dlls() {
         }
     }
     println!(
-        "cargo:warning=Staged {} VC++ runtime DLL(s) for app-local deployment",
+        "Staged {} VC++ runtime DLL(s) for app-local deployment",
         copied.len()
     );
 }
@@ -143,7 +143,7 @@ fn stage_onnxruntime_dll() {
     std::fs::create_dir_all(&dest_dir).expect("create transcribe-libs staging dir");
     std::fs::copy(&src, dest_dir.join("onnxruntime.dll"))
         .unwrap_or_else(|e| panic!("copy {}: {e}", src.display()));
-    println!("cargo:warning=Staged onnxruntime.dll for Windows bundling");
+    println!("Staged onnxruntime.dll for Windows bundling");
 }
 
 /// Stage transcribe-cpp's shared runtime libraries into `transcribe-libs/` so the
@@ -257,7 +257,7 @@ fn stage_transcribe_runtime_libs() {
              compute devices"
         );
     }
-    println!("cargo:warning=Staged {copied} transcribe-cpp runtime library file(s)");
+    println!("Staged {copied} transcribe-cpp runtime library file(s)");
 }
 
 /// Split a versioned ELF shared-library name into (stem, version depth):
@@ -355,7 +355,7 @@ fn generate_tray_translations() {
     fs::write(Path::new(&out_dir).join("tray_translations.rs"), out).unwrap();
 
     println!(
-        "cargo:warning=Generated tray translations: {} languages, {} fields",
+        "Generated tray translations: {} languages, {} fields",
         translations.len(),
         fields.len()
     );
@@ -444,7 +444,7 @@ fn build_apple_intelligence_bridge() {
     let has_foundation_models = framework_path.exists() && !force_stub && !command_line_tools_only;
 
     let source_file = if has_foundation_models {
-        println!("cargo:warning=Building with Apple Intelligence support.");
+        println!("Building with Apple Intelligence support.");
         REAL_SWIFT_FILE
     } else {
         // The SDK genuinely lacking FoundationModels is only one reason we build
@@ -452,7 +452,7 @@ fn build_apple_intelligence_bridge() {
         // above) also land here, and for those the framework does exist. Only
         // claim it's "not found" when that's actually true.
         if framework_path.exists() {
-            println!("cargo:warning=Building Apple Intelligence with stubs.");
+            println!("Building Apple Intelligence with stubs.");
         } else {
             println!("cargo:warning=Apple Intelligence SDK not found. Building with stubs.");
         }

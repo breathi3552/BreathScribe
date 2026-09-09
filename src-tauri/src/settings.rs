@@ -325,9 +325,10 @@ pub enum VadBackend {
     Earshot,
 }
 
+/// API 密钥映射；Debug 输出会隐藏非空密钥。
 #[derive(Clone, Serialize, Deserialize, Type)]
 #[serde(transparent)]
-pub(crate) struct SecretMap(HashMap<String, String>);
+pub struct SecretMap(HashMap<String, String>);
 
 impl fmt::Debug for SecretMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -353,31 +354,21 @@ impl std::ops::DerefMut for SecretMap {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProxyMode {
+    #[default]
     System,
     Manual,
     Direct,
 }
 
-impl Default for ProxyMode {
-    fn default() -> Self {
-        ProxyMode::System
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProxyProtocol {
+    #[default]
     Http,
     Socks5,
-}
-
-impl Default for ProxyProtocol {
-    fn default() -> Self {
-        ProxyProtocol::Http
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
@@ -405,20 +396,15 @@ impl Default for ProxySettings {
         }
     }
 }
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type, Default)]
 #[serde(tag = "type", content = "config", rename_all = "snake_case")]
 pub enum TranscriptionMode {
+    #[default]
     Local,
     Cloud {
         provider_id: String,
         model_id: String,
     },
-}
-
-impl Default for TranscriptionMode {
-    fn default() -> Self {
-        TranscriptionMode::Local
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
@@ -612,7 +598,6 @@ pub struct AppSettings {
 
 pub const DEFAULT_CLOUD_STT_PROVIDER_ID: &str = "gemini";
 pub const DEFAULT_CLOUD_STT_MODEL_ID: &str = "gemini-3.5-transcribe";
-pub const GEMINI_LIVE_MODEL_ID: &str = "gemini-3.5-transcribe-live";
 
 impl AppSettings {
     /// Resolves active or default cloud transcription mode.

@@ -169,17 +169,12 @@ pub struct GeminiInteractionGenerationConfig {
 }
 
 /// Interactions API transcription mode.
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum GeminiTranscriptionMode {
+    #[default]
     Smart,
     Verbatim,
-}
-
-impl Default for GeminiTranscriptionMode {
-    fn default() -> Self {
-        Self::Smart
-    }
 }
 
 /// Transcription configuration for speech inputs.
@@ -248,8 +243,12 @@ impl GeminiProvider {
             .map_err(|e| format!("Failed to create in-memory WAV writer: {}", e))?;
 
         for &sample in samples {
-            // Clamp to [-1.0, 1.0] and scale to i16 range
-            let clamped = sample.max(-1.0).min(1.0);
+            // 保持 NaN 映射为 -1.0，其余采样限制在 [-1.0, 1.0]。
+            let clamped = if sample.is_nan() {
+                -1.0
+            } else {
+                sample.clamp(-1.0, 1.0)
+            };
             let scaled = (clamped * 32767.0).round() as i16;
             writer
                 .write_sample(scaled)
@@ -377,7 +376,12 @@ impl GeminiProvider {
     pub fn convert_samples_to_pcm16_le(samples: &[f32]) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(samples.len() * 2);
         for &sample in samples {
-            let clamped = sample.max(-1.0).min(1.0);
+            // 保持 NaN 映射为 -1.0，其余采样限制在 [-1.0, 1.0]。
+            let clamped = if sample.is_nan() {
+                -1.0
+            } else {
+                sample.clamp(-1.0, 1.0)
+            };
             let scaled = (clamped * 32767.0).round() as i16;
             bytes.extend_from_slice(&scaled.to_le_bytes());
         }
@@ -674,36 +678,32 @@ async fn run_gemini_live_worker<S>(
     loop {
         tokio::select! {
             maybe_samples = audio_rx.recv() => {
-                match maybe_samples {
-                    Some(samples) => {
-                        let pcm_bytes = GeminiProvider::convert_samples_to_pcm16_le(&samples);
-                        pcm_buffer.extend_from_slice(&pcm_bytes);
+                if let Some(samples) = maybe_samples {
+                    let pcm_bytes = GeminiProvider::convert_samples_to_pcm16_le(&samples);
+                    pcm_buffer.extend_from_slice(&pcm_bytes);
 
-                        let chunk_size = SAMPLES_PER_CHUNK * 2;
-                        while pcm_buffer.len() >= chunk_size {
-                            let chunk: Vec<u8> = pcm_buffer.drain(..chunk_size).collect();
-                            let base64_pcm = BASE64.encode(&chunk);
-                            let input_frame = GeminiLiveRealtimeInputFrame {
-                                realtime_input: GeminiLiveRealtimeInput {
-                                    audio: Some(GeminiLiveAudioData {
-                                        data: base64_pcm,
-                                        mime_type: "audio/pcm;rate=16000".to_string(),
-                                    }),
-                                    audio_stream_end: None,
-                                },
-                            };
-                            if let Ok(frame_json) = serde_json::to_string(&input_frame) {
-                                if sink_tx
-                                    .send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into()))
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
-                                }
+                    let chunk_size = SAMPLES_PER_CHUNK * 2;
+                    while pcm_buffer.len() >= chunk_size {
+                        let chunk: Vec<u8> = pcm_buffer.drain(..chunk_size).collect();
+                        let base64_pcm = BASE64.encode(&chunk);
+                        let input_frame = GeminiLiveRealtimeInputFrame {
+                            realtime_input: GeminiLiveRealtimeInput {
+                                audio: Some(GeminiLiveAudioData {
+                                    data: base64_pcm,
+                                    mime_type: "audio/pcm;rate=16000".to_string(),
+                                }),
+                                audio_stream_end: None,
+                            },
+                        };
+                        if let Ok(frame_json) = serde_json::to_string(&input_frame) {
+                            if sink_tx
+                                .send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into()))
+                                .await
+                                .is_err()
+                            {
+                                break;
                             }
                         }
-                    }
-                    None => {
                     }
                 }
             }

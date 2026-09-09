@@ -1,63 +1,15 @@
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use url::Url;
 
 use crate::network::system_proxy;
 use crate::settings::{ProxyMode, ProxyProtocol, ProxySettings};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Underlying transport stream supporting plain TCP and TLS tunnels.
-pub enum TunnelStream {
-    Plain(TcpStream),
-    Tls(tokio_native_tls::TlsStream<TcpStream>),
-}
-
-impl AsyncRead for TunnelStream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            TunnelStream::Plain(s) => Pin::new(s).poll_read(cx, buf),
-            TunnelStream::Tls(s) => Pin::new(s).poll_read(cx, buf),
-        }
-    }
-}
-
-impl AsyncWrite for TunnelStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        match self.get_mut() {
-            TunnelStream::Plain(s) => Pin::new(s).poll_write(cx, buf),
-            TunnelStream::Tls(s) => Pin::new(s).poll_write(cx, buf),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            TunnelStream::Plain(s) => Pin::new(s).poll_flush(cx),
-            TunnelStream::Tls(s) => Pin::new(s).poll_flush(cx),
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            TunnelStream::Plain(s) => Pin::new(s).poll_shutdown(cx),
-            TunnelStream::Tls(s) => Pin::new(s).poll_shutdown(cx),
-        }
-    }
-}
 
 /// Effective proxy configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -362,7 +314,7 @@ pub async fn establish_socks5_tunnel(
 pub async fn connect_websocket_tunnel(
     url_str: &str,
     proxy_settings: &ProxySettings,
-) -> Result<WebSocketStream<TunnelStream>, String> {
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, String> {
     let parsed_url =
         Url::parse(url_str).map_err(|e| format!("Failed to parse WebSocket URL: {}", e))?;
 
@@ -445,9 +397,9 @@ pub async fn connect_websocket_tunnel(
                 .map_err(|_| format!("TLS handshake with {} timed out", host))?
                 .map_err(|e| format!("TLS handshake with {} failed: {}", host, e))?;
 
-        TunnelStream::Tls(tls_stream)
+        MaybeTlsStream::NativeTls(tls_stream)
     } else {
-        TunnelStream::Plain(tcp_stream)
+        MaybeTlsStream::Plain(tcp_stream)
     };
 
     let (ws_stream, _response) = tokio::time::timeout(

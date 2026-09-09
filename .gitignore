@@ -1,4 +1,37 @@
-# Logs
+# 本地环境与隐私凭据（仅放行示例模板）
+.env
+.env.*
+*.local
+*.local.*
+!.env.example
+.direnv
+.envrc
+
+# AI 助手运行时缓存与临时上下文
+.omp/
+.claude/
+.crush/
+.agents/
+
+# 依赖与构建产物（后端专属产物见 src-tauri/.gitignore）
+node_modules
+package-lock.json
+dist
+dist-ssr
+/target/
+release-builds/
+# Nix 构建输出
+result
+
+# 测试报告与覆盖率产物
+playwright-report/
+test-results/
+blob-report/
+coverage/
+.nyc_output/
+*.lcov
+
+# 日志
 logs
 *.log
 npm-debug.log*
@@ -7,52 +40,30 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-package-lock.json
+# 操作系统缓存
+.DS_Store
+._*
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
 
-node_modules
-dist
-dist-ssr
-*.local
-*.local.*
-
-# Editor directories and files
+# 编辑器本地配置与临时文件
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-.claude/
-
-/target/
-recording_*
-.crush/
-
-# Playwright
-playwright-report/
-test-results/
-blob-report/
-
-.direnv
-.envrc
-
-# Nix build output
-result
-
-# Python bytecode (scripts/)
+# Python 字节码
 __pycache__/
+*.py[cod]
 
-# Temporary and local scratch files
+# 本地录音、草稿与设计原型
+recording_*
 .scratch/
-
-# Release packages
-release-builds/
-
-# Design prototypes and assets
 prototypes/
-# Agent runtime artifacts
-.agents/

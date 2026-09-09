@@ -354,3 +354,4 @@ const ModelCard: React.FC<ModelCardProps> = ({
 };
 
 export default ModelCard;
+export { ModelCard };

@@ -4,15 +4,13 @@ import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
 import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
-import {
-  GeneralSettings,
-  AdvancedSettings,
-  HistorySettings,
-  DebugSettings,
-  AboutSettings,
-  PostProcessingSettings,
-  ModelsSettings,
-} from "./settings";
+import { GeneralSettings } from "./settings/general/GeneralSettings";
+import { AdvancedSettings } from "./settings/advanced/AdvancedSettings";
+import { HistorySettings } from "./settings/history/HistorySettings";
+import { DebugSettings } from "./settings/debug/DebugSettings";
+import { AboutSettings } from "./settings/about/AboutSettings";
+import { PostProcessingSettings } from "./settings/post-processing/PostProcessingSettings";
+import { ModelsSettings } from "./settings/models/ModelsSettings";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
 

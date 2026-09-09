@@ -9,7 +9,7 @@ import { AppDataDirectory } from "../AppDataDirectory";
 import { AppLanguageSelector } from "../AppLanguageSelector";
 import { ShowWhatsNewOnUpdate } from "../ShowWhatsNewOnUpdate";
 import { ThemeSelector } from "../ThemeSelector";
-import { LogDirectory } from "../debug";
+import { LogDirectory } from "../debug/LogDirectory";
 
 export const AboutSettings: React.FC = () => {
   const { t } = useTranslation();

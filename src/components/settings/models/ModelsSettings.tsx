@@ -11,11 +11,11 @@ import {
   Cpu,
   Cloud,
 } from "lucide-react";
-import type { ModelCardStatus } from "@/components/onboarding";
-import { ModelCard } from "@/components/onboarding";
+import type { ModelCardStatus } from "@/components/onboarding/ModelCard";
+import { ModelCard } from "@/components/onboarding/ModelCard";
 import { useModelStore } from "@/stores/modelStore";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { CloudSTTSettings } from "@/components/settings";
+import { CloudSTTSettings } from "@/components/settings/CloudSTTSettings";
 import {
   getLanguageLabel,
   MODEL_CAPABILITY_LANGUAGES,

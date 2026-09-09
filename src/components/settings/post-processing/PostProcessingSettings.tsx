@@ -4,12 +4,10 @@ import { RefreshCcw } from "lucide-react";
 import { commands } from "@/bindings";
 
 import { Alert } from "../../ui/Alert";
-import {
-  Dropdown,
-  SettingContainer,
-  SettingsGroup,
-  Textarea,
-} from "@/components/ui";
+import { Dropdown } from "../../ui/Dropdown";
+import { SettingContainer } from "../../ui/SettingContainer";
+import { SettingsGroup } from "../../ui/SettingsGroup";
+import { Textarea } from "../../ui/Textarea";
 import { Button } from "../../ui/Button";
 import { ResetButton } from "../../ui/ResetButton";
 import { Input } from "../../ui/Input";

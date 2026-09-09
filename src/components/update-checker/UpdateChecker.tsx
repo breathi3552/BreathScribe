@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
-import { ProgressBar } from "../shared";
+import ProgressBar from "../shared/ProgressBar";
 import { useSettings } from "../../hooks/useSettings";
 
 interface UpdateCheckerProps {

@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Dialog } from "../ui";
+import { Dialog } from "../ui/Dialog";
 import { MarkdownContent } from "./MarkdownContent";
 import type { ReleaseNote } from "./releaseNotes";
 

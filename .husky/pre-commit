@@ -1,0 +1,6 @@
+if ! bun run lint:staged; then
+  printf '\n提交已阻止：请修复上方报告的文件。\n' >&2
+  printf '格式问题：bunx prettier --write <文件>；Rust：rustfmt --edition 2021 --config skip_children=true <文件>。\n' >&2
+  printf '修复 lint 或语法错误后，用 git add <文件> 重新暂存，再运行 git commit。\n' >&2
+  exit 1
+fi

@@ -66,6 +66,16 @@ Before you begin, ensure you have the following installed:
 
 For detailed platform-specific setup instructions, see [BUILD.md](BUILD.md).
 
+### 提交前检查
+
+`bun install` 会通过 Husky 自动安装 Git 提交前门禁。请确保运行 `git commit` 的终端或 Git GUI 的 `PATH` 能找到 Bun、Node.js（供 ESLint 等工具使用）和 Rust 的 `rustfmt`。若出现 `ENOENT` / command not found，请修正该进程的 `PATH` 后重新启动终端或 GUI；缺少格式化组件时运行 `rustup component add rustfmt`。
+
+- 每次提交仅对暂存文件运行 Prettier 格式检查、JavaScript/TypeScript 的 ESLint 检查，以及 Rust 的格式与语法检查。现有 `src/` 国际化规则保持生效。
+- 门禁只检查，不自动改写代码。部分暂存文件的未暂存改动会临时隐藏并在检查后恢复；Rust 不递归检查未暂存的子模块。
+- 检查失败时提交被阻止，输出包含文件位置及错误。使用 `bunx prettier --write <文件>` 或 `rustfmt --edition 2021 --config skip_children=true <文件>` 修复格式，按 ESLint/解析器提示修复代码，再用 `git add <文件>` 重新暂存并提交。也可运行 `bun run lint:staged` 提前检查。
+- 为保持快速，提交门禁不执行全项目类型分析或 Rust 编译；提交前仍应运行 `bun run build` 和在 `src-tauri/` 下运行 `cargo check --locked`。未配置检查器的文件类型不做内容检查；本地 hook 可以被绕过，不能替代 CI 或密钥审查，`.gitignore` 也不能阻止强制暂存。
+- CI 或不含 Git 元数据的源码构建可设置 `HUSKY=0` 跳过 hook 安装；开发环境需要正常执行安装脚本，使用 `--ignore-scripts` 后可运行 `bun run prepare` 补装门禁。
+
 ### Understanding the Codebase
 
 Handy follows a clean architecture pattern:

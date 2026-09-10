@@ -3,7 +3,7 @@ import tsParser from "@typescript-eslint/parser";
 
 export default [
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx,jsx}"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -12,6 +12,9 @@ export default [
         },
       },
     },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
     plugins: {
       i18next,
     },

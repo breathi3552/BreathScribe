@@ -41,7 +41,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
     error?: string;
   } | null>(null);
 
-  // Sync draft whenever remote/stored settings change
   useEffect(() => {
     if (settings?.proxy) {
       setDraft(settings.proxy);
@@ -133,7 +132,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
     setIsTesting(true);
     setTestResult(null);
     try {
-      // Test with current draft configuration
       const rtt = await testProxyConnectivity(draft);
       setTestResult({ success: true, rtt });
       toast.success(t("settings.advanced.proxy.test.success", { ms: rtt }));
@@ -163,7 +161,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
       {draft.mode === "manual" && (
         <div className="mx-4 p-4 rounded-lg bg-mid-gray/5 border border-mid-gray/20 space-y-4 transition-all">
           <div className="flex gap-3">
-            {/* Protocol */}
             <div className="w-28 shrink-0 space-y-1">
               <label className="text-xs font-medium text-text/80">
                 {t("settings.advanced.proxy.protocol.title")}
@@ -182,7 +179,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
               />
             </div>
 
-            {/* Host */}
             <div className="flex-1 min-w-0 space-y-1">
               <label className="text-xs font-medium text-text/80">
                 {t("settings.advanced.proxy.host.label")}
@@ -197,7 +193,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
               />
             </div>
 
-            {/* Port */}
             <div className="w-24 shrink-0 space-y-1">
               <label className="text-xs font-medium text-text/80">
                 {t("settings.advanced.proxy.port.label")}
@@ -219,7 +214,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
             </div>
           </div>
 
-          {/* Authentication Checkbox */}
           <div className="pt-2 border-t border-mid-gray/10 space-y-3">
             <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-text/90">
               <input
@@ -279,7 +273,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
             )}
           </div>
 
-          {/* Save Button for Manual Mode */}
           <div className="flex justify-end pt-2">
             <Button
               variant="primary"
@@ -300,7 +293,6 @@ export const ProxySettings: React.FC<ProxySettingsProps> = ({
         </div>
       )}
 
-      {/* 3. Connectivity Test Action Bar */}
       <div className="px-4 py-3 bg-mid-gray/5 border-t border-mid-gray/10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs">
           {testResult ? (

@@ -33,7 +33,6 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           <ModelSelector />
         </div>
 
-        {/* Status Indicators & Update Status */}
         <div className="flex items-center gap-2.5">
           <NetworkProxyIndicator onClick={() => onNavigate?.("advanced")} />
           <UpdateChecker />

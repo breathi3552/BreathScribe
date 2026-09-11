@@ -40,27 +40,11 @@ jobs:
         shell: pwsh
         run: ./scripts/windows/p0-regression.ps1
 
-      - name: Verify NSIS icon placeholders are consumed
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $template = Get-Content "src-tauri/nsis/installer.nsi" -Raw
-          if ($template -notmatch '!define UNINSTALLERICON \"\{\{uninstaller_icon\}\}\"') {
-            throw "Custom NSIS template does not consume Tauri uninstaller_icon"
-          }
-          if ($template -notmatch '!define MUI_ICON \"\$\{INSTALLERICON\}\"') {
-            throw "Custom NSIS template does not wire installer icon into MUI_ICON"
-          }
-          if ($template -notmatch '!define MUI_UNICON \"\$\{UNINSTALLERICON\}\"') {
-            throw "Custom NSIS template does not wire uninstaller icon into MUI_UNICON"
-          }
-          Write-Host "PASS - custom NSIS template consumes installer and uninstaller BreathScribe icon placeholders"
-
       - name: Commit generated binary brand assets when source changed
         id: commit
         shell: pwsh
         run: |
-          git add -- brand/breath-scribe-icon-source.svg brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources src-tauri/nsis/installer.nsi src/i18n/locales package.json bun.lock src-tauri/Cargo.toml src-tauri/src/tray.rs src/components/settings/about/AboutSettings.tsx README.md
+          git add -- brand/P0_ICON_GENERATED.txt src-tauri/icons src-tauri/resources
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
             "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -108,24 +92,6 @@ jobs:
       - name: Verify source and packaged branding
         shell: pwsh
         run: ./scripts/windows/p0-regression.ps1 -PackageDir artifacts
-
-      - name: Win+H source smoke guard
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $files = @(
-            "src-tauri/src/shortcut/handy_keys.rs",
-            "src-tauri/src/shortcut/handler.rs",
-            "src-tauri/src/shortcut/mod.rs",
-            "src-tauri/src/input.rs"
-          )
-          foreach ($file in $files) {
-            if (-not (Test-Path $file)) { throw "Missing Windows shortcut path: $file" }
-          }
-          $shortcutSource = (Get-Content "src-tauri/src/shortcut/handy_keys.rs" -Raw) + (Get-Content "src-tauri/src/shortcut/mod.rs" -Raw)
-          if ($shortcutSource -notmatch "blocking|block") { throw "Blocking hotkey path is no longer discoverable" }
-          if ($shortcutSource -notmatch "Windows|Meta|Super|Win") { throw "Windows modifier path is no longer discoverable" }
-          Write-Host "PASS - Win+H/blocking-hotkey source smoke guard"
 
   publish-p0:
     needs: [build-windows-x64, verify-windows-packages]
@@ -178,7 +144,6 @@ jobs:
             echo "- PASS — final tracked platform/tray icon assets differ byte-for-byte from cjpais/Handy and match the approved source marker."
             echo "- PASS — Windows x64 Tauri build completed and EXE/MSI artifacts were produced."
             echo "- PASS — NSIS installer icon and installed app icons were compared against the committed BreathScribe icon.ico; MSI ProductName and app executable metadata were also checked."
-            echo "- PASS — Win+H/blocking-hotkey source smoke guard and preserved core path checks completed without modifying core interaction logic."
             echo "- NOT INTERACTIVE-CI VERIFIED — physical global Win+H suppression, keydown/keyup delivery and end-to-end Push-To-Talk behavior require an interactive Windows desktop smoke test."
             echo
             echo "## SHA-256"

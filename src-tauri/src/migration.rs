@@ -1,14 +1,4 @@
-//! Data Migration Engine for BreathScribe.
-//!
-//! Handles automatic, non-destructive migration of user data from legacy
-//! Handy/Handy-Cloud installations to the new BreathScribe directory layout.
-//!
-//! Per ADR-0005:
-//! 1. In installed mode: if target directory is empty/new, detect legacy directory (%APPDATA%\io.github.breathi3552.handycloud)
-//! 2. Copy settings files (`settings_store.json`, `settings.json`) and database (`history.db`, WAL/SHM)
-//! 3. Create NTFS hard links for models under `models/`, falling back to file copy if hard links fail (e.g. cross-volume)
-//! 4. Write `.migrated_from_handycloud` marker to ensure strict idempotency
-//! 5. Portable mode skips this migration because data lives in `./Data/`
+//! 将旧版 Handy Cloud 用户数据迁移到 BreathScribe，不覆盖目标目录已有数据。
 
 use std::fs;
 use std::io;
@@ -77,7 +67,6 @@ where
         });
     }
 
-    // Determine source directory
     let legacy_dir = match explicit_legacy_dir {
         Some(p) => p.to_path_buf(),
         None => match target_dir.parent() {
@@ -107,7 +96,6 @@ where
         });
     }
 
-    // Safety: check if source and target resolve to the same location
     if let (Ok(canon_source), Ok(canon_target)) =
         (legacy_dir.canonicalize(), target_dir.canonicalize())
     {
@@ -147,7 +135,6 @@ where
         });
     }
 
-    // Ensure target directory exists
     fs::create_dir_all(target_dir)?;
 
     let mut report = MigrationReport {
@@ -158,7 +145,6 @@ where
         ..Default::default()
     };
 
-    // 1. Copy settings and database files
     let direct_copy_files = [
         "settings_store.json",
         "settings.json",
@@ -184,7 +170,6 @@ where
         }
     }
 
-    // 2. Migrate models/ directory using hard links (with fallback copy)
     let src_models_dir = legacy_dir.join("models");
     let dst_models_dir = target_dir.join("models");
     if src_models_dir.is_dir() {
@@ -198,7 +183,6 @@ where
         )?;
     }
 
-    // 3. Migrate recordings/ directory if present
     let src_recordings_dir = legacy_dir.join("recordings");
     let dst_recordings_dir = target_dir.join("recordings");
     if src_recordings_dir.is_dir() {
@@ -213,7 +197,6 @@ where
         )?;
     }
 
-    // 4. Write migration marker to ensure idempotency
     let marker_content = format!(
         "migrated_from: {}\nfiles_copied: {}\nmodels_hard_linked: {}\nmodels_copied_fallback: {}\nbytes_migrated: {}\n",
         legacy_dir.display(),
@@ -269,7 +252,6 @@ where
         } else if file_type.is_file() {
             let file_size = entry.metadata().map(|m| m.len()).unwrap_or(0);
 
-            // Attempt hard link first
             match hard_linker(&src_path, &dst_path) {
                 Ok(()) => {
                     *linked_count += 1;
@@ -281,7 +263,6 @@ where
                     );
                 }
                 Err(err) => {
-                    // Fallback to copy
                     eprintln!(
                         "[migration] hard link failed ({}), falling back to copy for {}",
                         err,
@@ -345,7 +326,6 @@ mod tests {
         let legacy = base.path.join("legacy");
         let target = base.path.join("target");
 
-        // Setup legacy data
         fs::create_dir_all(legacy.join("models/subdir")).unwrap();
         fs::write(legacy.join("settings_store.json"), r#"{"theme":"dark"}"#).unwrap();
         fs::write(legacy.join("history.db"), b"SQLite format 3\0test_data").unwrap();
@@ -356,7 +336,6 @@ mod tests {
         )
         .unwrap();
 
-        // Run migration
         let report = migrate_if_needed(&target, Some(&legacy)).unwrap();
 
         assert!(report.migrated);
@@ -365,7 +344,6 @@ mod tests {
         assert_eq!(report.models_hard_linked, 2);
         assert_eq!(report.models_copied_fallback, 0);
 
-        // Verify target contents
         assert_eq!(
             fs::read_to_string(target.join("settings_store.json")).unwrap(),
             r#"{"theme":"dark"}"#
@@ -405,7 +383,6 @@ mod tests {
         fs::create_dir_all(&legacy).unwrap();
         fs::write(legacy.join("settings_store.json"), r#"{"theme":"light"}"#).unwrap();
 
-        // Pre-create migration marker in target
         fs::create_dir_all(&target).unwrap();
         fs::write(target.join(MIGRATION_MARKER_FILE), "already_migrated").unwrap();
 
@@ -416,7 +393,6 @@ mod tests {
             report.skip_reason.as_deref(),
             Some("Migration marker already exists")
         );
-        // settings file should NOT have been copied
         assert!(!target.join("settings_store.json").exists());
     }
 
@@ -440,7 +416,6 @@ mod tests {
         assert_eq!(report.models_hard_linked, 0);
         assert_eq!(report.models_copied_fallback, 1);
 
-        // Verify file was copied successfully despite link error
         assert_eq!(
             fs::read(target.join("models/model.gguf")).unwrap(),
             b"GGUF_HEADER_BYTES"
@@ -457,7 +432,6 @@ mod tests {
         fs::create_dir_all(&legacy).unwrap();
         fs::write(legacy.join("settings_store.json"), r#"{"old":"settings"}"#).unwrap();
 
-        // Target already has fresh user data
         fs::create_dir_all(&target).unwrap();
         fs::write(target.join("settings_store.json"), r#"{"new":"settings"}"#).unwrap();
 
@@ -468,12 +442,10 @@ mod tests {
             report.skip_reason.as_deref(),
             Some("Target directory already has user data")
         );
-        // User's new settings should NOT be overwritten
         assert_eq!(
             fs::read_to_string(target.join("settings_store.json")).unwrap(),
             r#"{"new":"settings"}"#
         );
-        // Marker should be created to prevent future checks
         assert!(target.join(MIGRATION_MARKER_FILE).exists());
     }
 

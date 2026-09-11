@@ -117,18 +117,13 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
     error?: string;
   } | null>(null);
 
-  // Sync state when store updates
   useEffect(() => {
-    if (storedApiKey !== undefined) {
-      setApiKeyDraft(storedApiKey);
-    }
+    setApiKeyDraft(storedApiKey);
   }, [storedApiKey]);
 
   useEffect(() => {
-    if (storedProviderConfig) {
-      setSelectedModel(storedProviderConfig.model_id || DEFAULT_CLOUD_MODEL_ID);
-      setCustomBaseUrlDraft(storedProviderConfig.custom_base_url ?? "");
-    }
+    setSelectedModel(storedProviderConfig.model_id || DEFAULT_CLOUD_MODEL_ID);
+    setCustomBaseUrlDraft(storedProviderConfig.custom_base_url ?? "");
   }, [storedProviderConfig]);
 
   const handleModelChange = useCallback(
@@ -250,7 +245,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
 
   const content = (
     <div className="space-y-4">
-      {/* Provider Info Card */}
       <div className="rounded-xl border border-mid-gray/40 bg-mid-gray/10 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -280,7 +274,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
           </Button>
         </div>
       </div>
-      {/* Provider Selection */}
       <SettingContainer
         title={t("settings.models.cloud.providerSelectTitle")}
         description={t("settings.models.cloud.providerSelectDesc")}
@@ -294,7 +287,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
         </div>
       </SettingContainer>
 
-      {/* Model Selection */}
       <SettingContainer
         title={t("settings.models.cloud.modelSelectTitle")}
         description={t("settings.models.cloud.modelSelectDesc")}
@@ -307,7 +299,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
           />
         </div>
       </SettingContainer>
-      {/* API Key Input */}
       <SettingContainer
         title={t("settings.models.cloud.apiKeyTitle")}
         description={t("settings.models.cloud.apiKeyDesc")}
@@ -379,7 +370,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
               </p>
             )}
 
-          {/* Validation Feedback */}
           {validationResult && (
             <div
               className={`flex items-start gap-2 p-2.5 rounded-lg text-xs ${
@@ -418,7 +408,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
         </div>
       </SettingContainer>
 
-      {/* Advanced Section: Custom Base URL */}
       <div className="border border-mid-gray/30 rounded-xl overflow-hidden">
         <button
           type="button"
@@ -485,7 +474,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
         )}
       </div>
 
-      {/* Fail-Safe and Security Guarantee Footer */}
       <div className="flex items-start gap-2.5 p-3 rounded-lg bg-logo-primary/5 border border-logo-primary/15 text-xs text-text/70">
         <ShieldCheck className="w-4 h-4 text-logo-primary shrink-0 mt-0.5" />
         <div className="space-y-0.5">

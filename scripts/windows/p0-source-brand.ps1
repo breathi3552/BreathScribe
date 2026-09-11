@@ -7,56 +7,6 @@ Set-StrictMode -Version Latest
 
 $changed = $false
 
-function Replace-InFile {
-  param([string]$Path, [string]$Old, [string]$New)
-  if (-not (Test-Path $Path)) { throw "Brand patch path missing: $Path" }
-  $content = Get-Content $Path -Raw
-  $updated = $content.Replace($Old, $New)
-  if ($updated -ne $content) {
-    [System.IO.File]::WriteAllText((Resolve-Path $Path), $updated, (New-Object System.Text.UTF8Encoding($false)))
-    $script:changed = $true
-    Write-Host "Updated brand string: $Path"
-  }
-}
-
-Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{} (Dev)", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{} (Dev)", env!("CARGO_PKG_VERSION"))'
-Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy v{}", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{}", env!("CARGO_PKG_VERSION"))'
-Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy Cloud v{} (Dev)", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{} (Dev)", env!("CARGO_PKG_VERSION"))'
-Replace-InFile "src-tauri/src/tray.rs" 'format!("Handy Cloud v{}", env!("CARGO_PKG_VERSION"))' 'format!("BreathScribe v{}", env!("CARGO_PKG_VERSION"))'
-Replace-InFile "package.json" '"name": "handy-app"' '"name": "breath-scribe-app"'
-Replace-InFile "package.json" '"name": "handy-cloud-app"' '"name": "breath-scribe-app"'
-Replace-InFile "bun.lock" '"name": "handy-app"' '"name": "breath-scribe-app"'
-Replace-InFile "bun.lock" '"name": "handy-cloud-app"' '"name": "breath-scribe-app"'
-Replace-InFile "src-tauri/Cargo.toml" 'name = "handy"' 'name = "breath-scribe"'
-Replace-InFile "src-tauri/Cargo.toml" 'description = "Handy Cloud"' 'description = "BreathScribe"'
-Replace-InFile "src-tauri/Cargo.toml" 'description = "Handy"' 'description = "BreathScribe"'
-
-if (Test-Path "src-tauri/nsis/installer.nsi") {
-  $path = "src-tauri/nsis/installer.nsi"
-  $content = Get-Content $path -Raw
-  $updated = [regex]::Replace($content, 'Custom NSIS template for (?:Handy Cloud|Handy)', 'Custom NSIS template for BreathScribe')
-
-  $installerDefine = '!define INSTALLERICON "{{installer_icon}}"'
-  $uninstallerDefine = '!define UNINSTALLERICON "{{uninstaller_icon}}"'
-  if (-not $updated.Contains($uninstallerDefine)) {
-    if (-not $updated.Contains($installerDefine)) { throw "NSIS installer icon placeholder missing from custom template" }
-    $updated = $updated.Replace($installerDefine, $installerDefine + "`n" + $uninstallerDefine)
-  }
-
-  $muiInstaller = '  !define MUI_ICON "${INSTALLERICON}"'
-  $muiUninstaller = '  !define MUI_UNICON "${UNINSTALLERICON}"'
-  if (-not $updated.Contains($muiUninstaller)) {
-    if (-not $updated.Contains($muiInstaller)) { throw "NSIS MUI installer icon definition missing from custom template" }
-    $updated = $updated.Replace($muiInstaller, $muiInstaller + "`n" + $muiUninstaller)
-  }
-
-  if ($updated -ne $content) {
-    [System.IO.File]::WriteAllText((Resolve-Path $path), $updated, (New-Object System.Text.UTF8Encoding($false)))
-    $changed = $true
-    Write-Host "Updated BreathScribe NSIS icon wiring: $path"
-  }
-}
-
 $iconSource = "brand/breath-scribe-icon-source.svg"
 $iconMarker = "brand/P0_ICON_GENERATED.txt"
 if (-not (Test-Path $iconSource)) { throw "Missing approved brand icon source: $iconSource" }

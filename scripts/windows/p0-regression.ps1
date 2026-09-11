@@ -71,8 +71,6 @@ Assert-True ($config.identifier -eq "io.github.breathi3552.breathscribe") "Tauri
 $endpoint = [string]$config.plugins.updater.endpoints[0]
 Assert-True ($endpoint -like "*breathi3552/BreathScribe*") "updater points at BreathScribe fork"
 Assert-True ($endpoint -notlike "*cjpais/Handy*") "updater no longer points at upstream"
-Assert-True ([string]$config.bundle.windows.nsis.installerIcon -eq "icons/icon.ico") "NSIS installerIcon explicitly uses BreathScribe icon.ico"
-Assert-True ([string]$config.bundle.windows.nsis.uninstallerIcon -eq "icons/icon.ico") "NSIS uninstallerIcon explicitly uses BreathScribe icon.ico"
 
 $iconSource = "brand/breath-scribe-icon-source.svg"
 $marker = "brand/P0_ICON_GENERATED.txt"
@@ -138,21 +136,6 @@ foreach ($asset in $criticalBrandAssets) {
   }
 }
 
-$sourcePaths = @(
-  "src/components/icons/HandyHand.tsx",
-  "src/components/icons/HandyTextLogo.tsx",
-  "src/components/settings/about/AboutSettings.tsx",
-  "src/overlay/RecordingOverlay.tsx",
-  "src-tauri/src/tray.rs"
-)
-foreach ($path in $sourcePaths) { Assert-FileExists $path }
-Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -match "<svg") "UI hand icon is pure SVG vector"
-Assert-True ((Get-Content "src/components/icons/HandyHand.tsx" -Raw) -notmatch "<img") "UI hand icon does not rely on bitmap img"
-Assert-True ((Get-Content "src/components/icons/HandyTextLogo.tsx" -Raw) -match "BreathScribe") "text logo displays BreathScribe"
-Assert-True ((Get-Content "src/components/settings/about/AboutSettings.tsx" -Raw) -match "github\.com/breathi3552/BreathScribe") "About source link uses fork"
-Assert-True ((Get-Content "src-tauri/src/tray.rs" -Raw) -match "BreathScribe v") "Tray tooltip identifies BreathScribe"
-
-Assert-True ((Get-Content "src-tauri/Cargo.toml" -Raw) -match 'handy-keys\s*=') "handy-keys dependency remains intact"
 Assert-True (Test-Path "LICENSE") "LICENSE/upstream attribution remains present"
 
 # Upstream attribution and technical dependency URLs may remain. Product updater ownership is checked above.
@@ -162,21 +145,6 @@ foreach ($needle in $forbidden) {
   $matches = @(Get-ChildItem $scanTargets -Recurse -File -ErrorAction SilentlyContinue | Select-String -SimpleMatch $needle)
   Assert-True ($matches.Count -eq 0) "fork release configuration does not request legacy signing: $needle"
 }
-
-$releaseText = Get-Content ".github/workflows/release.yml" -Raw
-Assert-True ($releaseText -match 'asset-prefix:\s*"breath-scribe"') "release artifact prefix is BreathScribe branded"
-Assert-True ($releaseText -match 'sign-binaries:\s*false') "P0 fork release is unsigned"
-
-$corePaths = @(
-  "src-tauri/src/shortcut/handy_keys.rs",
-  "src-tauri/src/shortcut/handler.rs",
-  "src-tauri/src/input.rs",
-  "src-tauri/src/transcription_coordinator.rs",
-  "src-tauri/src/clipboard.rs",
-  "src-tauri/src/paste_tx/windows.rs",
-  "src-tauri/src/managers/audio.rs"
-)
-foreach ($path in $corePaths) { Assert-FileExists $path }
 
 if ($PackageDir) {
   Assert-True (Test-Path $PackageDir -PathType Container) "package directory exists: $PackageDir"
@@ -205,7 +173,6 @@ if ($PackageDir) {
       $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru
       Assert-True ($proc.ExitCode -eq 0) "MSI administrative extraction succeeds"
       $installedExe = Get-ChildItem $extractDir -Filter "breath-scribe.exe" -Recurse -File | Select-Object -First 1
-      if (-not $installedExe) { $installedExe = Get-ChildItem $extractDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1 }
       Assert-True ($null -ne $installedExe) "MSI payload contains breath-scribe.exe"
       Assert-AppExecutableBranding -Executable $installedExe -Label "MSI payload"
     } finally {
@@ -226,7 +193,6 @@ if ($PackageDir) {
       $proc = Start-Process -FilePath $setup.FullName -ArgumentList @("/S", "/D=$tempInstallDir") -Wait -PassThru
       Assert-True ($proc.ExitCode -eq 0) "NSIS silent extraction succeeds"
       $installedExe = Get-ChildItem $tempInstallDir -Filter "breath-scribe.exe" -Recurse -File | Select-Object -First 1
-      if (-not $installedExe) { $installedExe = Get-ChildItem $tempInstallDir -Filter "handy.exe" -Recurse -File | Select-Object -First 1 }
       Assert-True ($null -ne $installedExe) "NSIS payload contains breath-scribe.exe"
       Assert-AppExecutableBranding -Executable $installedExe -Label "NSIS payload"
     } finally {

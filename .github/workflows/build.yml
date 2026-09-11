@@ -586,7 +586,7 @@ jobs:
           echo "=== Frameworks contents ==="
           ls -la "$APP/Contents/Frameworks/" | grep onnx || true
           echo "=== Binary linked libs ==="
-          BIN=$(find "$APP/Contents/MacOS" -type f | head -1)
+          BIN="$APP/Contents/MacOS/breath-scribe"
           otool -L "$BIN" | grep onnx || true
           echo "=== Checking all @rpath deps are satisfied ==="
           # Extract every @rpath lib the binary needs
@@ -661,9 +661,8 @@ jobs:
               export VK_ICD_FILENAMES="$vulkan_icd"
             fi
             HANDY_NO_GTK_LAYER_SHELL=1 \
-            BIN=$(find "${root}/usr/bin" -type f | head -1)
-            LD_LIBRARY_PATH="${root}/usr/lib/BreathScribe:${root}/usr/lib/Handy:${root}/usr/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
-              xvfb-run -a "$BIN" --list-devices \
+            LD_LIBRARY_PATH="${root}/usr/lib/BreathScribe:${root}/usr/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+              xvfb-run -a "${root}/usr/bin/breath-scribe" --list-devices \
                 >/tmp/handy-package-smoke.log 2>&1
             echo "${label} --list-devices smoke passed"
           }
@@ -673,15 +672,13 @@ jobs:
               echo "Auditing deb package: ${deb}"
               listing="$(mktemp)"
               dpkg-deb -c "$deb" > "$listing"
-              require_pattern "$listing" 'usr/bin/(breath-scribe|handy)$' "main binary"
-              require_pattern "$listing" 'usr/lib/(BreathScribe|Handy)/libtranscribe\.so(\.[0-9]+)+$' "transcribe runtime library (SONAME)"
-              require_pattern "$listing" 'usr/lib/(BreathScribe|Handy)/libggml-cpu.*\.so' "ggml CPU backend module"
+              require_pattern "$listing" 'usr/bin/breath-scribe$' "main binary"
+              require_pattern "$listing" 'usr/lib/BreathScribe/libtranscribe\.so(\.[0-9]+)+$' "transcribe runtime library (SONAME)"
+              require_pattern "$listing" 'usr/lib/BreathScribe/libggml-cpu.*\.so' "ggml CPU backend module"
               if [[ "${{ inputs.platform }}" == *"ubuntu-22.04"* && "${{ inputs.target }}" == "x86_64-unknown-linux-gnu" ]]; then
-                require_pattern "$listing" 'usr/lib/(BreathScribe|Handy)/libonnxruntime\.so\.[0-9]+$' "ONNX Runtime library (SONAME)"
+                require_pattern "$listing" 'usr/lib/BreathScribe/libonnxruntime\.so\.[0-9]+$' "ONNX Runtime library (SONAME)"
               fi
-              # Handy's libs must stay out of the ldconfig-scanned /usr/lib
-              # (issue #1639): app-private libs belong in /usr/lib/Handy only.
-              # `[^/]+` excludes the Handy/ subdir, so only direct hits match.
+              # App-private libs must stay out of the ldconfig-scanned /usr/lib.
               if grep -Eq 'usr/lib/[^/]+\.so' "$listing"; then
                 echo "ERROR: libraries installed directly into /usr/lib (issue #1639):" >&2
                 grep -E 'usr/lib/[^/]+\.so' "$listing" >&2
@@ -703,9 +700,9 @@ jobs:
               echo "Auditing rpm package: ${rpm_pkg}"
               listing="$(mktemp)"
               rpm -qpl "$rpm_pkg" > "$listing"
-              require_pattern "$listing" '/usr/bin/(breath-scribe|handy)$' "main binary"
-              require_pattern "$listing" '/usr/lib/(BreathScribe|Handy)/libtranscribe\.so(\.[0-9]+)+$' "transcribe runtime library (SONAME)"
-              require_pattern "$listing" '/usr/lib/(BreathScribe|Handy)/libggml-cpu.*\.so' "ggml CPU backend module"
+              require_pattern "$listing" '/usr/bin/breath-scribe$' "main binary"
+              require_pattern "$listing" '/usr/lib/BreathScribe/libtranscribe\.so(\.[0-9]+)+$' "transcribe runtime library (SONAME)"
+              require_pattern "$listing" '/usr/lib/BreathScribe/libggml-cpu.*\.so' "ggml CPU backend module"
               # Same /usr/lib pollution guard as the deb audit (issue #1639).
               if grep -Eq 'usr/lib/[^/]+\.so' "$listing"; then
                 echo "ERROR: libraries installed directly into /usr/lib (issue #1639):" >&2
@@ -834,9 +831,6 @@ jobs:
             param([string]$Root, [string]$Label)
 
             $mainExe = Get-ChildItem $Root -Filter "breath-scribe.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $mainExe) {
-              $mainExe = Get-ChildItem $Root -Filter "handy.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-            }
             if (-not $mainExe) {
               throw "$Label package is missing breath-scribe.exe"
             }

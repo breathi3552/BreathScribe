@@ -32,7 +32,6 @@ const HandyTextLogo: React.FC<HandyTextLogoProps> = ({
       </linearGradient>
     </defs>
 
-    {/* Brand Icon Badge */}
     <g transform="translate(4, 4)">
       <rect
         width="48"
@@ -43,12 +42,10 @@ const HandyTextLogo: React.FC<HandyTextLogoProps> = ({
         strokeWidth="1.5"
         strokeOpacity="0.4"
       />
-      {/* Cloud silhouette */}
       <path
         d="M 13 33 C 9.5 33 8 30 9.5 26.5 C 9 22 13 19.5 16.5 20.5 C 19 15 26.5 14.5 30 19 C 33.5 17.5 38.5 20 38 24.5 C 41.5 27 40.5 33 35.5 33 Z"
         fill="url(#textLogoIconBg)"
       />
-      {/* Voice soundwave bars */}
       <rect x="17" y="22" width="2" height="7" rx="1" fill="#ffffff" />
       <rect x="21" y="18" width="2" height="11" rx="1" fill="#ffffff" />
       <rect x="25" y="15" width="2" height="14" rx="1" fill="#ffffff" />
@@ -56,7 +53,6 @@ const HandyTextLogo: React.FC<HandyTextLogoProps> = ({
       <rect x="33" y="23" width="2" height="6" rx="1" fill="#ffffff" />
     </g>
 
-    {/* Brand Typography */}
     <g transform="translate(64, 38)">
       <text
         fontFamily='system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'

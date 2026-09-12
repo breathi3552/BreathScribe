@@ -298,7 +298,7 @@ jobs:
           #     statically linking libomp.
           echo "TRANSCRIBE_CMAKE_ARGS=-DGGML_NATIVE=OFF -DGGML_OPENMP=OFF" >> $env:GITHUB_ENV
 
-      # Bundle the VC++ runtime app-local so Handy starts on machines without a
+      # Bundle the VC++ runtime app-local so BreathScribe starts on machines without a
       # current Microsoft redistributable. build.rs stages DLLs from these dirs
       # into transcribe-libs/, using the same VS install that compiled the code.
       # x64 also needs vcomp140.dll for ggml OpenMP; ARM64 disables OpenMP.
@@ -511,17 +511,49 @@ jobs:
           chmod +x "$tools_dir/linuxdeploy-${arch}.AppImage"
           "$tools_dir/linuxdeploy-${arch}.AppImage" --appimage-extract-and-run --version
 
+      # tauri-action treats a present-but-empty APPLE_CERTIFICATE as a request
+      # to import a certificate. Keep Apple signing variables absent for the
+      # unsigned fork build, and inject them only when real signing is enabled.
+      - name: Configure macOS signing
+        if: contains(inputs.platform, 'macos')
+        shell: bash
+        env:
+          SIGN_BINARIES: ${{ inputs.sign-binaries }}
+          APPLE_CERTIFICATE_SECRET: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD_SECRET: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD_SECRET: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_PASSWORD_SECRET: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_CLIENT_ID_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID_SECRET: ${{ secrets.AZURE_TENANT_ID }}
+          TAURI_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [[ "$SIGN_BINARIES" == "true" ]]; then
+            {
+              printf 'APPLE_CERTIFICATE=%s\n' "$APPLE_CERTIFICATE_SECRET"
+              printf 'APPLE_CERTIFICATE_PASSWORD=%s\n' "$APPLE_CERTIFICATE_PASSWORD_SECRET"
+              printf 'APPLE_ID=%s\n' "$APPLE_ID_SECRET"
+              printf 'APPLE_ID_PASSWORD=%s\n' "$APPLE_ID_PASSWORD_SECRET"
+              printf 'APPLE_PASSWORD=%s\n' "$APPLE_PASSWORD_SECRET"
+              printf 'APPLE_TEAM_ID=%s\n' "$APPLE_TEAM_ID_SECRET"
+              printf 'APPLE_SIGNING_IDENTITY=%s\n' "$CERT_ID"
+              printf 'AZURE_CLIENT_ID=%s\n' "$AZURE_CLIENT_ID_SECRET"
+              printf 'AZURE_CLIENT_SECRET=%s\n' "$AZURE_CLIENT_SECRET_SECRET"
+              printf 'AZURE_TENANT_ID=%s\n' "$AZURE_TENANT_ID_SECRET"
+              printf 'TAURI_SIGNING_PRIVATE_KEY=%s\n' "$TAURI_SIGNING_PRIVATE_KEY_SECRET"
+              printf 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD=%s\n' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET"
+            } >> "$GITHUB_ENV"
+          else
+            echo 'APPLE_SIGNING_IDENTITY=-' >> "$GITHUB_ENV"
+          fi
+
       - name: Build with Tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ inputs.sign-binaries && secrets.APPLE_ID || '' }}
-          APPLE_ID_PASSWORD: ${{ inputs.sign-binaries && secrets.APPLE_ID_PASSWORD || '' }}
-          APPLE_PASSWORD: ${{ inputs.sign-binaries && secrets.APPLE_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ inputs.sign-binaries && secrets.APPLE_TEAM_ID || '' }}
-          APPLE_CERTIFICATE: ${{ inputs.sign-binaries && secrets.APPLE_CERTIFICATE || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ inputs.sign-binaries && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ inputs.sign-binaries && env.CERT_ID || '' }}
           AZURE_CLIENT_ID: ${{ inputs.sign-binaries && secrets.AZURE_CLIENT_ID || '' }}
           AZURE_CLIENT_SECRET: ${{ inputs.sign-binaries && secrets.AZURE_CLIENT_SECRET || '' }}
           AZURE_TENANT_ID: ${{ inputs.sign-binaries && secrets.AZURE_TENANT_ID || '' }}
@@ -722,7 +754,7 @@ jobs:
               (
                 cd "$workdir"
                 ./Handy.AppImage --appimage-extract >/dev/null
-                require_path "squashfs-root/usr/bin/handy" "AppImage handy binary"
+                require_path "squashfs-root/usr/bin/breath-scribe" "AppImage BreathScribe binary"
                 # Gear Lever and other integration tools consume the root entry;
                 # appimagetool does not update the copy under usr/share/applications.
                 desktop_file="$(find squashfs-root -maxdepth 1 -type f -name '*.desktop' -print -quit)"

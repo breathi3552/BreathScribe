@@ -62,6 +62,21 @@ struct TranscribeAction {
     post_process: bool,
 }
 
+fn supports_streaming(app: &AppHandle, settings: &AppSettings) -> bool {
+    match &settings.transcription_mode {
+        TranscriptionMode::Cloud {
+            provider_id,
+            model_id,
+        } => app
+            .try_state::<Arc<TranscriptionRouter>>()
+            .is_some_and(|router| router.supports_cloud_streaming(provider_id, model_id)),
+        TranscriptionMode::Local => app
+            .state::<Arc<ModelManager>>()
+            .get_model_info(&settings.selected_model)
+            .is_some_and(|model| model.supports_streaming),
+    }
+}
+
 /// Field name for structured output JSON schema
 const TRANSCRIPTION_FIELD: &str = "transcription";
 
@@ -519,22 +534,10 @@ impl ShortcutAction for TranscribeAction {
         // Get the microphone mode to determine audio feedback timing
         let plan_started = Instant::now();
         let is_always_on = settings.always_on_microphone;
-
-        let selected_model_info = app
-            .state::<Arc<ModelManager>>()
-            .get_model_info(&settings.selected_model);
-
         let router = app.try_state::<Arc<TranscriptionRouter>>();
         let is_cloud_mode = matches!(settings.transcription_mode, TranscriptionMode::Cloud { .. });
 
-        let model_supports_streaming = if let Some(r) = &router {
-            r.is_streaming_supported(&settings)
-        } else {
-            selected_model_info
-                .as_ref()
-                .map(|m| m.supports_streaming)
-                .unwrap_or(false)
-        };
+        let model_supports_streaming = supports_streaming(app, &settings);
         let vad_policy = if !settings.vad_enabled {
             VadPolicy::Disabled
         } else if model_supports_streaming {
@@ -700,13 +703,9 @@ impl ShortcutAction for TranscribeAction {
         // the larger panel, but it still switches from listening to a working
         // spinner while the stream finalizes. Non-streaming paths use the
         // compact transcribing pill (None no-ops in show_*).
-        let style = get_settings(app).overlay_style;
-        let router = app.try_state::<Arc<TranscriptionRouter>>();
-        let is_cloud_streaming = router
-            .as_ref()
-            .map(|r| r.has_active_cloud_stream())
-            .unwrap_or(false);
-        let is_streaming = tm.is_streaming() || is_cloud_streaming;
+        let settings = get_settings(app);
+        let style = settings.overlay_style;
+        let is_streaming = supports_streaming(app, &settings);
         let use_streaming_overlay = should_use_streaming_overlay(style, is_streaming);
         if use_streaming_overlay {
             tm.emit_stream_working(StreamWorkKind::Transcribing);
@@ -770,52 +769,24 @@ impl ShortcutAction for TranscribeAction {
                     let wav_handle = tauri::async_runtime::spawn_blocking(move || {
                         crate::audio_toolkit::save_wav_file(&wav_path, &samples_for_wav)
                     });
-
-                    // Transcribe concurrently with WAV save. If a live stream was
-                    // running, finalize it and use its text (all audio was already
-                    // fed to the stream); otherwise batch-transcribe the samples.
+                    // WAV 落盘与转写并行；云端 Live 的收尾及批量回退由 Router 负责，
+                    // 本地流式路径保持原有“收尾后批量转写”行为。
                     let transcription_time = Instant::now();
                     let settings = get_settings(&ah);
-                    let is_cloud =
-                        matches!(settings.transcription_mode, TranscriptionMode::Cloud { .. });
+                    let mode = settings.transcription_mode.clone();
+                    let options = TranscriptionOptions {
+                        language: settings.selected_language.clone(),
+                        prompt: None,
+                    };
+                    let router = ah.try_state::<Arc<TranscriptionRouter>>();
 
-                    let transcription_result = if is_cloud {
-                        let router = ah.try_state::<Arc<TranscriptionRouter>>();
-                        let cloud_stream_res = if let Some(r) = &router {
-                            if r.has_active_cloud_stream() {
-                                r.finalize_cloud_stream().await
-                            } else {
-                                None
-                            }
+                    let transcription_result = if matches!(&mode, TranscriptionMode::Cloud { .. }) {
+                        if let Some(r) = &router {
+                            r.finish_cloud_stream(samples, &options, &mode)
+                                .await
+                                .map_err(|e| anyhow::anyhow!(e))
                         } else {
-                            None
-                        };
-
-                        match cloud_stream_res {
-                            Some(Ok(text)) if !text.trim().is_empty() => {
-                                debug!("Gemini Live streaming transcription delivered: {}", text);
-                                Ok(text)
-                            }
-                            other => {
-                                if let Some(Err(e)) = other {
-                                    warn!("Gemini Live streaming transcription failed ({}): falling back to batch mode", e);
-                                } else {
-                                    debug!(
-                                        "Gemini Live produced no text, falling back to batch mode"
-                                    );
-                                }
-                                if let Some(r) = &router {
-                                    let options = TranscriptionOptions {
-                                        language: settings.selected_language.clone(),
-                                        prompt: None,
-                                    };
-                                    r.transcribe(samples, &options)
-                                        .await
-                                        .map_err(|e| anyhow::anyhow!(e))
-                                } else {
-                                    Err(anyhow::anyhow!("Transcription router not available"))
-                                }
-                            }
+                            Err(anyhow::anyhow!("Transcription router not available"))
                         }
                     } else {
                         match tm.finalize_stream() {
@@ -827,13 +798,8 @@ impl ShortcutAction for TranscribeAction {
                             // so a batch fallback would contend with it.
                             Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
                             Ok(_) => {
-                                if let Some(router) = ah.try_state::<Arc<TranscriptionRouter>>() {
-                                    let options = TranscriptionOptions {
-                                        language: settings.selected_language.clone(),
-                                        prompt: None,
-                                    };
-                                    router
-                                        .transcribe(samples, &options)
+                                if let Some(r) = &router {
+                                    r.transcribe(samples, &options, &mode)
                                         .await
                                         .map_err(|e| anyhow::anyhow!(e))
                                 } else {

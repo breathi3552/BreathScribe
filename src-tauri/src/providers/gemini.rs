@@ -526,6 +526,13 @@ enum SessionCmd {
 pub struct GeminiLiveStreamingSession {
     audio_tx: tokio::sync::mpsc::UnboundedSender<Vec<f32>>,
     cmd_tx: tokio::sync::mpsc::Sender<SessionCmd>,
+    worker_handle: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for GeminiLiveStreamingSession {
+    fn drop(&mut self) {
+        self.worker_handle.abort();
+    }
 }
 
 #[async_trait::async_trait]
@@ -582,23 +589,14 @@ async fn run_gemini_live_worker<S>(
     let turn_notify = Arc::new(tokio::sync::Notify::new());
     let (sink_tx, mut sink_rx) =
         tokio::sync::mpsc::channel::<tokio_tungstenite::tungstenite::Message>(64);
-
-    let writer_handle = tokio::spawn(async move {
-        while let Some(msg) = sink_rx.recv().await {
-            if let Err(e) = ws_sink.send(msg).await {
-                log::warn!("Gemini Live WebSocket send failed: {}", e);
-                break;
-            }
-        }
-        let _ = ws_sink.close().await;
-    });
+    let mut child_tasks = tokio::task::JoinSet::new();
 
     let state_receiver = Arc::clone(&state);
     let sink_tx_receiver = sink_tx.clone();
     let turn_notify_receiver = Arc::clone(&turn_notify);
     let text_sink_receiver = Arc::clone(&text_sink);
 
-    let receiver_handle = tokio::spawn(async move {
+    let receiver_abort = child_tasks.spawn(async move {
         while let Some(msg_res) = ws_stream.next().await {
             match msg_res {
                 Ok(msg) => match msg {
@@ -671,6 +669,16 @@ async fn run_gemini_live_worker<S>(
             }
         }
         turn_notify_receiver.notify_one();
+    });
+
+    child_tasks.spawn(async move {
+        while let Some(msg) = sink_rx.recv().await {
+            if let Err(e) = ws_sink.send(msg).await {
+                log::warn!("Gemini Live WebSocket send failed: {}", e);
+                break;
+            }
+        }
+        let _ = ws_sink.close().await;
     });
 
     let mut pcm_buffer: Vec<u8> = Vec::with_capacity(SAMPLES_PER_CHUNK * 2);
@@ -770,7 +778,7 @@ async fn run_gemini_live_worker<S>(
                                     let s = state.lock();
                                     if s.turn_completed
                                         || s.session_error.is_some()
-                                        || receiver_handle.is_finished()
+                                        || receiver_abort.is_finished()
                                     {
                                         break;
                                     }
@@ -794,10 +802,9 @@ async fn run_gemini_live_worker<S>(
                             }
                         }
 
-                        receiver_handle.abort();
-                        let _ = receiver_handle.await;
+                        receiver_abort.abort();
                         drop(sink_tx);
-                        let _ = writer_handle.await;
+                        while child_tasks.join_next().await.is_some() {}
                         let final_state = state.lock();
                         let mut result = final_state.committed_text.clone();
                         let tentative = final_state.tentative_text.trim();
@@ -815,10 +822,9 @@ async fn run_gemini_live_worker<S>(
                         return;
                     }
                     Some(SessionCmd::Cancel) | None => {
-                        receiver_handle.abort();
-                        let _ = receiver_handle.await;
+                        receiver_abort.abort();
                         drop(sink_tx);
-                        let _ = writer_handle.await;
+                        while child_tasks.join_next().await.is_some() {}
                         return;
                     }
                 }
@@ -957,9 +963,13 @@ impl StreamingTranscriptionProvider for GeminiProvider {
         let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
 
-        tokio::spawn(run_gemini_live_worker(ws, audio_rx, cmd_rx, text_sink));
+        let worker_handle = tokio::spawn(run_gemini_live_worker(ws, audio_rx, cmd_rx, text_sink));
 
-        Ok(Box::new(GeminiLiveStreamingSession { audio_tx, cmd_tx }))
+        Ok(Box::new(GeminiLiveStreamingSession {
+            audio_tx,
+            cmd_tx,
+            worker_handle,
+        }))
     }
 }
 
@@ -1354,6 +1364,50 @@ mod tests {
     impl StreamTextSink for MockSink {
         fn emit_text(&self, committed: String, tentative: String) {
             self.emitted.lock().push((committed, tentative));
+        }
+    }
+
+    #[tokio::test]
+    async fn dropping_session_or_finalize_future_closes_live_connection() {
+        use tokio_tungstenite::tungstenite::{protocol::Role, Message};
+
+        for during_finalize in [false, true] {
+            let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+            let client_ws = WebSocketStream::from_raw_socket(client_io, Role::Client, None).await;
+            let mut server_ws =
+                WebSocketStream::from_raw_socket(server_io, Role::Server, None).await;
+            let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
+            let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
+            let sink = Arc::new(MockSink {
+                emitted: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            });
+            let worker_handle =
+                tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
+            let session = Box::new(GeminiLiveStreamingSession {
+                audio_tx,
+                cmd_tx,
+                worker_handle,
+            });
+            session.feed_audio(&vec![0.0; SAMPLES_PER_CHUNK]).unwrap();
+            assert!(matches!(server_ws.next().await, Some(Ok(Message::Text(_)))));
+
+            if during_finalize {
+                let finishing = tokio::spawn(session.finalize());
+                let end = server_ws.next().await.unwrap().unwrap();
+                assert!(matches!(end, Message::Text(text) if text.contains("audioStreamEnd")));
+                finishing.abort();
+                let _ = finishing.await;
+            } else {
+                drop(session);
+            }
+
+            let closed = tokio::time::timeout(Duration::from_secs(1), server_ws.next())
+                .await
+                .expect("cancelled connection must close without server cooperation");
+            assert!(matches!(
+                closed,
+                None | Some(Err(_)) | Some(Ok(Message::Close(_)))
+            ));
         }
     }
 

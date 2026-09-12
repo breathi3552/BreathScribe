@@ -1,18 +1,17 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_specta::Event;
+use tokio::sync::{oneshot, watch};
+use tokio::task::{AbortHandle, JoinHandle};
 
-use crate::managers::model::ModelManager;
-use crate::managers::transcription::StreamTextEvent;
-use crate::providers::gemini::GeminiProvider;
-use crate::providers::local::LocalTranscriptionProvider;
+use crate::managers::transcription::{StreamCmd, StreamRouter, StreamTextEvent};
 use crate::providers::{
-    BatchTranscriptionProvider, StreamTextSink, StreamingSession, StreamingTranscriptionProvider,
+    BatchTranscriptionProvider, StreamTextSink, StreamingTranscriptionProvider,
     TranscriptionOptions,
 };
-use crate::settings::{AppSettings, TranscriptionMode};
+use crate::settings::TranscriptionMode;
 
 /// Stream text event sink backed by Tauri AppHandle.
 pub struct TauriStreamTextSink {
@@ -35,260 +34,261 @@ impl StreamTextSink for TauriStreamTextSink {
     }
 }
 
-enum CloudStreamCtrl {
-    Finalize(tokio::sync::oneshot::Sender<Option<Result<String, String>>>),
-    Cancel,
+/// 每次录音独有的输出许可；撤销与正在交付的文本互斥。
+struct CloudOutput {
+    sink: Mutex<Option<Arc<dyn StreamTextSink>>>,
+    cancelled: watch::Sender<bool>,
+}
+
+impl CloudOutput {
+    fn close(&self) {
+        self.sink.lock().take();
+    }
+
+    fn cancel(&self) {
+        self.close();
+        self.cancelled.send_replace(true);
+    }
+}
+
+impl StreamTextSink for CloudOutput {
+    fn emit_text(&self, committed: String, tentative: String) {
+        if let Some(sink) = self.sink.lock().as_ref() {
+            sink.emit_text(committed, tentative);
+        }
+    }
+}
+
+struct CloudStream {
+    route: Option<Arc<StreamRouter>>,
+    output: Arc<CloudOutput>,
+    task: Option<JoinHandle<Result<String, String>>>,
+    abort: AbortHandle,
+    finish: Option<oneshot::Sender<()>>,
+}
+
+impl Drop for CloudStream {
+    fn drop(&mut self) {
+        self.output.cancel();
+        self.abort.abort();
+        if let Some(route) = self.route.take() {
+            route.clear();
+        }
+    }
+}
+
+/// 即使调用方丢弃结束 future，也不能留下仍在输出的任务。
+struct FinishGuard {
+    output: Arc<CloudOutput>,
+    abort: AbortHandle,
+}
+
+impl Drop for FinishGuard {
+    fn drop(&mut self) {
+        self.output.cancel();
+        self.abort.abort();
+    }
 }
 
 pub struct TranscriptionRouter {
-    app_handle: AppHandle,
-    local_provider: Arc<LocalTranscriptionProvider>,
-    gemini_provider: Arc<GeminiProvider>,
-    active_stream_router: Arc<Mutex<Option<Arc<crate::managers::transcription::StreamRouter>>>>,
-    active_stream_ctrl: Arc<Mutex<Option<tokio::sync::mpsc::Sender<CloudStreamCtrl>>>>,
-    has_active_stream: Arc<std::sync::atomic::AtomicBool>,
+    local_provider: Arc<dyn BatchTranscriptionProvider>,
+    cloud_batch: Arc<dyn BatchTranscriptionProvider>,
+    cloud_streaming: Arc<dyn StreamingTranscriptionProvider>,
+    text_sink: Arc<dyn StreamTextSink>,
+    cloud_stream: Mutex<Option<CloudStream>>,
 }
 
 impl TranscriptionRouter {
-    pub fn new(
-        app_handle: AppHandle,
-        local_provider: Arc<LocalTranscriptionProvider>,
-        gemini_provider: Arc<GeminiProvider>,
-    ) -> Self {
+    /// 使用现有 Provider 与文本输出适配器构造转写路由。
+    pub fn new<P>(
+        local_provider: Arc<dyn BatchTranscriptionProvider>,
+        cloud_provider: Arc<P>,
+        text_sink: Arc<dyn StreamTextSink>,
+    ) -> Self
+    where
+        P: BatchTranscriptionProvider + StreamingTranscriptionProvider + 'static,
+    {
         Self {
-            app_handle,
             local_provider,
-            gemini_provider,
-            active_stream_router: Arc::new(Mutex::new(None)),
-            active_stream_ctrl: Arc::new(Mutex::new(None)),
-            has_active_stream: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            cloud_batch: cloud_provider.clone(),
+            cloud_streaming: cloud_provider,
+            text_sink,
+            cloud_stream: Mutex::new(None),
         }
     }
 
-    pub fn local_provider(&self) -> &Arc<LocalTranscriptionProvider> {
-        &self.local_provider
-    }
-
-    pub fn gemini_provider(&self) -> &Arc<GeminiProvider> {
-        &self.gemini_provider
-    }
-
-    /// Checks whether a cloud streaming session is active.
-    pub fn has_active_cloud_stream(&self) -> bool {
-        self.has_active_stream
-            .load(std::sync::atomic::Ordering::Acquire)
-    }
-
-    /// Starts a cloud streaming session and pipes microphone audio frames to it.
-    pub fn start_cloud_stream(
-        &self,
-        options: &TranscriptionOptions,
-        stream_router: Arc<crate::managers::transcription::StreamRouter>,
-    ) {
-        self.cancel_cloud_stream();
-
-        let rx = stream_router.open();
-        *self.active_stream_router.lock() = Some(Arc::clone(&stream_router));
-        self.has_active_stream
-            .store(true, std::sync::atomic::Ordering::Release);
-
-        let (ctrl_tx, mut ctrl_rx) = tokio::sync::mpsc::channel::<CloudStreamCtrl>(1);
-        *self.active_stream_ctrl.lock() = Some(ctrl_tx);
-
-        let active_router = Arc::clone(&self.active_stream_router);
-        let has_stream = Arc::clone(&self.has_active_stream);
-        let app_handle = self.app_handle.clone();
-        let gemini_provider = Arc::clone(&self.gemini_provider);
-        let options_clone = options.clone();
-
-        tauri::async_runtime::spawn(async move {
-            let session_res = gemini_provider
-                .start_stream(
-                    &options_clone,
-                    Arc::new(TauriStreamTextSink::new(app_handle)),
-                )
-                .await;
-
-            let session = match session_res {
-                Ok(s) => s,
-                Err(e) => {
-                    log::warn!("Failed to initiate cloud streaming handshake: {}", e);
-                    has_stream.store(false, std::sync::atomic::Ordering::Release);
-                    if let Some(r) = active_router.lock().take() {
-                        r.clear();
+    /// 同步打开音频入口，在网络握手期间保留首段音频。
+    pub fn start_cloud_stream(&self, options: &TranscriptionOptions, route: Arc<StreamRouter>) {
+        let mut active = self.cloud_stream.lock();
+        // 旧入口必须在新入口打开前关闭；后台任务无权访问该槽位。
+        active.take();
+        let rx = route.open();
+        let (cancelled, _) = watch::channel(false);
+        let output = Arc::new(CloudOutput {
+            sink: Mutex::new(Some(self.text_sink.clone())),
+            cancelled,
+        });
+        let provider = self.cloud_streaming.clone();
+        let sink = output.clone();
+        let options = options.clone();
+        let (finish, finished) = oneshot::channel();
+        let runtime = tokio::runtime::Handle::try_current()
+            .unwrap_or_else(|_| tauri::async_runtime::handle().inner().clone());
+        let task = runtime.spawn(async move {
+            let session = provider.start_stream(&options, sink.clone()).await?;
+            // 阻塞接收器只拥有本次 session 和 rx，绝不清理共享音频入口。
+            let feeder = tokio::task::spawn_blocking(move || {
+                while let Ok(StreamCmd::Feed(samples)) = rx.recv() {
+                    if sink.sink.lock().is_none() {
+                        return Err("Cloud recording cancelled".to_string());
                     }
-                    if let Some(CloudStreamCtrl::Finalize(reply_tx)) = ctrl_rx.recv().await {
-                        let _ = reply_tx.send(Some(Err(e)));
-                    }
-                    return;
+                    session.feed_audio(&samples)?;
                 }
-            };
-
-            log::info!("Cloud streaming session ready, streaming audio");
-
-            let session_arc = Arc::new(tokio::sync::Mutex::new(Some(session)));
-            let session_feed = Arc::clone(&session_arc);
-            let (feed_done_tx, feed_done_rx) = tokio::sync::oneshot::channel::<()>();
-            let has_stream_feed = Arc::clone(&has_stream);
-
-            tokio::task::spawn_blocking(move || {
-                while let Ok(cmd) = rx.recv() {
-                    if !has_stream_feed.load(std::sync::atomic::Ordering::Acquire) {
-                        break;
-                    }
-                    match cmd {
-                        crate::managers::transcription::StreamCmd::Feed(samples) => {
-                            let guard = session_feed.blocking_lock();
-                            if let Some(s) = guard.as_ref() {
-                                if let Err(e) = s.feed_audio(&samples) {
-                                    log::warn!(
-                                        "Failed to feed audio samples to cloud session: {}",
-                                        e
-                                    );
-                                    break;
-                                }
-                            }
-                        }
-                        _ => break,
-                    }
-                }
-                let _ = feed_done_tx.send(());
+                Ok::<_, String>(session)
             });
-
-            match ctrl_rx.recv().await {
-                Some(CloudStreamCtrl::Finalize(reply_tx)) => {
-                    let _ = tokio::time::timeout(Duration::from_millis(500), feed_done_rx).await;
-
-                    let maybe_session = session_arc.lock().await.take();
-                    if let Some(s) = maybe_session {
-                        let res = s.finalize().await;
-                        let _ = reply_tx.send(Some(res));
-                    } else {
-                        let _ = reply_tx.send(None);
-                    }
-                }
-                Some(CloudStreamCtrl::Cancel) | None => {
-                    let maybe_session = session_arc.lock().await.take();
-                    if let Some(s) = maybe_session {
-                        s.cancel().await;
-                    }
-                }
-            }
-
-            has_stream.store(false, std::sync::atomic::Ordering::Release);
+            finished
+                .await
+                .map_err(|_| "Cloud recording cancelled".to_string())?;
+            let session = tokio::time::timeout(Duration::from_millis(500), feeder)
+                .await
+                .map_err(|_| "Cloud audio drain timed out (500ms)".to_string())?
+                .map_err(|e| format!("Cloud audio worker failed: {e}"))??;
+            session.finalize().await
+        });
+        let abort = task.abort_handle();
+        *active = Some(CloudStream {
+            route: Some(route),
+            output,
+            task: Some(task),
+            abort,
+            finish: Some(finish),
         });
     }
 
-    /// Finalizes cloud streaming session and returns the transcribed text.
-    pub async fn finalize_cloud_stream(&self) -> Option<Result<String, String>> {
-        if let Some(router) = self.active_stream_router.lock().take() {
-            router.clear();
+    /// 完成本次云端录音；有效 Live 文本优先，其余结果仅回退云端批量路径。
+    pub async fn finish_cloud_stream(
+        &self,
+        audio: Vec<f32>,
+        options: &TranscriptionOptions,
+        mode: &TranscriptionMode,
+    ) -> Result<String, String> {
+        if audio.is_empty() {
+            self.cancel_cloud_stream();
+            return Ok(String::new());
         }
-
-        let ctrl_tx = self.active_stream_ctrl.lock().take()?;
-
-        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-        if ctrl_tx
-            .send(CloudStreamCtrl::Finalize(reply_tx))
-            .await
-            .is_err()
-        {
-            self.has_active_stream
-                .store(false, std::sync::atomic::Ordering::Release);
-            return None;
-        }
-
-        let res = match tokio::time::timeout(Duration::from_secs(8), reply_rx).await {
-            Ok(Ok(final_res)) => final_res,
-            Ok(Err(_)) => None,
-            Err(_) => {
-                log::warn!("Cloud stream finalization timed out (8s), falling back to batch mode");
-                None
+        let pending = {
+            let mut active = self.cloud_stream.lock();
+            match active.as_mut() {
+                Some(stream) => {
+                    let task = stream
+                        .task
+                        .take()
+                        .ok_or_else(|| "Cloud recording is already finishing".to_string())?;
+                    if let Some(route) = stream.route.take() {
+                        route.clear();
+                    }
+                    if let Some(finish) = stream.finish.take() {
+                        let _ = finish.send(());
+                    }
+                    Some((
+                        task,
+                        FinishGuard {
+                            output: stream.output.clone(),
+                            abort: stream.abort.clone(),
+                        },
+                    ))
+                }
+                None => None,
             }
         };
-
-        self.has_active_stream
-            .store(false, std::sync::atomic::Ordering::Release);
-        res
-    }
-
-    /// Cancels the active cloud streaming session.
-    pub fn cancel_cloud_stream(&self) {
-        self.has_active_stream
-            .store(false, std::sync::atomic::Ordering::Release);
-        if let Some(router) = self.active_stream_router.lock().take() {
-            router.clear();
-        }
-        if let Some(ctrl_tx) = self.active_stream_ctrl.lock().take() {
-            tauri::async_runtime::spawn(async move {
-                let _ = ctrl_tx.send(CloudStreamCtrl::Cancel).await;
-            });
-        }
-    }
-
-    /// Checks whether current settings support streaming transcription.
-    pub fn is_streaming_supported(&self, settings: &AppSettings) -> bool {
-        match &settings.transcription_mode {
-            TranscriptionMode::Cloud {
-                provider_id,
-                model_id,
-            } => match provider_id.as_str() {
-                "gemini" => self.gemini_provider.supports_streaming(model_id),
-                _ => false,
-            },
-            TranscriptionMode::Local => self
-                .app_handle
-                .try_state::<Arc<ModelManager>>()
-                .and_then(|mm| mm.get_model_info(&settings.selected_model))
-                .map(|m| m.supports_streaming)
-                .unwrap_or(false),
-        }
-    }
-
-    /// Starts a real-time streaming transcription session.
-    pub async fn start_streaming(
-        &self,
-        options: &TranscriptionOptions,
-        custom_sink: Option<Arc<dyn StreamTextSink>>,
-    ) -> Result<Box<dyn StreamingSession>, String> {
-        let settings = crate::settings::get_settings(&self.app_handle);
-        match &settings.transcription_mode {
-            TranscriptionMode::Cloud {
-                provider_id,
-                model_id,
-            } => match provider_id.as_str() {
-                "gemini" => {
-                    if !self.gemini_provider.supports_streaming(model_id) {
-                        return Err(format!("Model {} does not support streaming", model_id));
+        let Some((mut task, guard)) = pending else {
+            return self.transcribe_cloud(audio, options, mode).await;
+        };
+        let mut cancelled = guard.output.cancelled.subscribe();
+        let result = if *cancelled.borrow() {
+            Err("Cloud recording cancelled".to_string())
+        } else {
+            tokio::select! {
+                biased;
+                _ = cancelled.changed() => Err("Cloud recording cancelled".to_string()),
+                result = async {
+                    let live = tokio::time::timeout(Duration::from_secs(8), &mut task).await;
+                    // 超时与错误也撤销输出许可，晚到文本不能覆盖批量结果。
+                    guard.output.close();
+                    guard.abort.abort();
+                    match live {
+                        Ok(Ok(Ok(text))) if !text.trim().is_empty() => Ok(text),
+                        other => {
+                            match other {
+                                Err(_) => log::warn!("Cloud stream finalization timed out (8s), falling back to batch mode"),
+                                Ok(Ok(Err(e))) => log::warn!("Cloud streaming failed ({e}), falling back to batch mode"),
+                                Ok(Err(e)) => log::warn!("Cloud streaming worker failed ({e}), falling back to batch mode"),
+                                _ => log::debug!("Cloud stream produced no text, falling back to batch mode"),
+                            }
+                            self.transcribe_cloud(audio, options, mode).await
+                        }
                     }
-                    let sink = custom_sink.unwrap_or_else(|| {
-                        Arc::new(TauriStreamTextSink::new(self.app_handle.clone()))
-                    });
-                    self.gemini_provider.start_stream(options, sink).await
-                }
-                unknown => Err(format!(
-                    "Cloud provider {} does not support streaming",
-                    unknown
-                )),
-            },
-            TranscriptionMode::Local => {
-                Err("Local model streaming is handled by TranscriptionManager".to_string())
+                } => result,
             }
+        };
+        let mut active = self.cloud_stream.lock();
+        if active
+            .as_ref()
+            .is_some_and(|stream| Arc::ptr_eq(&stream.output, &guard.output))
+        {
+            let was_cancelled = *guard.output.cancelled.borrow();
+            active.take();
+            if was_cancelled {
+                return Err("Cloud recording cancelled".to_string());
+            }
+            result
+        } else {
+            Err("Cloud recording cancelled".to_string())
         }
     }
 
+    /// 撤销当前录音及其输出，下一次开始无需等待旧网络操作退出。
+    pub fn cancel_cloud_stream(&self) {
+        self.cloud_stream.lock().take();
+    }
+
+    /// 查询指定云端模型的流式能力。
+    pub fn supports_cloud_streaming(&self, provider_id: &str, model_id: &str) -> bool {
+        provider_id == self.cloud_batch.provider_id()
+            && self.cloud_streaming.supports_streaming(model_id)
+    }
+
+    /// 批量转写入口，历史重试不会消费当前录音的流式会话。
     pub async fn transcribe(
         &self,
         audio: Vec<f32>,
         options: &TranscriptionOptions,
+        mode: &TranscriptionMode,
     ) -> Result<String, String> {
-        let settings = crate::settings::get_settings(&self.app_handle);
-        match &settings.transcription_mode {
+        match mode {
             TranscriptionMode::Local => self.local_provider.transcribe(audio, options).await,
-            TranscriptionMode::Cloud { provider_id, .. } => match provider_id.as_str() {
-                "gemini" => self.gemini_provider.transcribe(audio, options).await,
-                unknown => Err(format!("Unknown cloud STT provider: {}", unknown)),
-            },
+            TranscriptionMode::Cloud { .. } => self.transcribe_cloud(audio, options, mode).await,
+        }
+    }
+
+    async fn transcribe_cloud(
+        &self,
+        audio: Vec<f32>,
+        options: &TranscriptionOptions,
+        mode: &TranscriptionMode,
+    ) -> Result<String, String> {
+        match mode {
+            TranscriptionMode::Cloud { provider_id, .. }
+                if provider_id == self.cloud_batch.provider_id() =>
+            {
+                self.cloud_batch.transcribe(audio, options).await
+            }
+            TranscriptionMode::Cloud { provider_id, .. } => {
+                Err(format!("Unknown cloud STT provider: {provider_id}"))
+            }
+            TranscriptionMode::Local => {
+                Err("Cloud recording requires a cloud provider".to_string())
+            }
         }
     }
 }
@@ -345,3 +345,6 @@ mod tests {
         assert!(rx.try_recv().is_err());
     }
 }
+
+#[cfg(test)]
+mod lifecycle_tests;

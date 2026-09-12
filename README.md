@@ -22,6 +22,10 @@ Supported modes:
 
 A Google Gemini API key is required. Configure the key and select a model in **Settings > Cloud STT**.
 
+Stopping a Live recording uses its text when available. If the stream is unavailable, empty, fails, or exceeds the existing 8-second finish budget, the same recording is sent through cloud batch transcription; it never silently switches to a local model. Cancelling discards that session's text and allows a new recording without waiting for the old connection.
+
+If transcription fails, the saved recording remains in history for retry.
+
 ## Usage
 
 1. Download the binary from [Releases](https://github.com/breathi3552/BreathScribe/releases).

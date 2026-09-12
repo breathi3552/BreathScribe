@@ -208,9 +208,11 @@ fn initialize_core_logic(app_handle: &AppHandle) {
         app_handle.clone(),
     ));
     let transcription_router = Arc::new(transcription_router::TranscriptionRouter::new(
-        app_handle.clone(),
         local_provider.clone(),
         gemini_provider.clone(),
+        Arc::new(transcription_router::TauriStreamTextSink::new(
+            app_handle.clone(),
+        )),
     ));
     app_handle.manage(local_provider);
     app_handle.manage(gemini_provider);

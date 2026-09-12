@@ -96,7 +96,9 @@ pub async fn retry_history_entry_transcription(
         language: settings.selected_language.clone(),
         prompt: None,
     };
-    let transcription = router.transcribe(samples, &options).await?;
+    let transcription = router
+        .transcribe(samples, &options, &settings.transcription_mode)
+        .await?;
 
     if transcription.is_empty() {
         return Err("Recording contains no speech".to_string());

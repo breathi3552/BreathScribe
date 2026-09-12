@@ -153,6 +153,13 @@ fn connectivity_test_urls() -> Vec<String> {
         return urls;
     }
 
+    #[cfg(feature = "acceptance48_test")]
+    if let Ok(url) = std::env::var("BREATHSCRIBE_ACCEPTANCE48_CONNECTIVITY_URL") {
+        if !url.is_empty() {
+            return vec![url];
+        }
+    }
+
     vec![
         "https://www.google.com/generate_204".to_string(),
         "https://generativelanguage.googleapis.com".to_string(),

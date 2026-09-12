@@ -7,6 +7,10 @@ edition = "2021"
 license = "MIT"
 default-run = "breath-scribe"
 
+[features]
+# Private, local-only seam for the issue #48 UI/IPC acceptance runner.
+acceptance48_test = []
+
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.
 

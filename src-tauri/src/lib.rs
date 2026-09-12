@@ -677,8 +677,9 @@ pub fn run(cli_args: CliArgs) {
     // when the variable is unset
     let console_filter = build_console_filter();
 
-    let specta_builder = Builder::<tauri::Wry>::new()
-        .commands(collect_commands![
+    macro_rules! acceptance48_commands {
+        ($($extra:ident $(:: $path:ident)*)? $(,)?) => {
+            collect_commands![
             shortcut::change_binding,
             shortcut::reset_binding,
             shortcut::change_shortcut_activation_setting,
@@ -802,12 +803,24 @@ pub fn run(cli_args: CliArgs) {
             commands::transcription_mode::set_cloud_stt_provider_settings,
             commands::transcription_mode::test_cloud_stt_connection,
             commands::transcription_mode::complete_onboarding_cloud,
-        ])
-        .events(collect_events![
-            managers::history::HistoryUpdatePayload,
-            managers::transcription::StreamTextEvent,
-            managers::transcription::StreamPhaseEvent,
-        ]);
+            $($extra $(:: $path)*)?
+            ]
+        };
+    }
+
+    #[cfg(feature = "acceptance48_test")]
+    let app_commands = acceptance48_commands![commands::network::acceptance48_probe_network,];
+    #[cfg(not(feature = "acceptance48_test"))]
+    let app_commands = acceptance48_commands![];
+
+    let specta_builder =
+        Builder::<tauri::Wry>::new()
+            .commands(app_commands)
+            .events(collect_events![
+                managers::history::HistoryUpdatePayload,
+                managers::transcription::StreamTextEvent,
+                managers::transcription::StreamPhaseEvent,
+            ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
     specta_builder

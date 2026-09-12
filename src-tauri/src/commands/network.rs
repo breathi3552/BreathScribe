@@ -3,6 +3,11 @@ use crate::settings::ProxySettings;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
+#[cfg(feature = "acceptance48_test")]
+use futures_util::{SinkExt, StreamExt};
+#[cfg(feature = "acceptance48_test")]
+use tokio_tungstenite::tungstenite::Message;
+
 #[tauri::command]
 #[specta::specta]
 pub async fn test_proxy_connectivity(
@@ -61,4 +66,49 @@ where
     network_manager
         .update_proxy_settings_with_persistence(settings, persist)
         .await
+}
+
+/// Private acceptance-only observation of the shared NetworkManager. The UI
+/// still exercises the production commands; this only supplies a local,
+/// deterministic WebSocket observation without adding a product command.
+#[cfg(feature = "acceptance48_test")]
+#[derive(serde::Serialize, specta::Type)]
+pub struct Acceptance48NetworkProbeResult {
+    pub http_rtt_ms: u64,
+    pub websocket_response: String,
+}
+
+#[cfg(feature = "acceptance48_test")]
+#[tauri::command]
+#[specta::specta]
+pub async fn acceptance48_probe_network(
+    app: AppHandle,
+    websocket_url: String,
+) -> Result<Acceptance48NetworkProbeResult, String> {
+    let network_manager = app
+        .try_state::<Arc<NetworkManager>>()
+        .ok_or_else(|| "Network manager not initialized".to_string())?;
+    let client = network_manager.client().await;
+    let http_rtt_ms = network::test_connectivity(&client).await?;
+    let mut websocket = network_manager.connect_websocket(&websocket_url).await?;
+
+    websocket
+        .send(Message::Text("acceptance48-probe".into()))
+        .await
+        .map_err(|error| format!("WebSocket probe send failed: {error}"))?;
+    let response = tokio::time::timeout(std::time::Duration::from_secs(5), websocket.next())
+        .await
+        .map_err(|_| "WebSocket probe timed out".to_string())?
+        .ok_or_else(|| "WebSocket probe closed without a response".to_string())?
+        .map_err(|error| format!("WebSocket probe receive failed: {error}"))?;
+
+    let websocket_response = match response {
+        Message::Text(text) => text.to_string(),
+        _ => return Err("WebSocket probe received an unexpected response".to_string()),
+    };
+
+    Ok(Acceptance48NetworkProbeResult {
+        http_rtt_ms,
+        websocket_response,
+    })
 }

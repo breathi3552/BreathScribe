@@ -5,7 +5,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use specta::Type;
 use std::collections::HashMap;
 use std::fmt;
-use tauri::AppHandle;
+use std::sync::{Mutex, OnceLock};
+use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
 pub const APPLE_INTELLIGENCE_PROVIDER_ID: &str = "apple_intelligence";
@@ -1008,6 +1009,33 @@ fn ensure_cloud_stt_defaults(settings: &mut AppSettings) -> bool {
 
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
+static SETTINGS_UPDATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+fn with_settings_lock<T>(operation: impl FnOnce() -> T) -> T {
+    let _guard = SETTINGS_UPDATE_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    operation()
+}
+
+pub(crate) fn with_settings_update<Load, Update, Persist, T>(
+    load: Load,
+    update: Update,
+    persist: Persist,
+) -> T
+where
+    Load: FnOnce() -> AppSettings,
+    Update: FnOnce(&mut AppSettings),
+    Persist: FnOnce(AppSettings) -> T,
+{
+    with_settings_lock(|| {
+        let mut settings = load();
+        update(&mut settings);
+        persist(settings)
+    })
+}
+
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
     let default_shortcut = "ctrl+space";
@@ -1168,7 +1196,11 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
     settings
 }
 
-pub fn get_settings(app: &AppHandle) -> AppSettings {
+pub fn get_settings<R: Runtime>(app: &AppHandle<R>) -> AppSettings {
+    with_settings_lock(|| get_settings_unlocked(app))
+}
+
+fn get_settings_unlocked<R: Runtime>(app: &AppHandle<R>) -> AppSettings {
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
         .expect("Failed to initialize store");
@@ -1370,20 +1402,99 @@ pub fn update_checks_effectively_enabled(settings: &AppSettings) -> bool {
     settings.update_checks_enabled && !update_checks_forced_disabled()
 }
 
-pub fn write_settings(app: &AppHandle, settings: AppSettings) {
+/// Legacy settings writers submit a complete snapshot. They do not own the
+/// proxy or secret fields, so preserve the latest values here; those fields use
+/// targeted atomic updates instead.
+fn preserve_current_owned_fields(settings: &mut AppSettings, stored: Option<&serde_json::Value>) {
+    if let Some(proxy) = stored
+        .and_then(|value| value.get("proxy").cloned())
+        .and_then(|value| serde_json::from_value::<ProxySettings>(value).ok())
+    {
+        settings.proxy = proxy;
+    }
+    if let Some(keys) = stored
+        .and_then(|value| value.get("cloud_stt_api_keys").cloned())
+        .and_then(|value| serde_json::from_value::<SecretMap>(value).ok())
+    {
+        settings.cloud_stt_api_keys = keys;
+    }
+    if let Some(keys) = stored
+        .and_then(|value| value.get("post_process_api_keys").cloned())
+        .and_then(|value| serde_json::from_value::<SecretMap>(value).ok())
+    {
+        settings.post_process_api_keys = keys;
+    }
+}
+
+fn write_settings_unlocked<R: Runtime>(app: &AppHandle<R>, mut settings: AppSettings) {
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
         .expect("Failed to initialize store");
 
+    let stored = store.get("settings");
+    preserve_current_owned_fields(&mut settings, stored.as_ref());
     store.set("settings", serde_json::to_value(&settings).unwrap());
 }
 
-/// Writes settings immediately and reports a real persistence failure.
-///
-/// Most legacy settings commands intentionally keep the store's debounced write
-/// behavior through `write_settings`. Proxy updates use this checked path so a
-/// successful command cannot claim a disk write that has not happened yet.
-pub fn try_write_settings(app: &AppHandle, settings: AppSettings) -> Result<(), String> {
+pub fn write_settings<R: Runtime>(app: &AppHandle<R>, settings: AppSettings) {
+    with_settings_lock(|| write_settings_unlocked(app, settings));
+}
+
+/// Atomically read, mutate, and persist the settings snapshot.
+pub fn update_settings<R: Runtime, F>(app: &AppHandle<R>, update: F)
+where
+    F: FnOnce(&mut AppSettings),
+{
+    with_settings_update(
+        || get_settings_unlocked(app),
+        update,
+        |settings| write_settings_unlocked(app, settings),
+    );
+}
+
+/// Atomically read, mutate, and persist settings, reporting a real failure.
+pub fn try_update_settings<R: Runtime, F>(app: &AppHandle<R>, update: F) -> Result<(), String>
+where
+    F: FnOnce(&mut AppSettings),
+{
+    with_settings_update(
+        || get_settings_unlocked(app),
+        update,
+        |settings| try_write_settings_unlocked(app, settings),
+    )
+}
+
+fn persist_value_with_rollback<Set, Delete, Save>(
+    previous: Option<serde_json::Value>,
+    value: serde_json::Value,
+    mut set: Set,
+    mut delete: Delete,
+    mut save: Save,
+) -> Result<(), String>
+where
+    Set: FnMut(serde_json::Value),
+    Delete: FnMut(),
+    Save: FnMut() -> Result<(), String>,
+{
+    set(value);
+    if let Err(error) = save() {
+        match previous {
+            Some(previous) => set(previous),
+            None => delete(),
+        }
+        // Cancel the rollback's debounced save as well. The cache remains the
+        // previous settings even when the filesystem is unavailable.
+        let _ = save();
+        return Err(format!("Failed to persist settings: {error}"));
+    }
+
+    Ok(())
+}
+
+fn try_write_settings_unlocked<R: Runtime>(
+    app: &AppHandle<R>,
+    settings: AppSettings,
+) -> Result<(), String> {
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
         .map_err(|error| format!("Failed to initialize settings store: {error}"))?;
@@ -1391,21 +1502,15 @@ pub fn try_write_settings(app: &AppHandle, settings: AppSettings) -> Result<(), 
         .map_err(|error| format!("Failed to serialize settings: {error}"))?;
     let previous = store.get("settings");
 
-    store.set("settings", value);
-    if let Err(error) = store.save() {
-        match previous {
-            Some(previous) => store.set("settings", previous),
-            None => {
-                store.delete("settings");
-            }
-        }
-        // Cancel the rollback's debounced save as well. The cache remains the
-        // previous settings even when the filesystem is unavailable.
-        let _ = store.save();
-        return Err(format!("Failed to persist settings: {error}"));
-    }
-
-    Ok(())
+    persist_value_with_rollback(
+        previous,
+        value,
+        |value| store.set("settings", value),
+        || {
+            store.delete("settings");
+        },
+        || store.save().map_err(|error| error.to_string()),
+    )
 }
 
 pub fn get_bindings(app: &AppHandle) -> HashMap<String, ShortcutBinding> {
@@ -1435,6 +1540,8 @@ pub fn get_recording_retention_period(app: &AppHandle) -> RecordingRetentionPeri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{mpsc, Arc, Barrier};
+    use std::thread;
 
     fn default_settings_json() -> serde_json::Value {
         serde_json::to_value(get_default_settings()).unwrap()
@@ -1966,5 +2073,132 @@ mod tests {
         let out = format!("{:?}", map);
         assert!(!out.contains("secret"));
         assert!(out.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn failed_settings_save_restores_previous_value() {
+        let previous = serde_json::json!({"settings": "old"});
+        let stored = std::cell::RefCell::new(Some(previous.clone()));
+        let mut fail_first_save = true;
+
+        let previous_stored = stored.borrow().clone();
+        let result = persist_value_with_rollback(
+            previous_stored,
+            serde_json::json!({"settings": "new"}),
+            |value| *stored.borrow_mut() = Some(value),
+            || *stored.borrow_mut() = None,
+            || {
+                if fail_first_save {
+                    fail_first_save = false;
+                    Err("disk unavailable".to_string())
+                } else {
+                    Ok(())
+                }
+            },
+        );
+
+        assert_eq!(
+            result,
+            Err("Failed to persist settings: disk unavailable".to_string())
+        );
+        assert_eq!(*stored.borrow(), Some(previous));
+    }
+
+    #[test]
+    fn legacy_snapshot_write_preserves_new_proxy_and_api_keys() {
+        let mut current = get_default_settings();
+        current.proxy = ProxySettings {
+            mode: ProxyMode::Direct,
+            ..ProxySettings::default()
+        };
+        current
+            .cloud_stt_api_keys
+            .insert("gemini".into(), "new-api-key".into());
+        current
+            .post_process_api_keys
+            .insert("openai".into(), "new-post-process-key".into());
+        let stored = serde_json::to_value(&current).unwrap();
+
+        let mut stale_snapshot = current;
+        stale_snapshot.proxy = ProxySettings::default();
+        stale_snapshot
+            .cloud_stt_api_keys
+            .insert("gemini".into(), "old-api-key".into());
+        stale_snapshot
+            .post_process_api_keys
+            .insert("openai".into(), "old-post-process-key".into());
+        preserve_current_owned_fields(&mut stale_snapshot, Some(&stored));
+
+        assert_eq!(
+            serde_json::to_value(&stale_snapshot.proxy).unwrap(),
+            stored["proxy"]
+        );
+        assert_eq!(
+            stale_snapshot.cloud_stt_api_keys.get("gemini"),
+            Some(&"new-api-key".to_string())
+        );
+        assert_eq!(
+            stale_snapshot.post_process_api_keys.get("openai"),
+            Some(&"new-post-process-key".to_string())
+        );
+    }
+
+    #[test]
+    fn concurrent_settings_transactions_preserve_proxy_and_api_key() {
+        let mut initial = get_default_settings();
+        initial
+            .cloud_stt_api_keys
+            .insert("gemini".into(), "old".into());
+        let stored = Arc::new(std::sync::Mutex::new(initial));
+        let proxy = ProxySettings {
+            mode: ProxyMode::Direct,
+            ..ProxySettings::default()
+        };
+        let entered = Arc::new(Barrier::new(2));
+        let (release_tx, release_rx) = mpsc::channel();
+        let proxy_stored = stored.clone();
+        let proxy_thread = thread::spawn({
+            let entered = entered.clone();
+            let proxy = proxy.clone();
+            move || {
+                with_settings_update(
+                    || proxy_stored.lock().unwrap().clone(),
+                    |settings| {
+                        settings.proxy = proxy;
+                        entered.wait();
+                        release_rx.recv().unwrap();
+                    },
+                    |settings| *proxy_stored.lock().unwrap() = settings,
+                );
+            }
+        });
+
+        entered.wait();
+        let (api_started_tx, api_started_rx) = mpsc::channel();
+        let api_stored = stored.clone();
+        let api_thread = thread::spawn(move || {
+            api_started_tx.send(()).unwrap();
+            with_settings_update(
+                || api_stored.lock().unwrap().clone(),
+                |settings| {
+                    settings
+                        .cloud_stt_api_keys
+                        .insert("gemini".into(), "new-api-key".into());
+                },
+                |settings| *api_stored.lock().unwrap() = settings,
+            );
+        });
+        api_started_rx.recv().unwrap();
+        release_tx.send(()).unwrap();
+
+        proxy_thread.join().unwrap();
+        api_thread.join().unwrap();
+
+        let final_settings = stored.lock().unwrap().clone();
+        assert_eq!(final_settings.proxy, proxy);
+        assert_eq!(
+            final_settings.cloud_stt_api_keys.get("gemini"),
+            Some(&"new-api-key".to_string())
+        );
     }
 }

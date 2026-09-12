@@ -1,5 +1,5 @@
 use crate::network::{self, NetworkManager};
-use crate::settings::{get_settings, try_write_settings, ProxySettings};
+use crate::settings::ProxySettings;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
@@ -33,34 +33,32 @@ pub async fn update_proxy_settings(app: AppHandle, settings: ProxySettings) -> R
     let network_manager = app
         .try_state::<Arc<NetworkManager>>()
         .ok_or_else(|| "Network manager not initialized".to_string())?;
+    let app_for_persist = app.clone();
     update_proxy_settings_with_persistence(
         network_manager.inner().as_ref(),
-        get_settings(&app),
         settings,
-        |settings| try_write_settings(&app, settings),
+        move |settings| {
+            let app = app_for_persist.clone();
+            async move {
+                crate::settings::try_update_settings(&app, |current| {
+                    current.proxy = settings;
+                })
+            }
+        },
     )
     .await
 }
 
-pub(crate) async fn update_proxy_settings_with_persistence<F>(
+pub(crate) async fn update_proxy_settings_with_persistence<F, Fut>(
     network_manager: &NetworkManager,
-    mut current: crate::settings::AppSettings,
     settings: ProxySettings,
     persist: F,
 ) -> Result<(), String>
 where
-    F: FnOnce(crate::settings::AppSettings) -> Result<(), String>,
+    F: FnOnce(ProxySettings) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
 {
-    let settings = network::normalize_proxy_settings(settings)?;
-    let new_client = network::build_reqwest_client(&settings)?;
-    current.proxy = settings.clone();
-    // Persist first. Installing the new client only after this succeeds keeps
-    // the in-memory and on-disk effective settings in step.
-    persist(current)?;
     network_manager
-        .install_proxy_settings(settings, new_client)
-        .await;
-    log::info!("NetworkManager: proxy client successfully reloaded");
-
-    Ok(())
+        .update_proxy_settings_with_persistence(settings, persist)
+        .await
 }

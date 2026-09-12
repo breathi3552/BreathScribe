@@ -1,12 +1,13 @@
 use crate::settings::{ProxyMode, ProxyProtocol, ProxySettings};
 use reqwest::{Client, Proxy};
 use std::fmt;
+use std::future::Future;
 use std::net::Ipv6Addr;
 #[cfg(test)]
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 pub mod proxy_tunnel;
@@ -165,6 +166,7 @@ struct NetworkState {
 
 pub struct NetworkManager {
     state: RwLock<NetworkState>,
+    proxy_update_lock: TokioMutex<()>,
 }
 
 impl NetworkManager {
@@ -176,6 +178,7 @@ impl NetworkManager {
                 client,
                 settings: initial_settings,
             }),
+            proxy_update_lock: TokioMutex::new(()),
         })
     }
 
@@ -192,22 +195,33 @@ impl NetworkManager {
         proxy_tunnel::connect_websocket_tunnel(url, proxy).await
     }
 
-    pub(crate) async fn install_proxy_settings(
-        &self,
-        new_settings: ProxySettings,
-        new_client: Client,
-    ) {
+    async fn install_proxy_settings(&self, new_settings: ProxySettings, new_client: Client) {
         let mut state = self.state.write().await;
         state.client = new_client;
         state.settings = new_settings;
     }
 
-    pub async fn update_proxy_settings(&self, new_settings: ProxySettings) -> Result<(), String> {
+    pub(crate) async fn update_proxy_settings_with_persistence<F, Fut>(
+        &self,
+        new_settings: ProxySettings,
+        persist: F,
+    ) -> Result<(), String>
+    where
+        F: FnOnce(ProxySettings) -> Fut,
+        Fut: Future<Output = Result<(), String>>,
+    {
+        let _update_guard = self.proxy_update_lock.lock().await;
         let new_settings = normalize_proxy_settings(new_settings)?;
         let new_client = build_reqwest_client(&new_settings)?;
+        persist(new_settings.clone()).await?;
         self.install_proxy_settings(new_settings, new_client).await;
         log::info!("NetworkManager: proxy client successfully reloaded");
         Ok(())
+    }
+
+    pub async fn update_proxy_settings(&self, new_settings: ProxySettings) -> Result<(), String> {
+        self.update_proxy_settings_with_persistence(new_settings, |_| async { Ok(()) })
+            .await
     }
 }
 
@@ -1042,6 +1056,10 @@ mod tests {
         serde_json::from_slice(&bytes).map_err(|e| format!("decode persisted proxy: {e}"))
     }
 
+    fn read_persisted_settings(path: &Path) -> crate::settings::AppSettings {
+        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+    }
+
     async fn exercise_http_request(
         protocol: ProxyProtocol,
         auth: AuthCase,
@@ -1298,13 +1316,10 @@ mod tests {
         let proxy_b_addr = proxy_b_listener
             .local_addr()
             .map_err(|e| format!("proxy B address failed: {e}"))?;
-        let mut current = crate::settings::get_default_settings();
-        current.proxy = initial;
         crate::commands::network::update_proxy_settings_with_persistence(
             manager.as_ref(),
-            current,
             manual_settings(ProxyProtocol::Http, proxy_b_addr, no_auth),
-            |_| Ok(()),
+            |_| async { Ok(()) },
         )
         .await?;
         let proxy_b_task = tokio::spawn(run_http_connect_proxy(proxy_b_listener, new_target, None));
@@ -1357,8 +1372,6 @@ mod tests {
         let manager = Arc::new(NetworkManager::new(initial.clone())?);
         let old_client = manager.client().await;
         let settings_path = temp_dir.path().join("settings.json");
-        let mut current = crate::settings::get_default_settings();
-        current.proxy = initial;
         let path_for_persist = settings_path.clone();
         let proxy_a_task = tokio::spawn(run_http_forward_proxy(proxy_a_listener, target_a, None));
         let old_request = tokio::spawn({
@@ -1373,12 +1386,11 @@ mod tests {
 
         crate::commands::network::update_proxy_settings_with_persistence(
             manager.as_ref(),
-            current,
             updated.clone(),
-            move |settings| {
+            move |settings| async move {
                 std::fs::write(
                     &path_for_persist,
-                    serde_json::to_vec(&settings.proxy)
+                    serde_json::to_vec(&settings)
                         .map_err(|e| format!("serialize proxy failed: {e}"))?,
                 )
                 .map_err(|e| format!("persist proxy failed: {e}"))
@@ -1413,6 +1425,156 @@ mod tests {
             return Err("HTTP requests did not reach their expected exits".to_string());
         }
         assert_eq!(read_persisted_proxy(&settings_path)?, updated);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn concurrent_proxy_updates_keep_disk_memory_and_new_transports_aligned(
+    ) -> Result<(), String> {
+        let temp_dir = tempfile::tempdir().map_err(|e| format!("temp store failed: {e}"))?;
+        let settings_path = temp_dir.path().join("settings.json");
+        let no_auth = auth_cases()[0];
+        let initial_proxy = ProxySettings {
+            mode: ProxyMode::Direct,
+            ..ProxySettings::default()
+        };
+        let mut initial = crate::settings::get_default_settings();
+        initial.proxy = initial_proxy.clone();
+        initial
+            .cloud_stt_api_keys
+            .insert("gemini".to_string(), "old-api-key".to_string());
+        std::fs::write(
+            &settings_path,
+            serde_json::to_vec(&initial)
+                .map_err(|e| format!("serialize initial settings failed: {e}"))?,
+        )
+        .map_err(|e| format!("write initial settings failed: {e}"))?;
+
+        let proxy_b_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy B listener failed: {e}"))?;
+        let proxy_b_addr = proxy_b_listener
+            .local_addr()
+            .map_err(|e| format!("proxy B address failed: {e}"))?;
+        let unavailable_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy A address allocation failed: {e}"))?;
+        let proxy_a_addr = unavailable_listener
+            .local_addr()
+            .map_err(|e| format!("proxy A address failed: {e}"))?;
+        drop(unavailable_listener);
+
+        let proxy_a = manual_settings(ProxyProtocol::Http, proxy_a_addr, no_auth);
+        let proxy_b = manual_settings(ProxyProtocol::Http, proxy_b_addr, no_auth);
+        let manager = Arc::new(NetworkManager::new(initial_proxy)?);
+
+        let path_for_a = settings_path.clone();
+        let update_a = crate::commands::network::update_proxy_settings_with_persistence(
+            manager.as_ref(),
+            proxy_a.clone(),
+            move |settings| async move {
+                crate::settings::with_settings_update(
+                    || read_persisted_settings(&path_for_a),
+                    |current| current.proxy = settings,
+                    |persisted| {
+                        std::fs::write(
+                            &path_for_a,
+                            serde_json::to_vec(&persisted)
+                                .map_err(|e| format!("serialize proxy A failed: {e}"))?,
+                        )
+                        .map_err(|e| format!("persist proxy A failed: {e}"))
+                    },
+                )?;
+                // Explicitly yield after the production settings transaction.
+                // `tokio::join!` polls update A first, so update B can persist
+                // and publish before A publishes without relying on timing.
+                tokio::task::yield_now().await;
+                Ok(())
+            },
+        );
+        let path_for_b = settings_path.clone();
+        let update_b = crate::commands::network::update_proxy_settings_with_persistence(
+            manager.as_ref(),
+            proxy_b.clone(),
+            move |settings| async move {
+                crate::settings::with_settings_update(
+                    || read_persisted_settings(&path_for_b),
+                    |current| current.proxy = settings,
+                    |persisted| {
+                        std::fs::write(
+                            &path_for_b,
+                            serde_json::to_vec(&persisted)
+                                .map_err(|e| format!("serialize proxy B failed: {e}"))?,
+                        )
+                        .map_err(|e| format!("persist proxy B failed: {e}"))
+                    },
+                )
+            },
+        );
+        let path_for_api_key = settings_path.clone();
+        let update_api_key = async move {
+            crate::settings::with_settings_update(
+                || read_persisted_settings(&path_for_api_key),
+                |settings| {
+                    settings
+                        .cloud_stt_api_keys
+                        .insert("gemini".to_string(), "new-api-key".to_string());
+                },
+                |persisted| {
+                    std::fs::write(
+                        &path_for_api_key,
+                        serde_json::to_vec(&persisted)
+                            .map_err(|e| format!("serialize API key update failed: {e}"))?,
+                    )
+                    .map_err(|e| format!("persist API key update failed: {e}"))
+                },
+            )
+        };
+        let (result_a, result_b, result_api_key) = tokio::join!(update_a, update_b, update_api_key);
+        result_a?;
+        result_b?;
+        result_api_key?;
+
+        let persisted = read_persisted_settings(&settings_path);
+        assert_eq!(persisted.proxy, proxy_b);
+        assert_eq!(
+            persisted.cloud_stt_api_keys.get("gemini"),
+            Some(&"new-api-key".to_string())
+        );
+        assert_eq!(manager.state.read().await.settings, proxy_b);
+
+        let (http_target, http_task) = spawn_http_target().await;
+        let (websocket_target, websocket_task) = spawn_websocket_target(1).await;
+        let proxy_b_task = tokio::spawn(run_http_proxy_for_http_and_connect(
+            proxy_b_listener,
+            http_target,
+            websocket_target,
+        ));
+        let client = manager.client().await;
+        let http_result = http_round_trip(
+            &client,
+            format!("http://127.0.0.1:{}/final-http", http_target.port()),
+        )
+        .await;
+        if let Err(error) = http_result {
+            proxy_b_task.abort();
+            return Err(format!("final HTTP request did not use proxy B: {error}"));
+        }
+
+        let mut websocket = manager
+            .connect_websocket(&format!(
+                "ws://127.0.0.1:{}/final-websocket",
+                websocket_target.port()
+            ))
+            .await?;
+        websocket_round_trip(&mut websocket, "final-probe").await?;
+        drop(websocket);
+
+        await_test_task(proxy_b_task).await?;
+        await_test_task(http_task).await?;
+        if await_test_task(websocket_task).await? != "final-probe" {
+            return Err("final WebSocket request reached an unexpected target".to_string());
+        }
         Ok(())
     }
 
@@ -1536,18 +1698,16 @@ mod tests {
         .map_err(|e| format!("write proxy failed: {e}"))?;
         let manager = Arc::new(NetworkManager::new(initial.clone())?);
         let old_client = manager.client().await;
-        let mut current = crate::settings::get_default_settings();
-        current.proxy = initial.clone();
         let error = crate::commands::network::update_proxy_settings_with_persistence(
             manager.as_ref(),
-            current,
             manual_settings(ProxyProtocol::Http, "127.0.0.1:1".parse().unwrap(), no_auth),
-            |_| Err("persist failed".to_string()),
+            |_| async { Err("persist failed".to_string()) },
         )
         .await
         .expect_err("failed persistence must reject the update");
         assert_eq!(error, "persist failed");
         assert_eq!(read_persisted_proxy(&settings_path)?, initial);
+        assert_eq!(manager.state.read().await.settings, initial);
 
         let (target, target_task) = spawn_http_target().await;
         let proxy_task = tokio::spawn(run_http_forward_proxy(proxy_a_listener, target, None));

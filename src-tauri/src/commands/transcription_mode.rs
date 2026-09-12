@@ -3,16 +3,18 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::network::NetworkManager;
 use crate::settings::{
-    get_settings, write_settings, AppSettings, CloudSttProviderSettings, TranscriptionMode,
+    get_settings, update_settings, AppSettings, CloudSttProviderSettings, TranscriptionMode,
 };
 
 #[tauri::command]
 #[specta::specta]
 pub fn set_transcription_mode(app: AppHandle, mode: TranscriptionMode) -> Result<(), String> {
-    let mut settings = get_settings(&app);
-    let previous_mode = settings.transcription_mode.clone();
-    settings.transcription_mode = mode.clone();
-    write_settings(&app, settings);
+    let mut switched_to_local = false;
+    update_settings(&app, |settings| {
+        switched_to_local = mode == TranscriptionMode::Local
+            && settings.transcription_mode != TranscriptionMode::Local;
+        settings.transcription_mode = mode.clone();
+    });
     let _ = app.emit(
         "settings-changed",
         serde_json::json!({
@@ -20,7 +22,7 @@ pub fn set_transcription_mode(app: AppHandle, mode: TranscriptionMode) -> Result
         }),
     );
 
-    if mode == TranscriptionMode::Local && previous_mode != TranscriptionMode::Local {
+    if switched_to_local {
         let current_settings = get_settings(&app);
         if !current_settings.selected_model.is_empty() {
             if let Some(tm) =
@@ -40,9 +42,9 @@ pub fn set_cloud_stt_api_key(
     provider_id: String,
     api_key: String,
 ) -> Result<(), String> {
-    let mut settings = get_settings(&app);
-    settings.cloud_stt_api_keys.insert(provider_id, api_key);
-    write_settings(&app, settings);
+    update_settings(&app, |settings| {
+        settings.cloud_stt_api_keys.insert(provider_id, api_key);
+    });
     let _ = app.emit(
         "settings-changed",
         serde_json::json!({
@@ -58,25 +60,24 @@ pub fn set_cloud_stt_provider_settings(
     app: AppHandle,
     settings_input: CloudSttProviderSettings,
 ) -> Result<(), String> {
-    let mut settings = get_settings(&app);
-    settings
-        .cloud_stt_providers
-        .insert(settings_input.provider_id.clone(), settings_input.clone());
-
     let mut mode_changed = false;
-    if let crate::settings::TranscriptionMode::Cloud { provider_id, .. } =
-        &settings.transcription_mode
-    {
-        if provider_id == &settings_input.provider_id {
-            settings.transcription_mode = crate::settings::TranscriptionMode::Cloud {
-                provider_id: settings_input.provider_id.clone(),
-                model_id: settings_input.model_id.clone(),
-            };
-            mode_changed = true;
-        }
-    }
+    update_settings(&app, |settings| {
+        settings
+            .cloud_stt_providers
+            .insert(settings_input.provider_id.clone(), settings_input.clone());
 
-    write_settings(&app, settings);
+        if let crate::settings::TranscriptionMode::Cloud { provider_id, .. } =
+            &settings.transcription_mode
+        {
+            if provider_id == &settings_input.provider_id {
+                settings.transcription_mode = crate::settings::TranscriptionMode::Cloud {
+                    provider_id: settings_input.provider_id.clone(),
+                    model_id: settings_input.model_id.clone(),
+                };
+                mode_changed = true;
+            }
+        }
+    });
     let _ = app.emit(
         "settings-changed",
         serde_json::json!({
@@ -147,9 +148,7 @@ pub async fn test_cloud_stt_connection(
 #[tauri::command]
 #[specta::specta]
 pub fn complete_onboarding_cloud(app: AppHandle) -> Result<(), String> {
-    let mut settings = get_settings(&app);
-    apply_complete_onboarding_cloud(&mut settings);
-    write_settings(&app, settings);
+    update_settings(&app, apply_complete_onboarding_cloud);
     let _ = app.emit(
         "settings-changed",
         serde_json::json!({

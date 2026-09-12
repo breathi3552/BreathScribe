@@ -1378,6 +1378,36 @@ pub fn write_settings(app: &AppHandle, settings: AppSettings) {
     store.set("settings", serde_json::to_value(&settings).unwrap());
 }
 
+/// Writes settings immediately and reports a real persistence failure.
+///
+/// Most legacy settings commands intentionally keep the store's debounced write
+/// behavior through `write_settings`. Proxy updates use this checked path so a
+/// successful command cannot claim a disk write that has not happened yet.
+pub fn try_write_settings(app: &AppHandle, settings: AppSettings) -> Result<(), String> {
+    let store = app
+        .store(crate::portable::store_path(SETTINGS_STORE_PATH))
+        .map_err(|error| format!("Failed to initialize settings store: {error}"))?;
+    let value = serde_json::to_value(&settings)
+        .map_err(|error| format!("Failed to serialize settings: {error}"))?;
+    let previous = store.get("settings");
+
+    store.set("settings", value);
+    if let Err(error) = store.save() {
+        match previous {
+            Some(previous) => store.set("settings", previous),
+            None => {
+                store.delete("settings");
+            }
+        }
+        // Cancel the rollback's debounced save as well. The cache remains the
+        // previous settings even when the filesystem is unavailable.
+        let _ = store.save();
+        return Err(format!("Failed to persist settings: {error}"));
+    }
+
+    Ok(())
+}
+
 pub fn get_bindings(app: &AppHandle) -> HashMap<String, ShortcutBinding> {
     let settings = get_settings(app);
 

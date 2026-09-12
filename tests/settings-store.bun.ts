@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { AppSettings } from "../src/bindings";
+import {
+  DEFAULT_PROXY_SETTINGS,
+  type AppSettings,
+  type ProxySettings,
+} from "../src/bindings";
 
 type Unlisten = () => void;
 type EventCallback<T> = (event: { payload: T }) => void;
@@ -123,6 +127,8 @@ let defaultSettingsCalls = 0;
 let customSoundsCalls = 0;
 let updateLockCalls = 0;
 let microphoneCalls = 0;
+let proxyUpdates: ProxySettings[] = [];
+let connectivityProbes: (ProxySettings | null)[] = [];
 
 beforeEach(async () => {
   resolvePendingListeners();
@@ -135,6 +141,8 @@ beforeEach(async () => {
   customSoundsCalls = 0;
   updateLockCalls = 0;
   microphoneCalls = 0;
+  proxyUpdates = [];
+  connectivityProbes = [];
   appSettingsResponder = async () => ok(settings("initial"));
 
   commands.getAppSettings = () => {
@@ -156,6 +164,14 @@ beforeEach(async () => {
   commands.getAvailableMicrophones = async () => {
     microphoneCalls += 1;
     return { status: "ok", data: [] };
+  };
+  commands.updateProxySettings = async (proxy) => {
+    proxyUpdates.push(proxy);
+    return { status: "ok", data: null };
+  };
+  commands.testProxyConnectivity = async (proxy) => {
+    connectivityProbes.push(proxy);
+    return { status: "ok", data: 17 };
   };
 });
 
@@ -357,5 +373,47 @@ describe("settings store synchronization", () => {
 
     expect(useSettingsStore.getState().settings).toBe(existingSettings);
     expect(useSettingsStore.getState().isLoading).toBe(false);
+  });
+
+  test("saves and tests the proxy draft through the existing settings actions", async () => {
+    const original = settings("model", { proxy: DEFAULT_PROXY_SETTINGS });
+    useSettingsStore.setState({ settings: original });
+    const candidate: ProxySettings = {
+      ...DEFAULT_PROXY_SETTINGS,
+      mode: "manual",
+      host: "127.0.0.1",
+      port: 3128,
+    };
+
+    await useSettingsStore.getState().updateProxySettings(candidate);
+    expect(proxyUpdates).toEqual([candidate]);
+    expect(useSettingsStore.getState().settings?.proxy).toEqual(candidate);
+
+    await expect(
+      useSettingsStore.getState().testProxyConnectivity(candidate),
+    ).resolves.toBe(17);
+    expect(connectivityProbes).toEqual([candidate]);
+  });
+
+  test("rolls back the proxy draft when saving fails", async () => {
+    const original = settings("model", { proxy: DEFAULT_PROXY_SETTINGS });
+    useSettingsStore.setState({ settings: original });
+    commands.updateProxySettings = async () => ({
+      status: "error",
+      error: "persist failed",
+    });
+
+    const candidate: ProxySettings = {
+      ...DEFAULT_PROXY_SETTINGS,
+      mode: "manual",
+      host: "proxy.example",
+      port: 8080,
+    };
+    await expect(
+      useSettingsStore.getState().updateProxySettings(candidate),
+    ).rejects.toThrow("persist failed");
+    expect(useSettingsStore.getState().settings?.proxy).toEqual(
+      DEFAULT_PROXY_SETTINGS,
+    );
   });
 });

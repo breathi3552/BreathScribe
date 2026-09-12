@@ -2,7 +2,8 @@ use crate::settings::{ProxyMode, ProxyProtocol, ProxySettings};
 use reqwest::{Client, Proxy};
 use std::fmt;
 use std::net::Ipv6Addr;
-use std::sync::Arc;
+#[cfg(test)]
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
@@ -82,39 +83,129 @@ pub(crate) fn resolve_effective_proxy(settings: &ProxySettings) -> ResolvedProxy
     }
 }
 
+/// Applies the same host and port checks used by the manual proxy form before
+/// a candidate or saved setting can reach either transport.
+pub(crate) fn normalize_proxy_settings(
+    mut settings: ProxySettings,
+) -> Result<ProxySettings, String> {
+    if settings.mode == ProxyMode::Manual {
+        settings.host = settings.host.trim().to_string();
+        if settings.host.is_empty() {
+            return Err("Proxy server host cannot be empty".to_string());
+        }
+        if settings.port == 0 {
+            return Err("Proxy port must be between 1 and 65535".to_string());
+        }
+    }
+    Ok(settings)
+}
+
+#[cfg(test)]
+static TEST_CONNECTIVITY_URLS: OnceLock<Mutex<Option<Vec<String>>>> = OnceLock::new();
+#[cfg(test)]
+static TEST_CONNECTIVITY_URLS_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) struct TestConnectivityUrlsGuard {
+    _serial: MutexGuard<'static, ()>,
+}
+
+#[cfg(test)]
+impl TestConnectivityUrlsGuard {
+    pub(crate) fn set(&self, urls: Vec<String>) {
+        *TEST_CONNECTIVITY_URLS
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(urls);
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestConnectivityUrlsGuard {
+    fn drop(&mut self) {
+        if let Some(urls) = TEST_CONNECTIVITY_URLS.get() {
+            *urls.lock().unwrap_or_else(|error| error.into_inner()) = None;
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn test_connectivity_urls(urls: Vec<String>) -> TestConnectivityUrlsGuard {
+    let guard = TestConnectivityUrlsGuard {
+        _serial: TEST_CONNECTIVITY_URLS_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()),
+    };
+    guard.set(urls);
+    guard
+}
+
+fn connectivity_test_urls() -> Vec<String> {
+    #[cfg(test)]
+    if let Some(urls) = TEST_CONNECTIVITY_URLS
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .clone()
+    {
+        return urls;
+    }
+
+    vec![
+        "https://www.google.com/generate_204".to_string(),
+        "https://generativelanguage.googleapis.com".to_string(),
+    ]
+}
+
+struct NetworkState {
+    client: Client,
+    settings: ProxySettings,
+}
+
 pub struct NetworkManager {
-    client: Arc<RwLock<Client>>,
-    current_settings: Arc<RwLock<ProxySettings>>,
+    state: RwLock<NetworkState>,
 }
 
 impl NetworkManager {
     pub fn new(initial_settings: ProxySettings) -> Result<Self, String> {
+        let initial_settings = normalize_proxy_settings(initial_settings)?;
         let client = build_reqwest_client(&initial_settings)?;
         Ok(Self {
-            client: Arc::new(RwLock::new(client)),
-            current_settings: Arc::new(RwLock::new(initial_settings)),
+            state: RwLock::new(NetworkState {
+                client,
+                settings: initial_settings,
+            }),
         })
     }
 
     pub async fn client(&self) -> Client {
-        self.client.read().await.clone()
+        self.state.read().await.client.clone()
     }
 
     pub async fn connect_websocket(
         &self,
         url: &str,
     ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, String> {
-        let settings = self.current_settings.read().await.clone();
+        let settings = self.state.read().await.settings.clone();
         let proxy = resolve_effective_proxy(&settings);
         proxy_tunnel::connect_websocket_tunnel(url, proxy).await
     }
 
+    pub(crate) async fn install_proxy_settings(
+        &self,
+        new_settings: ProxySettings,
+        new_client: Client,
+    ) {
+        let mut state = self.state.write().await;
+        state.client = new_client;
+        state.settings = new_settings;
+    }
+
     pub async fn update_proxy_settings(&self, new_settings: ProxySettings) -> Result<(), String> {
+        let new_settings = normalize_proxy_settings(new_settings)?;
         let new_client = build_reqwest_client(&new_settings)?;
-        let mut client_lock = self.client.write().await;
-        let mut settings_lock = self.current_settings.write().await;
-        *client_lock = new_client;
-        *settings_lock = new_settings;
+        self.install_proxy_settings(new_settings, new_client).await;
         log::info!("NetworkManager: proxy client successfully reloaded");
         Ok(())
     }
@@ -143,11 +234,12 @@ fn build_reqwest_proxy(
 }
 
 pub fn build_reqwest_client(settings: &ProxySettings) -> Result<Client, String> {
+    let settings = normalize_proxy_settings(settings.clone())?;
     let mut builder = Client::builder()
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10));
 
-    match resolve_effective_proxy(settings) {
+    match resolve_effective_proxy(&settings) {
         ResolvedProxy::Direct => {
             builder = builder.no_proxy();
         }
@@ -166,16 +258,11 @@ pub fn build_reqwest_client(settings: &ProxySettings) -> Result<Client, String> 
 
 /// Probe network connectivity and return round-trip latency in ms
 pub async fn test_connectivity(client: &Client) -> Result<u64, String> {
-    let test_urls = [
-        "https://www.google.com/generate_204",
-        "https://generativelanguage.googleapis.com",
-    ];
-
     let mut last_err = None;
 
-    for url in test_urls {
+    for url in connectivity_test_urls() {
         let start = std::time::Instant::now();
-        match client.get(url).send().await {
+        match client.get(&url).send().await {
             Ok(resp) => {
                 let elapsed_ms = start.elapsed().as_millis() as u64;
                 log::info!(
@@ -205,8 +292,11 @@ mod tests {
     use base64::Engine;
     use futures_util::{SinkExt, StreamExt};
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+    use std::path::Path;
+    use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
+    use tokio::sync::oneshot;
     use tokio::task::JoinHandle;
     use tokio_tungstenite::{accept_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
@@ -384,6 +474,44 @@ mod tests {
         (address, task)
     }
 
+    async fn spawn_delayed_http_target() -> (
+        SocketAddr,
+        JoinHandle<Result<Vec<u8>, String>>,
+        oneshot::Receiver<()>,
+        oneshot::Sender<()>,
+    ) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (request_seen_tx, request_seen_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            let (mut stream, _) = listener
+                .accept()
+                .await
+                .map_err(|e| format!("delayed HTTP target accept failed: {e}"))?;
+            let request = read_headers(&mut stream).await?;
+            let _ = request_seen_tx.send(());
+            release_rx
+                .await
+                .map_err(|_| "delayed HTTP target release was dropped".to_string())?;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                HTTP_BODY.len(),
+                HTTP_BODY
+            );
+            stream
+                .write_all(response.as_bytes())
+                .await
+                .map_err(|e| format!("delayed HTTP target response failed: {e}"))?;
+            stream
+                .shutdown()
+                .await
+                .map_err(|e| format!("delayed HTTP target shutdown failed: {e}"))?;
+            Ok(request)
+        });
+        (address, task, request_seen_rx, release_tx)
+    }
+
     async fn spawn_websocket_target(
         message_count: usize,
     ) -> (SocketAddr, JoinHandle<Result<String, String>>) {
@@ -470,6 +598,53 @@ mod tests {
             .shutdown()
             .await
             .map_err(|e| format!("HTTP proxy shutdown failed: {e}"))?;
+        Ok(())
+    }
+
+    async fn run_http_proxy_for_http_and_connect(
+        listener: TcpListener,
+        http_target: SocketAddr,
+        websocket_target: SocketAddr,
+    ) -> Result<(), String> {
+        for _ in 0..2 {
+            let (mut client, _) = listener
+                .accept()
+                .await
+                .map_err(|e| format!("HTTP proxy accept failed: {e}"))?;
+            let request = read_headers(&mut client).await?;
+            if String::from_utf8_lossy(&request).starts_with("GET http://127.0.0.1:") {
+                let mut target_stream = TcpStream::connect(http_target)
+                    .await
+                    .map_err(|e| format!("HTTP proxy target connection failed: {e}"))?;
+                target_stream
+                    .write_all(&request)
+                    .await
+                    .map_err(|e| format!("HTTP proxy request forwarding failed: {e}"))?;
+                tokio::io::copy(&mut target_stream, &mut client)
+                    .await
+                    .map_err(|e| format!("HTTP proxy response forwarding failed: {e}"))?;
+                client
+                    .shutdown()
+                    .await
+                    .map_err(|e| format!("HTTP proxy shutdown failed: {e}"))?;
+            } else {
+                let expected_target =
+                    format!("CONNECT 127.0.0.1:{} HTTP/1.1", websocket_target.port());
+                if !String::from_utf8_lossy(&request).starts_with(&expected_target) {
+                    return Err("HTTP proxy received an unexpected request".to_string());
+                }
+                let mut target_stream = TcpStream::connect(websocket_target)
+                    .await
+                    .map_err(|e| format!("HTTP CONNECT target connection failed: {e}"))?;
+                client
+                    .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                    .await
+                    .map_err(|e| format!("HTTP CONNECT response failed: {e}"))?;
+                tokio::io::copy_bidirectional(&mut client, &mut target_stream)
+                    .await
+                    .map_err(|e| format!("HTTP CONNECT forwarding failed: {e}"))?;
+            }
+        }
         Ok(())
     }
 
@@ -647,6 +822,11 @@ mod tests {
             .await
             .map_err(|_| "local network test task timed out".to_string())?;
         joined.map_err(|e| format!("local network test task failed: {e}"))?
+    }
+
+    fn read_persisted_proxy(path: &Path) -> Result<ProxySettings, String> {
+        let bytes = std::fs::read(path).map_err(|e| format!("read persisted proxy: {e}"))?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("decode persisted proxy: {e}"))
     }
 
     async fn exercise_http_request(
@@ -876,6 +1056,303 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn manual_proxy_update_routes_new_websocket_and_preserves_existing_session(
+    ) -> Result<(), String> {
+        let no_auth = auth_cases()[0];
+        let (old_target, old_target_task) = spawn_websocket_target(2).await;
+        let proxy_a_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy A listener failed: {e}"))?;
+        let proxy_a_addr = proxy_a_listener
+            .local_addr()
+            .map_err(|e| format!("proxy A address failed: {e}"))?;
+        let initial = manual_settings(ProxyProtocol::Http, proxy_a_addr, no_auth);
+        let manager = Arc::new(NetworkManager::new(initial.clone())?);
+        let proxy_a_task = tokio::spawn(run_http_connect_proxy(proxy_a_listener, old_target, None));
+        let mut old_websocket = tokio::time::timeout(
+            Duration::from_secs(3),
+            manager.connect_websocket(&format!("ws://127.0.0.1:{}/old", old_target.port())),
+        )
+        .await
+        .map_err(|_| "old WebSocket connection timed out".to_string())?
+        .map_err(|e| format!("old WebSocket connection failed: {e}"))?;
+        websocket_round_trip(&mut old_websocket, "old-before").await?;
+
+        let (new_target, new_target_task) = spawn_websocket_target(1).await;
+        let proxy_b_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy B listener failed: {e}"))?;
+        let proxy_b_addr = proxy_b_listener
+            .local_addr()
+            .map_err(|e| format!("proxy B address failed: {e}"))?;
+        let mut current = crate::settings::get_default_settings();
+        current.proxy = initial;
+        crate::commands::network::update_proxy_settings_with_persistence(
+            manager.as_ref(),
+            current,
+            manual_settings(ProxyProtocol::Http, proxy_b_addr, no_auth),
+            |_| Ok(()),
+        )
+        .await?;
+        let proxy_b_task = tokio::spawn(run_http_connect_proxy(proxy_b_listener, new_target, None));
+
+        let mut new_websocket = tokio::time::timeout(
+            Duration::from_secs(3),
+            manager.connect_websocket(&format!("ws://127.0.0.1:{}/new", new_target.port())),
+        )
+        .await
+        .map_err(|_| "new WebSocket connection timed out".to_string())?
+        .map_err(|e| format!("new WebSocket connection failed: {e}"))?;
+        websocket_round_trip(&mut new_websocket, "new-probe").await?;
+        drop(new_websocket);
+        await_test_task(proxy_b_task).await?;
+        if await_test_task(new_target_task).await? != "new-probe" {
+            return Err("proxy B target received an unexpected message".to_string());
+        }
+
+        websocket_round_trip(&mut old_websocket, "old-after").await?;
+        drop(old_websocket);
+        await_test_task(proxy_a_task).await?;
+        if await_test_task(old_target_task).await? != "old-after" {
+            return Err("existing WebSocket session did not stay on proxy A".to_string());
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn update_proxy_settings_persists_then_reloads_http_client() -> Result<(), String> {
+        let temp_dir = tempfile::tempdir().map_err(|e| format!("temp store failed: {e}"))?;
+        let no_auth = auth_cases()[0];
+
+        let (target_a, target_a_task, request_seen, release_request) =
+            spawn_delayed_http_target().await;
+        let proxy_a_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy A listener failed: {e}"))?;
+        let proxy_a_addr = proxy_a_listener
+            .local_addr()
+            .map_err(|e| format!("proxy A address failed: {e}"))?;
+        let (target_b, target_b_task) = spawn_http_target().await;
+        let proxy_b_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy B listener failed: {e}"))?;
+        let proxy_b_addr = proxy_b_listener
+            .local_addr()
+            .map_err(|e| format!("proxy B address failed: {e}"))?;
+        let initial = manual_settings(ProxyProtocol::Http, proxy_a_addr, no_auth);
+        let updated = manual_settings(ProxyProtocol::Http, proxy_b_addr, no_auth);
+        let manager = Arc::new(NetworkManager::new(initial.clone())?);
+        let old_client = manager.client().await;
+        let settings_path = temp_dir.path().join("settings.json");
+        let mut current = crate::settings::get_default_settings();
+        current.proxy = initial;
+        let path_for_persist = settings_path.clone();
+        let proxy_a_task = tokio::spawn(run_http_forward_proxy(proxy_a_listener, target_a, None));
+        let old_request = tokio::spawn({
+            let old_client = old_client.clone();
+            let url = format!("http://127.0.0.1:{}/old", target_a.port());
+            async move { http_round_trip(&old_client, url).await }
+        });
+        tokio::time::timeout(Duration::from_secs(3), request_seen)
+            .await
+            .map_err(|_| "old HTTP request did not reach proxy A".to_string())?
+            .map_err(|_| "old HTTP request signal was dropped".to_string())?;
+
+        crate::commands::network::update_proxy_settings_with_persistence(
+            manager.as_ref(),
+            current,
+            updated.clone(),
+            move |settings| {
+                std::fs::write(
+                    &path_for_persist,
+                    serde_json::to_vec(&settings.proxy)
+                        .map_err(|e| format!("serialize proxy failed: {e}"))?,
+                )
+                .map_err(|e| format!("persist proxy failed: {e}"))
+            },
+        )
+        .await?;
+
+        let proxy_b_task = tokio::spawn(run_http_forward_proxy(proxy_b_listener, target_b, None));
+        release_request
+            .send(())
+            .map_err(|_| "old HTTP target was dropped before release".to_string())?;
+        if await_test_task(old_request).await? != HTTP_BODY {
+            return Err("old HTTP request did not complete after the update".to_string());
+        }
+        let new_client = manager.client().await;
+        if http_round_trip(
+            &new_client,
+            format!("http://127.0.0.1:{}/new", target_b.port()),
+        )
+        .await?
+            != HTTP_BODY
+        {
+            return Err("new HTTP client did not use proxy B".to_string());
+        }
+        await_test_task(proxy_a_task).await?;
+        await_test_task(proxy_b_task).await?;
+        let request_a = await_test_task(target_a_task).await?;
+        let request_b = await_test_task(target_b_task).await?;
+        if !String::from_utf8_lossy(&request_a).contains("/old")
+            || !String::from_utf8_lossy(&request_b).contains("/new")
+        {
+            return Err("HTTP requests did not reach their expected exits".to_string());
+        }
+        assert_eq!(read_persisted_proxy(&settings_path)?, updated);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn candidate_proxy_tests_use_independent_clients_and_keep_global_settings(
+    ) -> Result<(), String> {
+        let no_auth = auth_cases()[0];
+        let proxy_a_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy A listener failed: {e}"))?;
+        let proxy_a_addr = proxy_a_listener
+            .local_addr()
+            .map_err(|e| format!("proxy A address failed: {e}"))?;
+        let initial = manual_settings(ProxyProtocol::Http, proxy_a_addr, no_auth);
+        let manager = Arc::new(NetworkManager::new(initial)?);
+
+        let (candidate_target, candidate_target_task) = spawn_http_target().await;
+        let candidate_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("candidate proxy listener failed: {e}"))?;
+        let candidate_addr = candidate_listener
+            .local_addr()
+            .map_err(|e| format!("candidate proxy address failed: {e}"))?;
+        let candidate = manual_settings(ProxyProtocol::Http, candidate_addr, no_auth);
+        let urls = test_connectivity_urls(vec![format!(
+            "http://127.0.0.1:{}/candidate",
+            candidate_target.port()
+        )]);
+        let candidate_task = tokio::spawn(run_http_forward_proxy(
+            candidate_listener,
+            candidate_target,
+            None,
+        ));
+        crate::commands::network::test_candidate_proxy_connectivity(candidate).await?;
+        await_test_task(candidate_task).await?;
+        await_test_task(candidate_target_task).await?;
+
+        let unused_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("failure port allocation failed: {e}"))?;
+        let unavailable = unused_listener
+            .local_addr()
+            .map_err(|e| format!("failure port lookup failed: {e}"))?;
+        drop(unused_listener);
+        urls.set(vec![format!(
+            "http://127.0.0.1:{}/failure",
+            unavailable.port()
+        )]);
+        let failure = manual_settings(ProxyProtocol::Http, unavailable, no_auth);
+        assert!(
+            crate::commands::network::test_candidate_proxy_connectivity(failure)
+                .await
+                .is_err()
+        );
+
+        urls.set(vec!["http://127.0.0.1:1/invalid".to_string()]);
+        let invalid = ProxySettings {
+            mode: ProxyMode::Manual,
+            host: "   ".to_string(),
+            port: 0,
+            ..Default::default()
+        };
+        assert!(
+            crate::commands::network::test_candidate_proxy_connectivity(invalid)
+                .await
+                .is_err()
+        );
+
+        let (global_http_target, global_http_target_task) = spawn_http_target().await;
+        let (global_websocket_target, global_websocket_target_task) =
+            spawn_websocket_target(1).await;
+        let global_proxy_task = tokio::spawn(run_http_proxy_for_http_and_connect(
+            proxy_a_listener,
+            global_http_target,
+            global_websocket_target,
+        ));
+        let client = manager.client().await;
+        if http_round_trip(
+            &client,
+            format!("http://127.0.0.1:{}/global", global_http_target.port()),
+        )
+        .await?
+            != HTTP_BODY
+        {
+            return Err("global HTTP client did not stay on proxy A".to_string());
+        }
+        let mut websocket = tokio::time::timeout(
+            Duration::from_secs(3),
+            manager.connect_websocket(&format!(
+                "ws://127.0.0.1:{}/global",
+                global_websocket_target.port()
+            )),
+        )
+        .await
+        .map_err(|_| "global WebSocket connection timed out".to_string())?
+        .map_err(|e| format!("global WebSocket connection failed: {e}"))?;
+        websocket_round_trip(&mut websocket, "global-probe").await?;
+        drop(websocket);
+        await_test_task(global_proxy_task).await?;
+        await_test_task(global_http_target_task).await?;
+        await_test_task(global_websocket_target_task).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn failed_proxy_persistence_keeps_client_and_disk_unchanged() -> Result<(), String> {
+        let temp_dir = tempfile::tempdir().map_err(|e| format!("temp store failed: {e}"))?;
+        let settings_path = temp_dir.path().join("settings.json");
+        let no_auth = auth_cases()[0];
+        let proxy_a_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy A listener failed: {e}"))?;
+        let proxy_a_addr = proxy_a_listener
+            .local_addr()
+            .map_err(|e| format!("proxy A address failed: {e}"))?;
+        let initial = manual_settings(ProxyProtocol::Http, proxy_a_addr, no_auth);
+        std::fs::write(
+            &settings_path,
+            serde_json::to_vec(&initial).map_err(|e| format!("serialize proxy failed: {e}"))?,
+        )
+        .map_err(|e| format!("write proxy failed: {e}"))?;
+        let manager = Arc::new(NetworkManager::new(initial.clone())?);
+        let old_client = manager.client().await;
+        let mut current = crate::settings::get_default_settings();
+        current.proxy = initial.clone();
+        let error = crate::commands::network::update_proxy_settings_with_persistence(
+            manager.as_ref(),
+            current,
+            manual_settings(ProxyProtocol::Http, "127.0.0.1:1".parse().unwrap(), no_auth),
+            |_| Err("persist failed".to_string()),
+        )
+        .await
+        .expect_err("failed persistence must reject the update");
+        assert_eq!(error, "persist failed");
+        assert_eq!(read_persisted_proxy(&settings_path)?, initial);
+
+        let (target, target_task) = spawn_http_target().await;
+        let proxy_task = tokio::spawn(run_http_forward_proxy(proxy_a_listener, target, None));
+        if http_round_trip(
+            &old_client,
+            format!("http://127.0.0.1:{}/after-failure", target.port()),
+        )
+        .await?
+            != HTTP_BODY
+        {
+            return Err("old HTTP client stopped working after persistence failure".to_string());
+        }
+        await_test_task(proxy_task).await?;
+        await_test_task(target_task).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn system_proxy_change_preserves_existing_websocket_session() -> Result<(), String> {
         let (old_target, old_target_task) = spawn_websocket_target(2).await;
         let proxy_a_listener = TcpListener::bind("127.0.0.1:0")
@@ -989,8 +1466,8 @@ mod tests {
 
         let request_a = await_test_task(target_a_task).await?;
         let request_b = await_test_task(target_b_task).await?;
-        if !String::from_utf8_lossy(&request_a).contains(&format!("/old"))
-            || !String::from_utf8_lossy(&request_b).contains(&format!("/new"))
+        if !String::from_utf8_lossy(&request_a).contains("/old")
+            || !String::from_utf8_lossy(&request_b).contains("/new")
         {
             return Err("HTTP requests did not reach their expected local exits".to_string());
         }

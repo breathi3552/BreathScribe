@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings as Settings,
   AudioDevice,
@@ -18,8 +18,6 @@ import {
   DEFAULT_CLOUD_STT_PROVIDER_SETTINGS,
 } from "@/bindings";
 import { toast } from "sonner";
-
-type Unlisten = () => void;
 
 interface SettingsStore {
   settings: Settings | null;
@@ -245,41 +243,29 @@ const settingUpdaters: {
   },
 };
 
-const createSettingsSync = (
-  set: StoreSet,
-  get: StoreGet,
-): Pick<
-  SettingsStore,
-  | "initialize"
-  | "dispose"
-  | "refreshSettings"
-  | "refreshAudioDevices"
-  | "refreshOutputDevices"
-> => {
+const createSettingsSync = (set: StoreSet, get: StoreGet) => {
   let initializationPromise: Promise<void> | null = null;
   let refreshPromise: Promise<void> | null = null;
   let refreshPending = false;
   let lifecycleVersion = 0;
   // Explicit calls from onboarding or the main app open this permission-gated path.
   let audioDeviceRefreshEnabled = false;
-  const unlisteners = new Set<Unlisten>();
-  const listenerRegistrations = new Set<Promise<Unlisten>>();
+  const listenerRegistrations = new Set<Promise<UnlistenFn>>();
 
   const isCurrentLifecycle = (version: number) => version === lifecycleVersion;
 
   const releaseListeners = async () => {
-    const listeners = Array.from(unlisteners);
-    unlisteners.clear();
+    const registrations = Array.from(listenerRegistrations);
+    listenerRegistrations.clear();
 
-    await Promise.all(
-      listeners.map(async (unlisten) => {
-        try {
-          await unlisten();
-        } catch (error) {
-          console.error("Failed to remove settings listener:", error);
-        }
-      }),
-    );
+    for (const result of await Promise.allSettled(registrations)) {
+      if (result.status !== "fulfilled") continue;
+      try {
+        result.value();
+      } catch (error) {
+        console.error("Failed to remove settings listener:", error);
+      }
+    }
   };
 
   const refreshSettingsOnce = async (version: number) => {
@@ -346,35 +332,16 @@ const createSettingsSync = (
     eventName: string,
     callback: (payload: T) => void,
     version: number,
-  ): Promise<Unlisten> => {
-    let registration: Promise<Unlisten>;
+  ): Promise<UnlistenFn> => {
     try {
-      registration = listen<T>(eventName, (event) => {
+      const registration = listen<T>(eventName, (event) => {
         if (isCurrentLifecycle(version)) callback(event.payload);
       });
+      listenerRegistrations.add(registration);
+      return registration;
     } catch (error) {
       return Promise.reject(error);
     }
-
-    listenerRegistrations.add(registration);
-    registration.then(
-      (unlisten) => {
-        listenerRegistrations.delete(registration);
-        if (!isCurrentLifecycle(version)) {
-          try {
-            unlisten();
-          } catch (error) {
-            console.error("Failed to remove stale settings listener:", error);
-          }
-          return;
-        }
-        unlisteners.add(unlisten);
-      },
-      () => {
-        listenerRegistrations.delete(registration);
-      },
-    );
-    return registration;
   };
 
   const registerListeners = async (version: number) => {
@@ -442,9 +409,6 @@ const createSettingsSync = (
     initializationPromise = null;
     audioDeviceRefreshEnabled = false;
 
-    const registrations = Array.from(listenerRegistrations);
-    await releaseListeners();
-    await Promise.allSettled(registrations);
     await releaseListeners();
   };
 

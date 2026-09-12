@@ -1218,6 +1218,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn system_proxy_invalid_environment_candidate_falls_back_for_http_and_websocket(
+    ) -> Result<(), String> {
+        let (http_target, http_task) = spawn_http_target().await;
+        let (websocket_target, websocket_task) = spawn_websocket_target(1).await;
+        let proxy_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy listener failed: {e}"))?;
+        let proxy_addr = proxy_listener
+            .local_addr()
+            .map_err(|e| format!("proxy address failed: {e}"))?;
+        let proxy_url = format!("http://127.0.0.1:{}", proxy_addr.port());
+        let _system_proxy = system_proxy::test_system_proxy_environment([
+            None,
+            None,
+            None,
+            Some("not a proxy URL"),
+            Some(proxy_url.as_str()),
+            None,
+        ]);
+        let manager = NetworkManager::new(system_settings(ProxyProtocol::Socks5, auth_cases()[2]))?;
+        let proxy_task = tokio::spawn(run_http_proxy_for_http_and_connect(
+            proxy_listener,
+            http_target,
+            websocket_target,
+        ));
+
+        let client = manager.client().await;
+        if http_round_trip(
+            &client,
+            format!("http://127.0.0.1:{}/fallback-http", http_target.port()),
+        )
+        .await?
+            != HTTP_BODY
+        {
+            return Err("HTTP request did not use the lower-priority valid proxy".to_string());
+        }
+
+        let mut websocket = manager
+            .connect_websocket(&format!(
+                "ws://127.0.0.1:{}/fallback-websocket",
+                websocket_target.port()
+            ))
+            .await?;
+        websocket_round_trip(&mut websocket, "fallback-probe").await?;
+        drop(websocket);
+
+        await_test_task(proxy_task).await?;
+        await_test_task(http_task).await?;
+        if await_test_task(websocket_task).await? != "fallback-probe" {
+            return Err("WebSocket request did not use the lower-priority valid proxy".to_string());
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn system_proxy_change_keeps_old_http_client_and_routes_new_websocket(
     ) -> Result<(), String> {
         let (http_target, http_task) = spawn_http_target().await;

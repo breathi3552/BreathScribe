@@ -13,11 +13,22 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 #[cfg(test)]
 static TEST_SYSTEM_PROXY: OnceLock<Mutex<Option<Option<DetectedProxy>>>> = OnceLock::new();
 #[cfg(test)]
+static TEST_SYSTEM_PROXY_ENV: OnceLock<Mutex<Option<[Option<String>; 6]>>> = OnceLock::new();
+#[cfg(test)]
 static TEST_SYSTEM_PROXY_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[cfg(test)]
 fn test_system_proxy_override() -> Option<Option<DetectedProxy>> {
     TEST_SYSTEM_PROXY
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .clone()
+}
+
+#[cfg(test)]
+fn test_system_proxy_environment_override() -> Option<[Option<String>; 6]> {
+    TEST_SYSTEM_PROXY_ENV
         .get_or_init(|| Mutex::new(None))
         .lock()
         .unwrap_or_else(|error| error.into_inner())
@@ -37,6 +48,15 @@ impl TestSystemProxyGuard {
             .lock()
             .unwrap_or_else(|error| error.into_inner()) = Some(proxy);
     }
+
+    pub(super) fn set_environment(&self, values: [Option<&str>; 6]) {
+        // Values follow SYSTEM_PROXY_ENV_VARIABLES order.
+        *TEST_SYSTEM_PROXY_ENV
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) =
+            Some(values.map(|value| value.map(|value| value.to_string())));
+    }
 }
 
 #[cfg(test)]
@@ -44,6 +64,11 @@ impl Drop for TestSystemProxyGuard {
     fn drop(&mut self) {
         if let Some(proxy) = TEST_SYSTEM_PROXY.get() {
             *proxy.lock().unwrap_or_else(|error| error.into_inner()) = None;
+        }
+        if let Some(environment) = TEST_SYSTEM_PROXY_ENV.get() {
+            *environment
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = None;
         }
     }
 }
@@ -57,6 +82,18 @@ pub(super) fn test_system_proxy(proxy: Option<DetectedProxy>) -> TestSystemProxy
             .unwrap_or_else(|error| error.into_inner()),
     };
     guard.set(proxy);
+    guard
+}
+
+#[cfg(test)]
+pub(super) fn test_system_proxy_environment(values: [Option<&str>; 6]) -> TestSystemProxyGuard {
+    let guard = TestSystemProxyGuard {
+        _serial: TEST_SYSTEM_PROXY_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()),
+    };
+    guard.set_environment(values);
     guard
 }
 
@@ -160,6 +197,15 @@ pub fn parse_url_proxy(url_str: &str) -> Option<DetectedProxy> {
         return None;
     }
 
+    if let Some((scheme, _)) = trimmed.split_once("://") {
+        if !["http", "https", "socks", "socks5", "socks5h"]
+            .iter()
+            .any(|supported| scheme.eq_ignore_ascii_case(supported))
+        {
+            return None;
+        }
+    }
+
     let (protocol, rest) = extract_protocol_and_addr(trimmed);
     let without_auth = if let Some((_auth, host_port)) = rest.rsplit_once('@') {
         host_port
@@ -170,11 +216,46 @@ pub fn parse_url_proxy(url_str: &str) -> Option<DetectedProxy> {
     parse_host_port(without_auth, protocol)
 }
 
+const SYSTEM_PROXY_ENV_VARIABLES: [&str; 6] = [
+    "all_proxy",
+    "ALL_PROXY",
+    "https_proxy",
+    "HTTPS_PROXY",
+    "http_proxy",
+    "HTTP_PROXY",
+];
+
+#[cfg(test)]
+fn parse_environment_proxy_values(values: [Option<String>; 6]) -> Option<DetectedProxy> {
+    values
+        .into_iter()
+        .flatten()
+        .find_map(|url| parse_url_proxy(&url))
+}
+
+fn get_system_proxy_from_environment() -> Option<DetectedProxy> {
+    #[cfg(test)]
+    if let Some(values) = test_system_proxy_environment_override() {
+        return parse_environment_proxy_values(values);
+    }
+
+    SYSTEM_PROXY_ENV_VARIABLES.into_iter().find_map(|name| {
+        std::env::var(name)
+            .ok()
+            .and_then(|url| parse_url_proxy(&url))
+    })
+}
+
 #[cfg(target_os = "windows")]
 pub fn get_system_proxy() -> Option<DetectedProxy> {
     #[cfg(test)]
     if let Some(proxy) = test_system_proxy_override() {
         return proxy;
+    }
+
+    #[cfg(test)]
+    if test_system_proxy_environment_override().is_some() {
+        return get_system_proxy_from_environment();
     }
 
     use winreg::enums::HKEY_CURRENT_USER;
@@ -201,15 +282,8 @@ pub fn get_system_proxy() -> Option<DetectedProxy> {
         return proxy;
     }
 
-    // Read proxy environment variables on Unix
-    std::env::var("all_proxy")
-        .or_else(|_| std::env::var("ALL_PROXY"))
-        .or_else(|_| std::env::var("https_proxy"))
-        .or_else(|_| std::env::var("HTTPS_PROXY"))
-        .or_else(|_| std::env::var("http_proxy"))
-        .or_else(|_| std::env::var("HTTP_PROXY"))
-        .ok()
-        .and_then(|url| parse_url_proxy(&url))
+    // Read proxy environment variables on Unix.
+    get_system_proxy_from_environment()
 }
 
 #[cfg(test)]
@@ -316,6 +390,95 @@ mod tests {
 
         assert!(parse_url_proxy("").is_none());
         assert!(parse_url_proxy("invalid_no_port").is_none());
+    }
+
+    #[test]
+    fn test_system_proxy_skips_empty_and_malformed_candidates() {
+        let expected = DetectedProxy {
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            protocol: ProxyProtocol::Http,
+        };
+
+        {
+            let _guard = test_system_proxy_environment([
+                Some(""),
+                None,
+                None,
+                None,
+                Some("http://127.0.0.1:8080"),
+                None,
+            ]);
+            assert_eq!(get_system_proxy(), Some(expected.clone()));
+        }
+
+        let _guard = test_system_proxy_environment([
+            Some("not a proxy URL"),
+            None,
+            None,
+            None,
+            Some("http://127.0.0.1:8080"),
+            None,
+        ]);
+        assert_eq!(get_system_proxy(), Some(expected));
+    }
+
+    #[test]
+    fn test_system_proxy_accepts_http_and_socks5_candidates() {
+        let http = DetectedProxy {
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            protocol: ProxyProtocol::Http,
+        };
+        let _http_guard = test_system_proxy_environment([
+            Some("http://127.0.0.1:8080"),
+            Some("socks5://127.0.0.1:1080"),
+            None,
+            None,
+            None,
+            None,
+        ]);
+        assert_eq!(get_system_proxy(), Some(http));
+        drop(_http_guard);
+
+        let socks = DetectedProxy {
+            host: "127.0.0.1".to_string(),
+            port: 1080,
+            protocol: ProxyProtocol::Socks5,
+        };
+        let _socks_guard = test_system_proxy_environment([
+            Some("socks5://127.0.0.1:1080"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        ]);
+        assert_eq!(get_system_proxy(), Some(socks));
+    }
+
+    #[test]
+    fn test_system_proxy_rejects_unsupported_and_all_invalid_candidates() {
+        let _unsupported_guard = test_system_proxy_environment([
+            Some("ftp://127.0.0.1:8080"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        ]);
+        assert!(get_system_proxy().is_none());
+        drop(_unsupported_guard);
+
+        let _all_invalid_guard = test_system_proxy_environment([
+            Some(""),
+            Some("not a proxy URL"),
+            Some("ftp://127.0.0.1:8080"),
+            Some("socks5://127.0.0.1"),
+            Some("http://127.0.0.1:not-a-port"),
+            Some("http://:8080"),
+        ]);
+        assert!(get_system_proxy().is_none());
     }
 
     #[test]

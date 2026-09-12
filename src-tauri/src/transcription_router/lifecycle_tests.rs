@@ -1,8 +1,17 @@
 use super::*;
 use crate::managers::transcription::StreamRouter;
+use crate::network::NetworkManager;
+use crate::providers::gemini::{GeminiProvider, GEMINI_LIVE_MODEL_ID, SAMPLES_PER_CHUNK};
 use crate::providers::StreamingSession;
+use crate::settings::{ProxyMode, TranscriptionMode};
+use futures_util::{SinkExt, StreamExt};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
+use tokio_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
 
 type SessionResult = Result<Box<dyn StreamingSession>, String>;
 
@@ -501,4 +510,383 @@ async fn stalled_finalization_is_reclaimed_at_deadline_before_next_recording() {
         provider.batch_audio.lock().is_empty(),
         "Live finalization timeout must not be masked by cloud batch"
     );
+}
+
+#[derive(Clone, Copy, Debug)]
+enum LocalEndpointAction {
+    Close,
+    Eof,
+    FullResult,
+    EmptyResult,
+    KeepOpen,
+}
+
+struct LocalGeminiEndpoint {
+    base_url: String,
+    setup_seen: Option<oneshot::Receiver<()>>,
+    action: Option<oneshot::Sender<LocalEndpointAction>>,
+    stop: Option<oneshot::Sender<()>>,
+    batch_requests: Arc<AtomicUsize>,
+    task: Option<JoinHandle<Result<(), String>>>,
+}
+
+impl LocalGeminiEndpoint {
+    async fn wait_for_setup(&mut self) {
+        self.setup_seen
+            .take()
+            .expect("setup receiver should be available")
+            .await
+            .expect("local endpoint should observe the setup frame");
+    }
+
+    fn release(&mut self, action: LocalEndpointAction) {
+        self.action
+            .take()
+            .expect("endpoint action should be available")
+            .send(action)
+            .expect("local endpoint should still be waiting for its action");
+    }
+
+    fn batch_request_count(&self) -> usize {
+        self.batch_requests.load(Ordering::SeqCst)
+    }
+
+    async fn shutdown(mut self) -> Result<(), String> {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        self.task
+            .take()
+            .expect("endpoint task should be available")
+            .await
+            .map_err(|error| format!("local endpoint task failed: {error}"))?
+    }
+}
+
+impl Drop for LocalGeminiEndpoint {
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+    }
+}
+
+async fn read_http_headers(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
+    let mut request = Vec::with_capacity(2048);
+    let mut buffer = [0u8; 1024];
+    loop {
+        let read = tokio::time::timeout(Duration::from_secs(2), stream.read(&mut buffer))
+            .await
+            .map_err(|_| "local HTTP request header timed out".to_string())?
+            .map_err(|error| format!("local HTTP request read failed: {error}"))?;
+        if read == 0 {
+            return Err("local HTTP peer closed before sending headers".to_string());
+        }
+        request.extend_from_slice(&buffer[..read]);
+        if let Some(header_end) = request
+            .windows(4)
+            .position(|window| window == b"\r\n\r\n")
+            .map(|position| position + 4)
+        {
+            let header_text = String::from_utf8_lossy(&request[..header_end]);
+            let content_length = header_text
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse().ok())
+                        .flatten()
+                })
+                .unwrap_or(0usize);
+            let mut remaining = content_length.saturating_sub(request.len() - header_end);
+            while remaining > 0 {
+                let read = tokio::time::timeout(Duration::from_secs(2), stream.read(&mut buffer))
+                    .await
+                    .map_err(|_| "local HTTP request body timed out".to_string())?
+                    .map_err(|error| format!("local HTTP request body read failed: {error}"))?;
+                if read == 0 {
+                    return Err("local HTTP peer closed before sending its body".to_string());
+                }
+                remaining = remaining.saturating_sub(read);
+            }
+            return Ok(request);
+        }
+        if request.len() > 64 * 1024 {
+            return Err("local HTTP request headers exceeded 64KB".to_string());
+        }
+    }
+}
+
+async fn serve_batch_requests(
+    listener: TcpListener,
+    mut stop: oneshot::Receiver<()>,
+    batch_requests: Arc<AtomicUsize>,
+) -> Result<(), String> {
+    loop {
+        tokio::select! {
+            _ = &mut stop => return Ok(()),
+            accepted = listener.accept() => {
+                let (mut stream, _) = accepted
+                    .map_err(|error| format!("local batch endpoint accept failed: {error}"))?;
+                let request = read_http_headers(&mut stream).await?;
+                if request.starts_with(b"POST ") {
+                    batch_requests.fetch_add(1, Ordering::SeqCst);
+                }
+                let body = br#"{"status":"completed","steps":[]}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                stream
+                    .write_all(response.as_bytes())
+                    .await
+                    .map_err(|error| format!("local batch response header failed: {error}"))?;
+                stream
+                    .write_all(body)
+                    .await
+                    .map_err(|error| format!("local batch response body failed: {error}"))?;
+            }
+        }
+    }
+}
+
+async fn wait_for_live_shutdown(
+    websocket: &mut WebSocketStream<TcpStream>,
+    stop: &mut oneshot::Receiver<()>,
+) -> bool {
+    loop {
+        tokio::select! {
+            _ = &mut *stop => return true,
+            message = websocket.next() => match message {
+                Some(Ok(Message::Text(text))) if text.contains("audioStreamEnd") => return false,
+                Some(Ok(Message::Close(_))) | None | Some(Err(_)) => return false,
+                Some(_) => {}
+            }
+        }
+    }
+}
+
+async fn run_local_gemini_endpoint(
+    listener: TcpListener,
+    setup_seen: oneshot::Sender<()>,
+    action: oneshot::Receiver<LocalEndpointAction>,
+    mut stop: oneshot::Receiver<()>,
+    batch_requests: Arc<AtomicUsize>,
+) -> Result<(), String> {
+    let (stream, _) = listener
+        .accept()
+        .await
+        .map_err(|error| format!("local Live endpoint accept failed: {error}"))?;
+    let mut websocket = accept_async(stream)
+        .await
+        .map_err(|error| format!("local Live endpoint handshake failed: {error}"))?;
+
+    let setup = tokio::time::timeout(Duration::from_secs(2), websocket.next())
+        .await
+        .map_err(|_| "local Live endpoint timed out waiting for setup".to_string())?
+        .ok_or_else(|| "local Live endpoint received no setup frame".to_string())?
+        .map_err(|error| format!("local Live endpoint setup read failed: {error}"))?;
+    match setup {
+        Message::Text(text) if text.contains("setup") => {}
+        _ => return Err("local Live endpoint received an invalid setup frame".to_string()),
+    }
+    websocket
+        .send(Message::Text(r#"{"setupComplete":{}}"#.into()))
+        .await
+        .map_err(|error| format!("local Live setup response failed: {error}"))?;
+    setup_seen
+        .send(())
+        .map_err(|_| "setup observer was dropped".to_string())?;
+
+    let stopped = match action
+        .await
+        .map_err(|_| "local Live endpoint action was dropped".to_string())?
+    {
+        LocalEndpointAction::Close => {
+            websocket
+                .send(Message::Text(
+                    r#"{"serverContent":{"inputTranscription":{"text":"partial live transcript"}}}"#.into(),
+                ))
+                .await
+                .map_err(|error| format!("local Live partial result failed: {error}"))?;
+            websocket
+                .send(Message::Close(None))
+                .await
+                .map_err(|error| format!("local Live close frame failed: {error}"))?;
+            false
+        }
+        LocalEndpointAction::Eof => {
+            drop(websocket);
+            false
+        }
+        LocalEndpointAction::FullResult => {
+            websocket
+                .send(Message::Text(
+                    r#"{"serverContent":{"inputTranscription":{"text":"real live transcript"},"turnComplete":true}}"#.into(),
+                ))
+                .await
+                .map_err(|error| format!("local Live result failed: {error}"))?;
+            drop(websocket);
+            false
+        }
+        LocalEndpointAction::EmptyResult => {
+            websocket
+                .send(Message::Text(
+                    r#"{"serverContent":{"turnComplete":true}}"#.into(),
+                ))
+                .await
+                .map_err(|error| format!("local Live empty result failed: {error}"))?;
+            drop(websocket);
+            false
+        }
+        LocalEndpointAction::KeepOpen => wait_for_live_shutdown(&mut websocket, &mut stop).await,
+    };
+
+    if stopped {
+        return Ok(());
+    }
+    serve_batch_requests(listener, stop, batch_requests).await
+}
+
+async fn spawn_local_gemini_endpoint() -> LocalGeminiEndpoint {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("local Live endpoint should bind");
+    let address = listener
+        .local_addr()
+        .expect("local Live endpoint should have an address");
+    let (setup_tx, setup_rx) = oneshot::channel();
+    let (action_tx, action_rx) = oneshot::channel();
+    let (stop_tx, stop_rx) = oneshot::channel();
+    let batch_requests = Arc::new(AtomicUsize::new(0));
+    let task = tokio::spawn(run_local_gemini_endpoint(
+        listener,
+        setup_tx,
+        action_rx,
+        stop_rx,
+        Arc::clone(&batch_requests),
+    ));
+
+    LocalGeminiEndpoint {
+        base_url: format!("http://{address}"),
+        setup_seen: Some(setup_rx),
+        action: Some(action_tx),
+        stop: Some(stop_tx),
+        batch_requests,
+        task: Some(task),
+    }
+}
+
+fn real_gemini_router(endpoint: &str) -> (Arc<GeminiProvider>, TranscriptionRouter) {
+    let network = Arc::new(
+        NetworkManager::new(crate::settings::ProxySettings {
+            mode: ProxyMode::Direct,
+            ..Default::default()
+        })
+        .expect("direct test network should build"),
+    );
+    let provider = Arc::new(GeminiProvider::new_for_test(
+        network,
+        "local-gemini-test-key",
+        endpoint,
+    ));
+    let router = TranscriptionRouter::new(
+        Arc::new(NoLocal),
+        provider.clone(),
+        Arc::new(TextOutput::default()),
+    );
+    (provider, router)
+}
+
+fn real_gemini_mode() -> TranscriptionMode {
+    TranscriptionMode::Cloud {
+        provider_id: "gemini".to_string(),
+        model_id: GEMINI_LIVE_MODEL_ID.to_string(),
+    }
+}
+
+#[tokio::test]
+async fn real_gemini_live_failures_reach_router_without_batch_fallback() {
+    for action in [
+        LocalEndpointAction::Close,
+        LocalEndpointAction::Eof,
+        LocalEndpointAction::KeepOpen,
+    ] {
+        let mut endpoint = spawn_local_gemini_endpoint().await;
+        let (provider, router) = real_gemini_router(&endpoint.base_url);
+        let route = Arc::new(StreamRouter::new());
+        router.start_cloud_stream(&options(), route.clone());
+        endpoint.wait_for_setup().await;
+
+        if matches!(action, LocalEndpointAction::KeepOpen) {
+            let notification = provider.test_fail_next_live_send();
+            let send_failed = notification.notified();
+            endpoint.release(action);
+            route.feed(&vec![0.0; SAMPLES_PER_CHUNK]);
+            tokio::time::timeout(Duration::from_secs(1), send_failed)
+                .await
+                .expect("controlled Live send failure should be observed");
+        } else {
+            endpoint.release(action);
+        }
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            router.finish_cloud_stream(
+                vec![0.0; SAMPLES_PER_CHUNK],
+                &options(),
+                &real_gemini_mode(),
+            ),
+        )
+        .await
+        .expect("Live failure should reach the router promptly");
+        assert!(
+            result.is_err(),
+            "{action:?} must not become a successful transcript"
+        );
+        assert_eq!(
+            endpoint.batch_request_count(),
+            0,
+            "{action:?} must not trigger a cloud batch fallback"
+        );
+        endpoint
+            .shutdown()
+            .await
+            .expect("local endpoint should shut down cleanly");
+    }
+}
+
+#[tokio::test]
+async fn real_gemini_live_success_and_empty_result_keep_existing_contracts() {
+    for (action, expected, expected_batches) in [
+        (LocalEndpointAction::FullResult, "real live transcript", 0),
+        (LocalEndpointAction::EmptyResult, "", 1),
+    ] {
+        let mut endpoint = spawn_local_gemini_endpoint().await;
+        let (_provider, router) = real_gemini_router(&endpoint.base_url);
+        router.start_cloud_stream(&options(), Arc::new(StreamRouter::new()));
+        endpoint.wait_for_setup().await;
+        endpoint.release(action);
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            router.finish_cloud_stream(
+                vec![0.0; SAMPLES_PER_CHUNK],
+                &options(),
+                &real_gemini_mode(),
+            ),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{action:?} finalization timed out: {error}"))
+        .unwrap_or_else(|error| panic!("{action:?} finalization failed: {error}"));
+        assert_eq!(result, expected);
+        assert_eq!(endpoint.batch_request_count(), expected_batches);
+        endpoint
+            .shutdown()
+            .await
+            .expect("local endpoint should shut down cleanly");
+    }
 }

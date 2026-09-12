@@ -218,16 +218,102 @@ fn safe_error_text(text: &str, secrets: &[&str]) -> String {
         .collect()
 }
 
+#[cfg(test)]
+#[derive(Default)]
+struct TestLiveSendControl {
+    fail_next_send: std::sync::atomic::AtomicBool,
+    send_failed: Arc<tokio::sync::Notify>,
+}
+
+#[cfg(test)]
+struct TestGeminiConfig {
+    api_key: String,
+    custom_base_url: Option<String>,
+}
+
 pub struct GeminiProvider {
     network_manager: Arc<NetworkManager>,
+    #[cfg(not(test))]
     app_handle: AppHandle,
+    #[cfg(test)]
+    test_config: Option<TestGeminiConfig>,
+    #[cfg(test)]
+    test_send_control: Arc<TestLiveSendControl>,
 }
 
 impl GeminiProvider {
     pub fn new(network_manager: Arc<NetworkManager>, app_handle: AppHandle) -> Self {
+        #[cfg(test)]
+        let _ = app_handle;
+
         Self {
             network_manager,
+            #[cfg(not(test))]
             app_handle,
+            #[cfg(test)]
+            test_config: None,
+            #[cfg(test)]
+            test_send_control: Arc::new(TestLiveSendControl::default()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(
+        network_manager: Arc<NetworkManager>,
+        api_key: &str,
+        custom_base_url: &str,
+    ) -> Self {
+        Self {
+            network_manager,
+            test_config: Some(TestGeminiConfig {
+                api_key: api_key.to_string(),
+                custom_base_url: Some(custom_base_url.to_string()),
+            }),
+            test_send_control: Arc::new(TestLiveSendControl::default()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fail_next_live_send(&self) -> Arc<tokio::sync::Notify> {
+        self.test_send_control
+            .fail_next_send
+            .store(true, std::sync::atomic::Ordering::Release);
+        Arc::clone(&self.test_send_control.send_failed)
+    }
+
+    fn provider_settings(
+        &self,
+    ) -> Result<(String, crate::settings::CloudSttProviderSettings), String> {
+        #[cfg(test)]
+        {
+            if let Some(config) = &self.test_config {
+                return Ok((
+                    config.api_key.trim().to_string(),
+                    crate::settings::CloudSttProviderSettings {
+                        provider_id: "gemini".to_string(),
+                        model_id: DEFAULT_CLOUD_STT_MODEL_ID.to_string(),
+                        custom_base_url: config.custom_base_url.clone(),
+                    },
+                ));
+            }
+            Err("Gemini test provider configuration is missing".to_string())
+        }
+
+        #[cfg(not(test))]
+        {
+            let settings = crate::settings::get_settings(&self.app_handle);
+            let api_key = settings
+                .cloud_stt_api_keys
+                .get("gemini")
+                .map(|key| key.trim().to_string())
+                .filter(|key| !key.is_empty())
+                .ok_or_else(|| "Gemini API key is not configured".to_string())?;
+            let provider_config = settings
+                .cloud_stt_providers
+                .get("gemini")
+                .cloned()
+                .unwrap_or_default();
+            Ok((api_key, provider_config))
         }
     }
 
@@ -445,20 +531,7 @@ impl BatchTranscriptionProvider for GeminiProvider {
         audio: Vec<f32>,
         options: &TranscriptionOptions,
     ) -> Result<String, String> {
-        let settings = crate::settings::get_settings(&self.app_handle);
-        let api_key = settings
-            .cloud_stt_api_keys
-            .get("gemini")
-            .map(|k| k.trim())
-            .filter(|k| !k.is_empty())
-            .ok_or_else(|| "Gemini API key is not configured".to_string())?;
-
-        let provider_config = settings
-            .cloud_stt_providers
-            .get("gemini")
-            .cloned()
-            .unwrap_or_default();
-
+        let (api_key, provider_config) = self.provider_settings()?;
         let raw_model = provider_config.model_id.trim();
         let model = if raw_model.is_empty() || raw_model.contains("transcribe-live") {
             DEFAULT_CLOUD_STT_MODEL_ID
@@ -474,7 +547,7 @@ impl BatchTranscriptionProvider for GeminiProvider {
         let wav_bytes = Self::encode_wav_in_memory(&audio, 16000)?;
         let base64_audio = BASE64.encode(&wav_bytes);
 
-        let request_url = Self::build_request_url(custom_base, api_key);
+        let request_url = Self::build_request_url(custom_base, &api_key);
 
         let mut inputs = vec![GeminiInteractionInput::Audio {
             data: base64_audio,
@@ -508,10 +581,10 @@ impl BatchTranscriptionProvider for GeminiProvider {
 
         let client = self.network_manager.client().await;
         let mut req = client.post(&request_url);
-        if Self::is_oauth_token(api_key) {
+        if Self::is_oauth_token(&api_key) {
             req = req.header("Authorization", format!("Bearer {}", api_key));
         } else {
-            req = req.header("x-goog-api-key", api_key);
+            req = req.header("x-goog-api-key", &api_key);
         }
         let response = req.json(&payload).send().await.map_err(|e| {
             crate::llm_client::report_reqwest_error("Gemini transcription request failed", &e)
@@ -523,7 +596,7 @@ impl BatchTranscriptionProvider for GeminiProvider {
             return Err(Self::parse_api_error_with_secrets(
                 status,
                 &error_text,
-                &[api_key],
+                &[api_key.as_str()],
             ));
         }
 
@@ -581,25 +654,55 @@ impl StreamingSession for GeminiLiveStreamingSession {
     }
 }
 
+struct LiveState {
+    committed_text: String,
+    tentative_text: String,
+    session_error: Option<String>,
+    turn_completed: bool,
+    finalizing: bool,
+    has_received_input_after_finalize: bool,
+}
+
+fn record_live_error(
+    state: &Arc<parking_lot::Mutex<LiveState>>,
+    turn_notify: &tokio::sync::Notify,
+    error: String,
+) {
+    let mut state = state.lock();
+    if state.session_error.is_none() {
+        state.session_error = Some(error);
+    }
+    drop(state);
+    turn_notify.notify_one();
+}
+
+fn record_live_error_if_unfinished(
+    state: &Arc<parking_lot::Mutex<LiveState>>,
+    turn_notify: &tokio::sync::Notify,
+    error: String,
+) {
+    let mut state = state.lock();
+    if state.turn_completed {
+        return;
+    }
+    if state.session_error.is_none() {
+        state.session_error = Some(error);
+    }
+    drop(state);
+    turn_notify.notify_one();
+}
+
 async fn run_gemini_live_worker<S>(
     ws: WebSocketStream<S>,
     mut audio_rx: tokio::sync::mpsc::UnboundedReceiver<Vec<f32>>,
     mut cmd_rx: tokio::sync::mpsc::Receiver<SessionCmd>,
     text_sink: Arc<dyn StreamTextSink>,
     api_key: String,
+    #[cfg(test)] test_send_control: Arc<TestLiveSendControl>,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
     let (mut ws_sink, mut ws_stream) = ws.split();
-
-    struct LiveState {
-        committed_text: String,
-        tentative_text: String,
-        session_error: Option<String>,
-        turn_completed: bool,
-        finalizing: bool,
-        has_received_input_after_finalize: bool,
-    }
 
     let state = Arc::new(parking_lot::Mutex::new(LiveState {
         committed_text: String::new(),
@@ -625,12 +728,26 @@ async fn run_gemini_live_worker<S>(
             match msg_res {
                 Ok(msg) => match msg {
                     tokio_tungstenite::tungstenite::Message::Ping(data) => {
-                        let _ = sink_tx_receiver
+                        if sink_tx_receiver
                             .send(tokio_tungstenite::tungstenite::Message::Pong(data))
-                            .await;
+                            .await
+                            .is_err()
+                        {
+                            record_live_error_if_unfinished(
+                                &state_receiver,
+                                &turn_notify_receiver,
+                                "WebSocket send channel closed while sending Pong".to_string(),
+                            );
+                            break;
+                        }
                     }
                     tokio_tungstenite::tungstenite::Message::Close(_) => {
                         log::info!("Gemini Live server closed connection");
+                        record_live_error_if_unfinished(
+                            &state_receiver,
+                            &turn_notify_receiver,
+                            "Gemini Live server closed connection unexpectedly".to_string(),
+                        );
                         turn_notify_receiver.notify_one();
                         break;
                     }
@@ -643,8 +760,7 @@ async fn run_gemini_live_worker<S>(
                                 let err_text =
                                     safe_error_text(&err_text, &[receiver_api_key.as_str()]);
                                 log::warn!("Gemini Live server error: {}", err_text);
-                                state_receiver.lock().session_error = Some(err_text);
-                                turn_notify_receiver.notify_one();
+                                record_live_error(&state_receiver, &turn_notify_receiver, err_text);
                             }
                             if let Some(content) = server_msg.server_content {
                                 if let Some(interim) = content.interim_input_transcription {
@@ -688,22 +804,56 @@ async fn run_gemini_live_worker<S>(
                 Err(e) => {
                     let error = safe_error_text(&e.to_string(), &[receiver_api_key.as_str()]);
                     log::warn!("Gemini Live WebSocket receive error: {}", error);
-                    state_receiver.lock().session_error =
-                        Some(format!("WebSocket receive error: {}", error));
-                    turn_notify_receiver.notify_one();
+                    record_live_error(
+                        &state_receiver,
+                        &turn_notify_receiver,
+                        format!("WebSocket receive error: {}", error),
+                    );
                     break;
                 }
             }
         }
+        record_live_error_if_unfinished(
+            &state_receiver,
+            &turn_notify_receiver,
+            "Gemini Live server ended the connection unexpectedly".to_string(),
+        );
         turn_notify_receiver.notify_one();
     });
 
     let sender_api_key = api_key;
+    let state_sender = Arc::clone(&state);
+    let turn_notify_sender = Arc::clone(&turn_notify);
+    #[cfg(test)]
+    let test_send_control_sender = Arc::clone(&test_send_control);
     child_tasks.spawn(async move {
         while let Some(msg) = sink_rx.recv().await {
-            if let Err(e) = ws_sink.send(msg).await {
+            #[cfg(test)]
+            let send_result = if test_send_control_sender
+                .fail_next_send
+                .swap(false, std::sync::atomic::Ordering::AcqRel)
+            {
+                test_send_control_sender.send_failed.notify_one();
+                Err(tokio_tungstenite::tungstenite::Error::Io(
+                    std::io::Error::new(
+                        std::io::ErrorKind::BrokenPipe,
+                        "test-controlled send failure",
+                    ),
+                ))
+            } else {
+                ws_sink.send(msg).await
+            };
+            #[cfg(not(test))]
+            let send_result = ws_sink.send(msg).await;
+
+            if let Err(e) = send_result {
                 let error = safe_error_text(&e.to_string(), &[sender_api_key.as_str()]);
                 log::warn!("Gemini Live WebSocket send failed: {}", error);
+                record_live_error_if_unfinished(
+                    &state_sender,
+                    &turn_notify_sender,
+                    format!("WebSocket send error: {}", error),
+                );
                 break;
             }
         }
@@ -738,6 +888,12 @@ async fn run_gemini_live_worker<S>(
                                 .await
                                 .is_err()
                             {
+                                record_live_error_if_unfinished(
+                                    &state,
+                                    &turn_notify,
+                                    "WebSocket send channel closed while sending audio"
+                                        .to_string(),
+                                );
                                 break;
                             }
                         }
@@ -767,9 +923,18 @@ async fn run_gemini_live_worker<S>(
                                 },
                             };
                             if let Ok(frame_json) = serde_json::to_string(&input_frame) {
-                                let _ = sink_tx
+                                if sink_tx
                                     .send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into()))
-                                    .await;
+                                    .await
+                                    .is_err()
+                                {
+                                    record_live_error_if_unfinished(
+                                        &state,
+                                        &turn_notify,
+                                        "WebSocket send channel closed while sending final audio"
+                                            .to_string(),
+                                    );
+                                }
                             }
                         }
 
@@ -780,9 +945,17 @@ async fn run_gemini_live_worker<S>(
                             },
                         };
                         if let Ok(frame_json) = serde_json::to_string(&end_frame) {
-                            let _ = sink_tx
+                            if sink_tx
                                 .send(tokio_tungstenite::tungstenite::Message::Text(frame_json.into()))
-                                .await;
+                                .await
+                                .is_err()
+                            {
+                                record_live_error_if_unfinished(
+                                    &state,
+                                    &turn_notify,
+                                    "WebSocket send channel closed while ending audio".to_string(),
+                                );
+                            }
                         }
 
                         let had_pending_work = {
@@ -841,10 +1014,10 @@ async fn run_gemini_live_worker<S>(
                             result.push_str(tentative);
                         }
                         let trimmed = result.trim().to_string();
-                        if !trimmed.is_empty() {
-                            let _ = reply_tx.send(Ok(trimmed));
-                        } else if let Some(err) = &final_state.session_error {
+                        if let Some(err) = &final_state.session_error {
                             let _ = reply_tx.send(Err(err.clone()));
+                        } else if !trimmed.is_empty() {
+                            let _ = reply_tx.send(Ok(trimmed));
                         } else {
                             let _ = reply_tx.send(Ok(String::new()));
                         }
@@ -876,22 +1049,9 @@ impl StreamingTranscriptionProvider for GeminiProvider {
         options: &TranscriptionOptions,
         text_sink: Arc<dyn StreamTextSink>,
     ) -> Result<Box<dyn StreamingSession>, String> {
-        let settings = crate::settings::get_settings(&self.app_handle);
-        let api_key = settings
-            .cloud_stt_api_keys
-            .get("gemini")
-            .map(|k| k.trim())
-            .filter(|k| !k.is_empty())
-            .ok_or_else(|| "Gemini API key is not configured".to_string())?;
-
-        let provider_config = settings
-            .cloud_stt_providers
-            .get("gemini")
-            .cloned()
-            .unwrap_or_default();
-
+        let (api_key, provider_config) = self.provider_settings()?;
         let custom_base = provider_config.custom_base_url.as_deref();
-        let ws_url = Self::build_live_websocket_url(custom_base, api_key);
+        let ws_url = Self::build_live_websocket_url(custom_base, &api_key);
         let mut ws = self
             .network_manager
             .connect_websocket(&ws_url)
@@ -899,7 +1059,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
             .map_err(|error| {
                 format!(
                     "Gemini Live WebSocket connection failed: {}",
-                    safe_error_text(&error, &[api_key])
+                    safe_error_text(&error, &[api_key.as_str()])
                 )
             })?;
 
@@ -943,7 +1103,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
         .map_err(|e| {
             format!(
                 "Failed to send Gemini Live setup frame: {}",
-                safe_error_text(&e.to_string(), &[api_key])
+                safe_error_text(&e.to_string(), &[api_key.as_str()])
             )
         })?;
 
@@ -959,9 +1119,14 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                             );
                         }
                         tokio_tungstenite::tungstenite::Message::Ping(data) => {
-                            let _ = ws
-                                .send(tokio_tungstenite::tungstenite::Message::Pong(data))
-                                .await;
+                            ws.send(tokio_tungstenite::tungstenite::Message::Pong(data))
+                                .await
+                                .map_err(|e| {
+                                    format!(
+                                        "Gemini Live failed to send handshake pong: {}",
+                                        safe_error_text(&e.to_string(), &[api_key.as_str()])
+                                    )
+                                })?;
                         }
                         other => {
                             if let Some(server_msg) = GeminiLiveServerMessage::parse(&other) {
@@ -970,7 +1135,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                                         err.message.unwrap_or_else(|| "Unknown error".to_string());
                                     return Err(format!(
                                         "Gemini Live setup failed: {}",
-                                        safe_error_text(&message, &[api_key])
+                                        safe_error_text(&message, &[api_key.as_str()])
                                     ));
                                 }
                                 if server_msg.setup_complete.is_some() {
@@ -982,7 +1147,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                     Err(e) => {
                         return Err(format!(
                             "Gemini Live failed to receive handshake response: {}",
-                            safe_error_text(&e.to_string(), &[api_key])
+                            safe_error_text(&e.to_string(), &[api_key.as_str()])
                         ));
                     }
                 }
@@ -1009,7 +1174,9 @@ impl StreamingTranscriptionProvider for GeminiProvider {
             audio_rx,
             cmd_rx,
             text_sink,
-            api_key.to_string(),
+            api_key,
+            #[cfg(test)]
+            Arc::clone(&self.test_send_control),
         ));
 
         Ok(Box::new(GeminiLiveStreamingSession {
@@ -1470,6 +1637,7 @@ mod tests {
                 cmd_rx,
                 sink,
                 String::new(),
+                Arc::new(TestLiveSendControl::default()),
             ));
             let session = Box::new(GeminiLiveStreamingSession {
                 audio_tx,
@@ -1500,6 +1668,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn live_server_close_or_eof_after_setup_returns_an_error() {
+        use tokio_tungstenite::tungstenite::protocol::Role;
+        use tokio_tungstenite::tungstenite::Message;
+
+        for close_frame in [true, false] {
+            let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+            let client_ws = WebSocketStream::from_raw_socket(client_io, Role::Client, None).await;
+            let mut server_ws =
+                WebSocketStream::from_raw_socket(server_io, Role::Server, None).await;
+            let (_audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
+            let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
+            let sink = Arc::new(MockSink {
+                emitted: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            });
+            let worker = tokio::spawn(run_gemini_live_worker(
+                client_ws,
+                audio_rx,
+                cmd_rx,
+                sink,
+                String::new(),
+                Arc::new(TestLiveSendControl::default()),
+            ));
+
+            if close_frame {
+                server_ws
+                    .send(Message::Close(None))
+                    .await
+                    .expect("server close should be sent");
+            } else {
+                drop(server_ws);
+            }
+
+            let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+            cmd_tx.send(SessionCmd::Finalize(reply_tx)).await.unwrap();
+            let result = tokio::time::timeout(Duration::from_secs(1), reply_rx)
+                .await
+                .expect("Live finalization should not hang")
+                .unwrap();
+            assert!(result.is_err(), "unexpected Live termination must fail");
+            worker.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn live_failure_overrides_partial_text() {
+        use tokio_tungstenite::tungstenite::protocol::Role;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+        let client_ws = WebSocketStream::from_raw_socket(client_io, Role::Client, None).await;
+        let mut server_ws = WebSocketStream::from_raw_socket(server_io, Role::Server, None).await;
+        let (_audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
+        let sink = Arc::new(MockSink {
+            emitted: Arc::new(parking_lot::Mutex::new(Vec::new())),
+        });
+        let worker = tokio::spawn(run_gemini_live_worker(
+            client_ws,
+            audio_rx,
+            cmd_rx,
+            sink,
+            String::new(),
+            Arc::new(TestLiveSendControl::default()),
+        ));
+
+        server_ws
+            .send(Message::Text(
+                r#"{"serverContent":{"inputTranscription":{"text":"partial text"}}}"#.into(),
+            ))
+            .await
+            .unwrap();
+        server_ws.send(Message::Close(None)).await.unwrap();
+
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        cmd_tx.send(SessionCmd::Finalize(reply_tx)).await.unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(1), reply_rx)
+            .await
+            .expect("Live finalization should not hang")
+            .unwrap();
+        assert!(result.is_err(), "a Live error must override partial text");
+        worker.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn live_server_error_is_redacted_before_returning_to_router() {
         use tokio_tungstenite::tungstenite::protocol::Role;
         use tokio_tungstenite::tungstenite::Message;
@@ -1519,6 +1771,7 @@ mod tests {
             cmd_rx,
             sink,
             api_key.to_string(),
+            Arc::new(TestLiveSendControl::default()),
         ));
 
         let server_error = format!(
@@ -1569,6 +1822,7 @@ mod tests {
             cmd_rx,
             sink,
             String::new(),
+            Arc::new(TestLiveSendControl::default()),
         ));
 
         let samples = vec![0.0f32; 1600];
@@ -1651,6 +1905,7 @@ mod tests {
             cmd_rx,
             sink,
             String::new(),
+            Arc::new(TestLiveSendControl::default()),
         ));
 
         let final_text_json =
@@ -1710,6 +1965,7 @@ mod tests {
             cmd_rx,
             sink,
             String::new(),
+            Arc::new(TestLiveSendControl::default()),
         ));
 
         let interim_text_json =

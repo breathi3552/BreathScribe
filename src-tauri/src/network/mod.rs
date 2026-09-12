@@ -256,33 +256,73 @@ pub fn build_reqwest_client(settings: &ProxySettings) -> Result<Client, String> 
         .map_err(|e| format!("Failed to build reqwest client: {}", e))
 }
 
-/// Probe network connectivity and return round-trip latency in ms
+#[cfg(not(test))]
+const CONNECTIVITY_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[cfg(test)]
+const TEST_CONNECTIVITY_TIMEOUT: Duration = Duration::from_millis(250);
+
+fn connectivity_timeout() -> Duration {
+    #[cfg(test)]
+    {
+        TEST_CONNECTIVITY_TIMEOUT
+    }
+
+    #[cfg(not(test))]
+    {
+        CONNECTIVITY_TIMEOUT
+    }
+}
+
+/// Probe network connectivity and return round-trip latency in ms.
 pub async fn test_connectivity(client: &Client) -> Result<u64, String> {
     let mut last_err = None;
 
     for url in connectivity_test_urls() {
         let start = std::time::Instant::now();
-        match client.get(&url).send().await {
-            Ok(resp) => {
-                let elapsed_ms = start.elapsed().as_millis() as u64;
-                log::info!(
-                    "Connectivity test succeeded via {} in {} ms, status: {}",
-                    url,
-                    elapsed_ms,
-                    resp.status()
-                );
-                return Ok(elapsed_ms);
-            }
-            Err(e) => {
-                log::warn!("Connectivity test probe failed for {}: {}", url, e);
-                last_err = Some(e);
-            }
+        let response =
+            match tokio::time::timeout(connectivity_timeout(), client.get(&url).send()).await {
+                Ok(Ok(response)) => response,
+                Ok(Err(error)) => {
+                    last_err = Some(crate::llm_client::report_reqwest_error(
+                        "Connectivity probe request failed",
+                        &error,
+                    ));
+                    continue;
+                }
+                Err(_) => {
+                    let safe_url = crate::llm_client::sanitized_url_for_log(&url);
+                    log::warn!("Connectivity test probe timed out for {safe_url}");
+                    last_err = Some(format!("Connectivity probe to {safe_url} timed out"));
+                    continue;
+                }
+            };
+
+        let safe_url = crate::llm_client::sanitized_url_for_log(&url);
+        if response.status().is_success() {
+            let elapsed_ms = start.elapsed().as_millis() as u64;
+            log::info!(
+                "Connectivity test succeeded via {} in {} ms, status: {}",
+                safe_url,
+                elapsed_ms,
+                response.status()
+            );
+            return Ok(elapsed_ms);
         }
+
+        log::warn!(
+            "Connectivity test probe returned HTTP {} from {}",
+            response.status(),
+            safe_url
+        );
+        last_err = Some(format!(
+            "Connectivity probe returned HTTP {} from {}",
+            response.status(),
+            safe_url
+        ));
     }
 
-    Err(last_err
-        .map(|e| format!("Connectivity probe failed: {}", e))
-        .unwrap_or_else(|| "Connectivity probe failed: unknown error".to_string()))
+    Err(last_err.unwrap_or_else(|| "Connectivity probe failed: unknown error".to_string()))
 }
 
 #[cfg(test)]
@@ -470,6 +510,36 @@ mod tests {
                 .await
                 .map_err(|e| format!("HTTP target shutdown failed: {e}"))?;
             Ok(request)
+        });
+        (address, task)
+    }
+
+    async fn spawn_http_only_target() -> (SocketAddr, JoinHandle<Result<Vec<Vec<u8>>, String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..2 {
+                let (mut stream, _) = listener
+                    .accept()
+                    .await
+                    .map_err(|e| format!("HTTP-only target accept failed: {e}"))?;
+                requests.push(read_headers(&mut stream).await?);
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    HTTP_BODY.len(),
+                    HTTP_BODY
+                );
+                stream
+                    .write_all(response.as_bytes())
+                    .await
+                    .map_err(|e| format!("HTTP-only target response failed: {e}"))?;
+                stream
+                    .shutdown()
+                    .await
+                    .map_err(|e| format!("HTTP-only target shutdown failed: {e}"))?;
+            }
+            Ok(requests)
         });
         (address, task)
     }
@@ -675,6 +745,149 @@ mod tests {
             .await
             .map_err(|e| format!("HTTP CONNECT forwarding failed: {e}"))?;
         Ok(())
+    }
+
+    #[derive(Clone, Copy)]
+    enum ProxyFailure {
+        Rejected,
+        Authentication,
+        ConnectionError,
+        Silent,
+    }
+
+    async fn run_http_failure_proxy(
+        listener: TcpListener,
+        status: u16,
+        require_authentication: bool,
+        expected_prefix: &str,
+    ) -> Result<(), String> {
+        let (mut client, _) = listener
+            .accept()
+            .await
+            .map_err(|e| format!("HTTP failure proxy accept failed: {e}"))?;
+        let request = read_headers(&mut client).await?;
+        if !String::from_utf8_lossy(&request).starts_with(expected_prefix) {
+            return Err("HTTP failure proxy received an unexpected request".to_string());
+        }
+        if require_authentication && header_value(&request, "Proxy-Authorization").is_none() {
+            return Err("HTTP failure proxy did not receive proxy credentials".to_string());
+        }
+        let reason = if status == 407 {
+            "Proxy Authentication Required"
+        } else {
+            "Forbidden"
+        };
+        let response =
+            format!("HTTP/1.1 {status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        client
+            .write_all(response.as_bytes())
+            .await
+            .map_err(|e| format!("HTTP failure proxy response failed: {e}"))?;
+        client
+            .shutdown()
+            .await
+            .map_err(|e| format!("HTTP failure proxy shutdown failed: {e}"))?;
+        Ok(())
+    }
+
+    async fn run_silent_proxy(listener: TcpListener) -> Result<(), String> {
+        let _ = listener
+            .accept()
+            .await
+            .map_err(|e| format!("silent proxy accept failed: {e}"))?;
+        std::future::pending::<Result<(), String>>().await
+    }
+
+    async fn run_socks5_failure_proxy(
+        listener: TcpListener,
+        failure: ProxyFailure,
+    ) -> Result<(), String> {
+        let (mut client, _) = listener
+            .accept()
+            .await
+            .map_err(|e| format!("SOCKS5 failure proxy accept failed: {e}"))?;
+        let mut greeting_header = [0u8; 2];
+        client
+            .read_exact(&mut greeting_header)
+            .await
+            .map_err(|e| format!("SOCKS5 failure greeting failed: {e}"))?;
+        let mut methods = vec![0u8; greeting_header[1] as usize];
+        client
+            .read_exact(&mut methods)
+            .await
+            .map_err(|e| format!("SOCKS5 failure methods failed: {e}"))?;
+
+        match failure {
+            ProxyFailure::Rejected => {
+                client
+                    .write_all(&[0x05, 0x00])
+                    .await
+                    .map_err(|e| format!("SOCKS5 rejection method failed: {e}"))?;
+                read_socks5_destination(&mut client).await?;
+                client
+                    .write_all(&[0x05, 0x05, 0x00, 0x01, 127, 0, 0, 1, 0, 0])
+                    .await
+                    .map_err(|e| format!("SOCKS5 rejection response failed: {e}"))?;
+            }
+            ProxyFailure::Authentication => {
+                if !methods.contains(&0x02) {
+                    return Err("SOCKS5 client did not offer username/password auth".to_string());
+                }
+                client
+                    .write_all(&[0x05, 0x02])
+                    .await
+                    .map_err(|e| format!("SOCKS5 auth method failed: {e}"))?;
+                let mut auth_header = [0u8; 2];
+                client
+                    .read_exact(&mut auth_header)
+                    .await
+                    .map_err(|e| format!("SOCKS5 auth header failed: {e}"))?;
+                let mut username = vec![0u8; auth_header[1] as usize];
+                client
+                    .read_exact(&mut username)
+                    .await
+                    .map_err(|e| format!("SOCKS5 username failed: {e}"))?;
+                let mut password_length = [0u8; 1];
+                client
+                    .read_exact(&mut password_length)
+                    .await
+                    .map_err(|e| format!("SOCKS5 password length failed: {e}"))?;
+                let mut password = vec![0u8; password_length[0] as usize];
+                client
+                    .read_exact(&mut password)
+                    .await
+                    .map_err(|e| format!("SOCKS5 password failed: {e}"))?;
+                client
+                    .write_all(&[0x01, 0x01])
+                    .await
+                    .map_err(|e| format!("SOCKS5 auth rejection failed: {e}"))?;
+            }
+            ProxyFailure::ConnectionError => unreachable!(),
+            ProxyFailure::Silent => {
+                client
+                    .write_all(&[0x05, 0x00])
+                    .await
+                    .map_err(|e| format!("SOCKS5 silent method failed: {e}"))?;
+                read_socks5_destination(&mut client).await?;
+                client
+                    .write_all(&[0x05, 0x00, 0x00, 0x01])
+                    .await
+                    .map_err(|e| format!("SOCKS5 partial response failed: {e}"))?;
+                std::future::pending::<()>().await
+            }
+        }
+        Ok(())
+    }
+
+    async fn assert_no_direct_target_access(listener: &TcpListener) -> Result<(), String> {
+        match tokio::time::timeout(Duration::from_millis(100), listener.accept()).await {
+            Ok(Ok((stream, _))) => {
+                drop(stream);
+                Err("request bypassed the failed proxy and reached the target".to_string())
+            }
+            Ok(Err(error)) => Err(format!("target access check failed: {error}")),
+            Err(_) => Ok(()),
+        }
     }
 
     async fn read_socks5_destination(stream: &mut TcpStream) -> Result<SocketAddr, String> {
@@ -1525,6 +1738,168 @@ mod tests {
         }
         assert!(settings_debug.contains("[REDACTED]"));
         assert!(resolved_debug.contains("[REDACTED]"));
+    }
+
+    #[tokio::test]
+    async fn network_manager_reports_http_success_but_real_websocket_upgrade_failure(
+    ) -> Result<(), String> {
+        let (target, target_task) = spawn_http_only_target().await;
+        let _probe_urls = test_connectivity_urls(vec![format!(
+            "http://127.0.0.1:{}/probe?key=local-test-key",
+            target.port()
+        )]);
+        let manager = NetworkManager::new(ProxySettings {
+            mode: ProxyMode::Direct,
+            ..ProxySettings::default()
+        })?;
+        let client = manager.client().await;
+        test_connectivity(&client).await?;
+
+        let websocket_result = manager
+            .connect_websocket(&format!(
+                "ws://127.0.0.1:{}/live?key=local-test-key",
+                target.port()
+            ))
+            .await;
+        assert!(
+            websocket_result.is_err(),
+            "an HTTP 200 response must not be accepted as a WebSocket upgrade"
+        );
+
+        let requests = await_test_task(target_task).await?;
+        assert_eq!(requests.len(), 2);
+        let http_request = String::from_utf8_lossy(&requests[0]).to_ascii_lowercase();
+        assert!(http_request.starts_with("get /probe"));
+        assert!(!http_request.contains("\r\nupgrade: websocket"));
+        let websocket_request = String::from_utf8_lossy(&requests[1]).to_ascii_lowercase();
+        assert!(websocket_request.starts_with("get /live"));
+        assert!(websocket_request.contains("\r\nupgrade: websocket"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn network_manager_reports_proxy_failures_without_direct_fallback() -> Result<(), String>
+    {
+        const SENSITIVE: &str = "proxy-test-api-key";
+        let failures = [
+            ProxyFailure::Rejected,
+            ProxyFailure::Authentication,
+            ProxyFailure::ConnectionError,
+            ProxyFailure::Silent,
+        ];
+
+        for protocol in [ProxyProtocol::Http, ProxyProtocol::Socks5] {
+            for websocket in [false, true] {
+                for failure in failures {
+                    let target_listener = TcpListener::bind("127.0.0.1:0")
+                        .await
+                        .map_err(|e| format!("target listener failed: {e}"))?;
+                    let target_addr = target_listener
+                        .local_addr()
+                        .map_err(|e| format!("target address failed: {e}"))?;
+                    let expected_prefix = if websocket { "CONNECT " } else { "GET http://" };
+                    let auth = if matches!(failure, ProxyFailure::Authentication) {
+                        AuthCase {
+                            enabled: true,
+                            username: Some("failure-user"),
+                            password: Some("failure-password"),
+                        }
+                    } else {
+                        auth_cases()[0]
+                    };
+
+                    let (proxy_addr, proxy_task) =
+                        if matches!(failure, ProxyFailure::ConnectionError) {
+                            let listener = TcpListener::bind("127.0.0.1:0")
+                                .await
+                                .map_err(|e| format!("proxy listener failed: {e}"))?;
+                            let address = listener
+                                .local_addr()
+                                .map_err(|e| format!("proxy address failed: {e}"))?;
+                            drop(listener);
+                            (address, None)
+                        } else {
+                            let listener = TcpListener::bind("127.0.0.1:0")
+                                .await
+                                .map_err(|e| format!("proxy listener failed: {e}"))?;
+                            let address = listener
+                                .local_addr()
+                                .map_err(|e| format!("proxy address failed: {e}"))?;
+                            let task = match protocol {
+                                ProxyProtocol::Http => match failure {
+                                    ProxyFailure::Rejected => tokio::spawn(run_http_failure_proxy(
+                                        listener,
+                                        403,
+                                        false,
+                                        expected_prefix,
+                                    )),
+                                    ProxyFailure::Authentication => {
+                                        tokio::spawn(run_http_failure_proxy(
+                                            listener,
+                                            407,
+                                            true,
+                                            expected_prefix,
+                                        ))
+                                    }
+                                    ProxyFailure::Silent => {
+                                        tokio::spawn(run_silent_proxy(listener))
+                                    }
+                                    ProxyFailure::ConnectionError => unreachable!(),
+                                },
+                                ProxyProtocol::Socks5 => {
+                                    tokio::spawn(run_socks5_failure_proxy(listener, failure))
+                                }
+                            };
+                            (address, Some(task))
+                        };
+
+                    let manager = NetworkManager::new(manual_settings(protocol, proxy_addr, auth))?;
+                    let started = std::time::Instant::now();
+                    let error = if websocket {
+                        manager
+                            .connect_websocket(&format!(
+                                "ws://{}:{}/live?key={SENSITIVE}",
+                                target_addr.ip(),
+                                target_addr.port()
+                            ))
+                            .await
+                            .expect_err("failed WebSocket proxy operation must return an error")
+                    } else {
+                        let _probe_urls = test_connectivity_urls(vec![format!(
+                            "http://{}:{}/probe?key={SENSITIVE}",
+                            target_addr.ip(),
+                            target_addr.port()
+                        )]);
+                        test_connectivity(&manager.client().await)
+                            .await
+                            .expect_err("failed HTTP proxy operation must return an error")
+                    };
+                    assert!(!error.is_empty());
+                    assert!(
+                        !error.contains(SENSITIVE),
+                        "proxy failure leaked the API key: {error}"
+                    );
+                    if matches!(failure, ProxyFailure::Silent) {
+                        assert!(
+                            started.elapsed() < Duration::from_secs(2),
+                            "silent proxy failure exceeded the bounded test deadline: {:?}",
+                            started.elapsed()
+                        );
+                    }
+
+                    assert_no_direct_target_access(&target_listener).await?;
+                    if let Some(task) = proxy_task {
+                        if matches!(failure, ProxyFailure::Silent) {
+                            task.abort();
+                            let _ = task.await;
+                        } else {
+                            await_test_task(task).await?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     async fn exercise_direct_connections(settings: ProxySettings) -> Result<(), String> {

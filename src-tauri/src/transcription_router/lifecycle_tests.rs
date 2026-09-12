@@ -126,6 +126,13 @@ fn mode() -> TranscriptionMode {
     }
 }
 
+fn batch_mode() -> TranscriptionMode {
+    TranscriptionMode::Cloud {
+        provider_id: "gemini".into(),
+        model_id: "batch".into(),
+    }
+}
+
 #[tokio::test]
 async fn cancelled_handshake_cannot_deliver_text_into_next_recording() {
     let provider = Arc::new(ControlledProvider::default());
@@ -205,7 +212,7 @@ async fn complete_next_recording(
 }
 
 #[tokio::test]
-async fn handshake_failure_finishes_via_cloud_batch_and_allows_next_recording() {
+async fn handshake_failure_returns_live_error_without_cloud_batch_fallback() {
     let provider = Arc::new(ControlledProvider::default());
     let output = Arc::new(TextOutput::default());
     let router = TranscriptionRouter::new(Arc::new(NoLocal), provider.clone(), output.clone());
@@ -218,10 +225,13 @@ async fn handshake_failure_finishes_via_cloud_batch_and_allows_next_recording() 
         router
             .finish_cloud_stream(vec![0.25], &options(), &mode())
             .await
-            .unwrap(),
-        "batch transcript"
+            .unwrap_err(),
+        "handshake refused"
     );
-    assert_eq!(*provider.batch_audio.lock(), [vec![0.25]]);
+    assert!(
+        provider.batch_audio.lock().is_empty(),
+        "Live connection failure must not be masked by cloud batch"
+    );
     router.cancel_cloud_stream();
     complete_next_recording(&router, &provider, &route).await;
     failed_sink.emit_text("late failure output".into(), String::new());
@@ -229,7 +239,7 @@ async fn handshake_failure_finishes_via_cloud_batch_and_allows_next_recording() 
 }
 
 #[tokio::test(start_paused = true)]
-async fn handshake_timeout_keeps_eight_second_budget_and_next_recording_works() {
+async fn handshake_timeout_returns_live_error_without_batch_fallback() {
     let provider = Arc::new(ControlledProvider::default());
     let output = Arc::new(TextOutput::default());
     let router = TranscriptionRouter::new(Arc::new(NoLocal), provider.clone(), output.clone());
@@ -242,8 +252,8 @@ async fn handshake_timeout_keeps_eight_second_budget_and_next_recording_works() 
         router
             .finish_cloud_stream(vec![0.5], &options(), &mode())
             .await
-            .unwrap(),
-        "batch transcript"
+            .unwrap_err(),
+        "Cloud stream finalization timed out (8s)"
     );
     assert_eq!(start.elapsed(), Duration::from_secs(8));
     release.closed().await;
@@ -251,7 +261,10 @@ async fn handshake_timeout_keeps_eight_second_budget_and_next_recording_works() 
     complete_next_recording(&router, &provider, &route).await;
     old_sink.emit_text("timed out words".into(), String::new());
     assert_eq!(*output.0.lock(), ["next recording"]);
-    assert_eq!(*provider.batch_audio.lock(), [vec![0.5]]);
+    assert!(
+        provider.batch_audio.lock().is_empty(),
+        "Live timeout must not be masked by cloud batch"
+    );
 }
 
 struct BlockedFinalize {
@@ -349,7 +362,7 @@ impl StreamingSession for FailedStream {
 }
 
 #[tokio::test]
-async fn missing_empty_and_failed_live_use_only_cloud_batch_and_preserve_errors() {
+async fn empty_live_result_falls_back_but_live_failure_preserves_error() {
     let provider = Arc::new(ControlledProvider::default());
     let router = TranscriptionRouter::new(
         Arc::new(NoLocal),
@@ -357,14 +370,6 @@ async fn missing_empty_and_failed_live_use_only_cloud_batch_and_preserve_errors(
         Arc::new(TextOutput::default()),
     );
     let route = Arc::new(StreamRouter::new());
-    assert_eq!(
-        router
-            .finish_cloud_stream(vec![1.0], &options(), &mode())
-            .await
-            .unwrap(),
-        "batch transcript"
-    );
-
     let (started, release) = provider.handshake();
     router.start_cloud_stream(&options(), route.clone());
     let _sink = started.await.unwrap();
@@ -393,12 +398,28 @@ async fn missing_empty_and_failed_live_use_only_cloud_batch_and_preserve_errors(
             .finish_cloud_stream(vec![3.0], &options(), &mode())
             .await
             .unwrap_err(),
-        "cloud batch unavailable"
+        "stream disconnected"
     );
+    assert_eq!(*provider.batch_audio.lock(), [vec![2.0]]);
+}
+
+#[tokio::test]
+async fn non_streaming_cloud_mode_still_uses_batch_without_live_session() {
+    let provider = Arc::new(ControlledProvider::default());
+    let router = TranscriptionRouter::new(
+        Arc::new(NoLocal),
+        provider.clone(),
+        Arc::new(TextOutput::default()),
+    );
+
     assert_eq!(
-        *provider.batch_audio.lock(),
-        [vec![1.0], vec![2.0], vec![3.0]]
+        router
+            .finish_cloud_stream(vec![1.0], &options(), &batch_mode())
+            .await
+            .unwrap(),
+        "batch transcript"
     );
+    assert_eq!(*provider.batch_audio.lock(), [vec![1.0]]);
 }
 
 #[tokio::test]
@@ -467,11 +488,17 @@ async fn stalled_finalization_is_reclaimed_at_deadline_before_next_recording() {
     finalizing.await.unwrap();
     tokio::time::pause();
     tokio::time::advance(Duration::from_secs(8)).await;
-    assert_eq!(finishing.await.unwrap().unwrap(), "batch transcript");
+    assert_eq!(
+        finishing.await.unwrap().unwrap_err(),
+        "Cloud stream finalization timed out (8s)"
+    );
     finish_release.closed().await;
     tokio::time::resume();
     complete_next_recording(&router, &provider, &route).await;
     old_sink.emit_text("late final result".into(), String::new());
     assert_eq!(*output.0.lock(), ["next recording"]);
-    assert_eq!(*provider.batch_audio.lock(), [vec![0.75]]);
+    assert!(
+        provider.batch_audio.lock().is_empty(),
+        "Live finalization timeout must not be masked by cloud batch"
+    );
 }

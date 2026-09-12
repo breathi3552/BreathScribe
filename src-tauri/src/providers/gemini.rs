@@ -93,11 +93,7 @@ impl GeminiLiveServerMessage {
                 match serde_json::from_str(text.as_str()) {
                     Ok(parsed) => Some(parsed),
                     Err(e) => {
-                        log::warn!(
-                            "Failed to parse Gemini Live text message: {}, raw: {}",
-                            e,
-                            text.as_str()
-                        );
+                        log::warn!("Failed to parse Gemini Live text message: {}", e);
                         None
                     }
                 }
@@ -106,12 +102,10 @@ impl GeminiLiveServerMessage {
                 match serde_json::from_slice(bytes.as_ref()) {
                     Ok(parsed) => Some(parsed),
                     Err(e) => {
-                        let text_preview =
-                            std::str::from_utf8(bytes.as_ref()).unwrap_or("<invalid utf-8>");
                         log::warn!(
-                            "Failed to parse Gemini Live binary message: {}, raw: {}",
-                            e,
-                            text_preview
+                            "Failed to parse Gemini Live binary message ({} bytes): {}",
+                            bytes.len(),
+                            e
                         );
                         None
                     }
@@ -217,6 +211,13 @@ struct GeminiErrorDetail {
     message: Option<String>,
 }
 
+fn safe_error_text(text: &str, secrets: &[&str]) -> String {
+    crate::llm_client::redact_sensitive_text(text, secrets)
+        .chars()
+        .take(512)
+        .collect()
+}
+
 pub struct GeminiProvider {
     network_manager: Arc<NetworkManager>,
     app_handle: AppHandle,
@@ -318,14 +319,31 @@ impl GeminiProvider {
         Err("Gemini Interactions API returned no transcription text".to_string())
     }
 
-    /// Parses Gemini API error response.
+    /// Parses Gemini API error response without exposing echoed credentials.
     pub fn parse_api_error(status: reqwest::StatusCode, error_text: &str) -> String {
-        if let Ok(err_json) = serde_json::from_str::<GeminiErrorResponse>(error_text) {
-            if let Some(msg) = err_json.error.and_then(|e| e.message) {
-                return format!("Gemini API error (HTTP {}): {}", status, msg);
+        Self::parse_api_error_with_secrets(status, error_text, &[])
+    }
+
+    fn parse_api_error_with_secrets(
+        status: reqwest::StatusCode,
+        error_text: &str,
+        secrets: &[&str],
+    ) -> String {
+        if let Ok(response) = serde_json::from_str::<GeminiErrorResponse>(error_text) {
+            if let Some(message) = response.error.and_then(|error| error.message) {
+                return format!(
+                    "Gemini API error (HTTP {}): {}",
+                    status,
+                    safe_error_text(&message, secrets)
+                );
             }
         }
-        format!("Gemini API returned error HTTP {}: {}", status, error_text)
+
+        format!(
+            "Gemini API returned error HTTP {}: {}",
+            status,
+            safe_error_text(error_text, secrets)
+        )
     }
 
     /// Tests connectivity to the Gemini API.
@@ -358,15 +376,18 @@ impl GeminiProvider {
         } else {
             req = req.header("x-goog-api-key", api_key);
         }
-        let response = req
-            .send()
-            .await
-            .map_err(|e| format!("Failed to send network request: {}", e))?;
+        let response = req.send().await.map_err(|e| {
+            crate::llm_client::report_reqwest_error("Gemini connection request failed", &e)
+        })?;
 
         let status = response.status();
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            return Err(Self::parse_api_error(status, &error_text));
+            return Err(Self::parse_api_error_with_secrets(
+                status,
+                &error_text,
+                &[api_key],
+            ));
         }
 
         Ok(())
@@ -492,22 +513,23 @@ impl BatchTranscriptionProvider for GeminiProvider {
         } else {
             req = req.header("x-goog-api-key", api_key);
         }
-        let response = req
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to send Gemini transcription request: {}", e))?;
+        let response = req.json(&payload).send().await.map_err(|e| {
+            crate::llm_client::report_reqwest_error("Gemini transcription request failed", &e)
+        })?;
 
         let status = response.status();
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            return Err(Self::parse_api_error(status, &error_text));
+            return Err(Self::parse_api_error_with_secrets(
+                status,
+                &error_text,
+                &[api_key],
+            ));
         }
 
-        let body: GeminiInteractionResponse = response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse Gemini response JSON: {}", e))?;
+        let body: GeminiInteractionResponse = response.json().await.map_err(|e| {
+            crate::llm_client::report_reqwest_error("Failed to parse Gemini response JSON", &e)
+        })?;
 
         Self::extract_text_from_response(&body)
     }
@@ -564,6 +586,7 @@ async fn run_gemini_live_worker<S>(
     mut audio_rx: tokio::sync::mpsc::UnboundedReceiver<Vec<f32>>,
     mut cmd_rx: tokio::sync::mpsc::Receiver<SessionCmd>,
     text_sink: Arc<dyn StreamTextSink>,
+    api_key: String,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
@@ -595,6 +618,7 @@ async fn run_gemini_live_worker<S>(
     let sink_tx_receiver = sink_tx.clone();
     let turn_notify_receiver = Arc::clone(&turn_notify);
     let text_sink_receiver = Arc::clone(&text_sink);
+    let receiver_api_key = api_key.clone();
 
     let receiver_abort = child_tasks.spawn(async move {
         while let Some(msg_res) = ws_stream.next().await {
@@ -616,6 +640,8 @@ async fn run_gemini_live_worker<S>(
                                 let err_text = err
                                     .message
                                     .unwrap_or_else(|| "Unknown server error".to_string());
+                                let err_text =
+                                    safe_error_text(&err_text, &[receiver_api_key.as_str()]);
                                 log::warn!("Gemini Live server error: {}", err_text);
                                 state_receiver.lock().session_error = Some(err_text);
                                 turn_notify_receiver.notify_one();
@@ -660,9 +686,10 @@ async fn run_gemini_live_worker<S>(
                     }
                 },
                 Err(e) => {
-                    log::warn!("Gemini Live WebSocket receive error: {}", e);
+                    let error = safe_error_text(&e.to_string(), &[receiver_api_key.as_str()]);
+                    log::warn!("Gemini Live WebSocket receive error: {}", error);
                     state_receiver.lock().session_error =
-                        Some(format!("WebSocket receive error: {}", e));
+                        Some(format!("WebSocket receive error: {}", error));
                     turn_notify_receiver.notify_one();
                     break;
                 }
@@ -671,10 +698,12 @@ async fn run_gemini_live_worker<S>(
         turn_notify_receiver.notify_one();
     });
 
+    let sender_api_key = api_key;
     child_tasks.spawn(async move {
         while let Some(msg) = sink_rx.recv().await {
             if let Err(e) = ws_sink.send(msg).await {
-                log::warn!("Gemini Live WebSocket send failed: {}", e);
+                let error = safe_error_text(&e.to_string(), &[sender_api_key.as_str()]);
+                log::warn!("Gemini Live WebSocket send failed: {}", error);
                 break;
             }
         }
@@ -863,7 +892,16 @@ impl StreamingTranscriptionProvider for GeminiProvider {
 
         let custom_base = provider_config.custom_base_url.as_deref();
         let ws_url = Self::build_live_websocket_url(custom_base, api_key);
-        let mut ws = self.network_manager.connect_websocket(&ws_url).await?;
+        let mut ws = self
+            .network_manager
+            .connect_websocket(&ws_url)
+            .await
+            .map_err(|error| {
+                format!(
+                    "Gemini Live WebSocket connection failed: {}",
+                    safe_error_text(&error, &[api_key])
+                )
+            })?;
 
         let mut language_codes = Vec::new();
         if options.language != "auto" && !options.language.trim().is_empty() {
@@ -902,18 +940,23 @@ impl StreamingTranscriptionProvider for GeminiProvider {
             setup_json.into(),
         ))
         .await
-        .map_err(|e| format!("Failed to send Gemini Live setup frame: {}", e))?;
+        .map_err(|e| {
+            format!(
+                "Failed to send Gemini Live setup frame: {}",
+                safe_error_text(&e.to_string(), &[api_key])
+            )
+        })?;
 
         let setup_timeout = Duration::from_secs(10);
         let setup_result = tokio::time::timeout(setup_timeout, async {
             while let Some(msg_res) = ws.next().await {
                 match msg_res {
                     Ok(msg) => match msg {
-                        tokio_tungstenite::tungstenite::Message::Close(frame) => {
-                            return Err(format!(
-                                "Gemini Live server closed connection: {:?}",
-                                frame
-                            ));
+                        tokio_tungstenite::tungstenite::Message::Close(_) => {
+                            return Err(
+                                "Gemini Live server closed connection before setup completed"
+                                    .to_string(),
+                            );
                         }
                         tokio_tungstenite::tungstenite::Message::Ping(data) => {
                             let _ = ws
@@ -923,9 +966,11 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                         other => {
                             if let Some(server_msg) = GeminiLiveServerMessage::parse(&other) {
                                 if let Some(err) = server_msg.error {
+                                    let message =
+                                        err.message.unwrap_or_else(|| "Unknown error".to_string());
                                     return Err(format!(
                                         "Gemini Live setup failed: {}",
-                                        err.message.unwrap_or_else(|| "Unknown error".to_string())
+                                        safe_error_text(&message, &[api_key])
                                     ));
                                 }
                                 if server_msg.setup_complete.is_some() {
@@ -937,7 +982,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
                     Err(e) => {
                         return Err(format!(
                             "Gemini Live failed to receive handshake response: {}",
-                            e
+                            safe_error_text(&e.to_string(), &[api_key])
                         ));
                     }
                 }
@@ -959,7 +1004,13 @@ impl StreamingTranscriptionProvider for GeminiProvider {
         let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
 
-        let worker_handle = tokio::spawn(run_gemini_live_worker(ws, audio_rx, cmd_rx, text_sink));
+        let worker_handle = tokio::spawn(run_gemini_live_worker(
+            ws,
+            audio_rx,
+            cmd_rx,
+            text_sink,
+            api_key.to_string(),
+        ));
 
         Ok(Box::new(GeminiLiveStreamingSession {
             audio_tx,
@@ -973,6 +1024,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
 mod tests {
     use super::*;
     use std::io::Cursor;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
     fn test_encode_wav_in_memory_format_and_clamping() {
@@ -1061,6 +1113,41 @@ mod tests {
             GeminiProvider::parse_api_error(reqwest::StatusCode::GATEWAY_TIMEOUT, raw_err);
         assert!(raw_formatted.contains("504"));
         assert!(raw_formatted.contains("Gateway timeout"));
+    }
+
+    #[tokio::test]
+    async fn gemini_connection_failure_redacts_credentials_and_keeps_http_classification() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let api_key = "live-api-key-should-not-escape";
+        let body = format!(
+            "{{\"error\":{{\"message\":\"upstream echoed {api_key} http://proxy-user:proxy-pass@example.test:8080/path?key={api_key}\"}}}}"
+        );
+        let response = format!(
+            "HTTP/1.1 403 Forbidden\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 2048];
+            let _ = stream.read(&mut request).await.unwrap();
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let base_url = format!("http://{address}");
+        let error = GeminiProvider::test_connection(&client, api_key, Some(&base_url))
+            .await
+            .unwrap_err();
+        server.await.unwrap();
+
+        assert!(error.contains("HTTP 403"));
+        assert!(error.contains("upstream echoed"));
+        assert!(!error.contains(api_key));
+        assert!(!error.contains("proxy-user"));
+        assert!(!error.contains("proxy-pass"));
+        assert!(!error.contains("?key="));
     }
 
     #[test]
@@ -1377,8 +1464,13 @@ mod tests {
             let sink = Arc::new(MockSink {
                 emitted: Arc::new(parking_lot::Mutex::new(Vec::new())),
             });
-            let worker_handle =
-                tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
+            let worker_handle = tokio::spawn(run_gemini_live_worker(
+                client_ws,
+                audio_rx,
+                cmd_rx,
+                sink,
+                String::new(),
+            ));
             let session = Box::new(GeminiLiveStreamingSession {
                 audio_tx,
                 cmd_tx,
@@ -1408,6 +1500,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn live_server_error_is_redacted_before_returning_to_router() {
+        use tokio_tungstenite::tungstenite::protocol::Role;
+        use tokio_tungstenite::tungstenite::Message;
+
+        let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+        let client_ws = WebSocketStream::from_raw_socket(client_io, Role::Client, None).await;
+        let mut server_ws = WebSocketStream::from_raw_socket(server_io, Role::Server, None).await;
+        let (_audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1);
+        let sink = Arc::new(MockSink {
+            emitted: Arc::new(parking_lot::Mutex::new(Vec::new())),
+        });
+        let api_key = "live-worker-api-key";
+        let worker = tokio::spawn(run_gemini_live_worker(
+            client_ws,
+            audio_rx,
+            cmd_rx,
+            sink,
+            api_key.to_string(),
+        ));
+
+        let server_error = format!(
+            r#"{{"error":{{"message":"echo {api_key} http://user:pass@example.test:8080/path?key={api_key}"}}}}"#
+        );
+        server_ws
+            .send(Message::Text(server_error.into()))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        cmd_tx.send(SessionCmd::Finalize(reply_tx)).await.unwrap();
+        let end = server_ws.next().await.unwrap().unwrap();
+        assert!(matches!(end, Message::Text(text) if text.contains("audioStreamEnd")));
+
+        let error = reply_rx.await.unwrap().unwrap_err();
+        assert!(error.contains("echo"));
+        assert!(!error.contains(api_key));
+        assert!(!error.contains("user:pass"));
+        assert!(!error.contains("?key="));
+        worker.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn test_gemini_live_worker_full_duplex_flow() {
         use tokio_tungstenite::tungstenite::protocol::Role;
         use tokio_tungstenite::tungstenite::Message;
@@ -1427,7 +1563,13 @@ mod tests {
             emitted: Arc::clone(&emitted),
         });
 
-        let worker_handle = tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
+        let worker_handle = tokio::spawn(run_gemini_live_worker(
+            client_ws,
+            audio_rx,
+            cmd_rx,
+            sink,
+            String::new(),
+        ));
 
         let samples = vec![0.0f32; 1600];
         audio_tx.send(samples).unwrap();
@@ -1503,8 +1645,13 @@ mod tests {
             emitted: Arc::clone(&emitted),
         });
 
-        let _worker_handle =
-            tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
+        let _worker_handle = tokio::spawn(run_gemini_live_worker(
+            client_ws,
+            audio_rx,
+            cmd_rx,
+            sink,
+            String::new(),
+        ));
 
         let final_text_json =
             r#"{"serverContent":{"inputTranscription":{"text":"instant transcription"}}}"#;
@@ -1557,8 +1704,13 @@ mod tests {
             emitted: Arc::clone(&emitted),
         });
 
-        let _worker_handle =
-            tokio::spawn(run_gemini_live_worker(client_ws, audio_rx, cmd_rx, sink));
+        let _worker_handle = tokio::spawn(run_gemini_live_worker(
+            client_ws,
+            audio_rx,
+            cmd_rx,
+            sink,
+            String::new(),
+        ));
 
         let interim_text_json =
             r#"{"serverContent":{"interimInputTranscription":{"text":"live spoken phrase"}}}"#;

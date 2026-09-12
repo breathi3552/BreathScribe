@@ -204,6 +204,13 @@ impl TranscriptionRouter {
         let Some((mut task, guard)) = pending else {
             return self.transcribe_cloud(audio, options, mode).await;
         };
+        let preserve_live_error = matches!(
+            mode,
+            TranscriptionMode::Cloud {
+                provider_id,
+                model_id,
+            } if self.supports_cloud_streaming(provider_id, model_id)
+        );
         let mut cancelled = guard.output.cancelled.subscribe();
         let result = if *cancelled.borrow() {
             Err("Cloud recording cancelled".to_string())
@@ -218,6 +225,24 @@ impl TranscriptionRouter {
                     guard.abort.abort();
                     match live {
                         Ok(Ok(Ok(text))) if !text.trim().is_empty() => Ok(text),
+                        Ok(Ok(Err(error))) if preserve_live_error => {
+                            log::warn!(
+                                "Cloud Live streaming failed; preserving the error instead of falling back to batch mode"
+                            );
+                            Err(error)
+                        }
+                        Ok(Err(error)) if preserve_live_error => {
+                            log::warn!(
+                                "Cloud Live streaming worker failed; preserving the error instead of falling back to batch mode"
+                            );
+                            Err(format!("Cloud streaming worker failed: {error}"))
+                        }
+                        Err(_) if preserve_live_error => {
+                            log::warn!(
+                                "Cloud Live stream finalization timed out (8s); preserving the error instead of falling back to batch mode"
+                            );
+                            Err("Cloud stream finalization timed out (8s)".to_string())
+                        }
                         other => {
                             match other {
                                 Err(_) => log::warn!("Cloud stream finalization timed out (8s), falling back to batch mode"),

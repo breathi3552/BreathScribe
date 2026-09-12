@@ -241,7 +241,7 @@ fn reqwest_error_kinds(error: &reqwest::Error) -> String {
     }
 }
 
-fn sanitized_url(url: &reqwest::Url) -> String {
+pub(crate) fn sanitized_url(url: &reqwest::Url) -> String {
     let mut url = url.clone();
 
     // Custom endpoints should not contain credentials or query-string tokens,
@@ -254,7 +254,7 @@ fn sanitized_url(url: &reqwest::Url) -> String {
     url.to_string()
 }
 
-fn sanitized_url_for_log(url: &str) -> String {
+pub(crate) fn sanitized_url_for_log(url: &str) -> String {
     reqwest::Url::parse(url)
         .map(|url| sanitized_url(&url))
         // Do not echo an invalid URL: the parse failure might have been caused
@@ -262,7 +262,42 @@ fn sanitized_url_for_log(url: &str) -> String {
         .unwrap_or_else(|_| "<invalid URL>".to_string())
 }
 
-fn report_reqwest_error(context: &str, error: &reqwest::Error) -> String {
+/// Redact known secrets and credential-bearing URLs from untrusted diagnostics.
+///
+/// Error bodies and protocol messages may echo request data. Callers pass the
+/// credentials they own; URL-shaped tokens are sanitized even when the caller
+/// cannot know which value an upstream service echoed.
+pub(crate) fn redact_sensitive_text(text: &str, secrets: &[&str]) -> String {
+    let mut redacted = text.to_string();
+    for secret in secrets.iter().copied().filter(|secret| !secret.is_empty()) {
+        redacted = redacted.replace(secret, "[REDACTED]");
+    }
+
+    redacted
+        .split_whitespace()
+        .map(|token| {
+            let trimmed =
+                token.trim_matches(|character: char| "\\\"'`([{<\\\\>},;.])".contains(character));
+            if trimmed.is_empty() {
+                return token.to_string();
+            }
+            let Ok(url) = reqwest::Url::parse(trimmed) else {
+                return token.to_string();
+            };
+            let sanitized = sanitized_url(&url);
+            let start = token.find(trimmed).unwrap_or(0);
+            format!(
+                "{}{}{}",
+                &token[..start],
+                sanitized,
+                &token[start + trimmed.len()..]
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub(crate) fn report_reqwest_error(context: &str, error: &reqwest::Error) -> String {
     let kinds = reqwest_error_kinds(error);
     let url = error
         .url()
@@ -277,12 +312,15 @@ fn report_reqwest_error(context: &str, error: &reqwest::Error) -> String {
         Vec::new()
     } else {
         error_source_chain(error)
+            .into_iter()
+            .map(|cause| redact_sensitive_text(&cause, &[]))
+            .collect()
     };
     let cause_details = if !causes.is_empty() {
         format!(": caused by: {}", causes.join(" -> "))
     } else if error.url().is_none() {
-        // Reqwest's short Display text is safe when it cannot append a raw URL.
-        format!(": {error}")
+        // Keep malformed-URL diagnostics bounded and scrub any echoed URL.
+        format!(": {}", redact_sensitive_text(&error.to_string(), &[]))
     } else {
         // The sanitized URL is already included above. Avoid formatting the
         // original error because its Display implementation includes the raw URL.
@@ -410,9 +448,10 @@ pub async fn send_chat_completion_with_schema(
         let error_text = response.text().await.unwrap_or_else(|e| {
             report_reqwest_error("Failed to read reasoning rejection response", &e)
         });
+        let safe_error_text = redact_sensitive_text(&error_text, &[api_key.as_str()]);
         info!(
             "Endpoint rejected request with reasoning disabled (status {}): {}. Retrying without reasoning fields",
-            status, error_text
+            status, safe_error_text
         );
 
         request_body.reasoning = ReasoningParams::default();
@@ -444,6 +483,7 @@ pub async fn send_chat_completion_with_schema(
             .text()
             .await
             .unwrap_or_else(|e| report_reqwest_error("Failed to read API error response", &e));
+        let error_text = redact_sensitive_text(&error_text, &[api_key.as_str()]);
         return Err(format!(
             "API request failed with status {}: {}",
             status, error_text
@@ -492,6 +532,7 @@ pub async fn fetch_models(
             .text()
             .await
             .unwrap_or_else(|e| report_reqwest_error("Failed to read model list error", &e));
+        let error_text = redact_sensitive_text(&error_text, &[api_key.as_str()]);
         return Err(format!(
             "Model list request failed ({}): {}",
             status, error_text
@@ -660,6 +701,24 @@ mod tests {
         assert!(details.contains(&format!("url: {base_url}/private")));
         assert!(!details.contains("SECRET_QUERY_TOKEN"));
         assert!(!details.contains("#private"));
+    }
+
+    #[tokio::test]
+    async fn chat_error_response_does_not_echo_api_key() {
+        let base_url = serve_one_response("400 Bad Request", "request rejected secret-key").await;
+        let api_key = "secret-key";
+        let error = send_chat_completion(
+            &provider("test", &base_url),
+            api_key.to_string(),
+            "test-model",
+            "hello".to_string(),
+            false,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.contains("status 400"));
+        assert!(!error.contains(api_key));
     }
 
     #[test]

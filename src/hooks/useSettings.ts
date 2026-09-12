@@ -47,12 +47,10 @@ interface UseSettingsReturn {
 export const useSettings = (): UseSettingsReturn => {
   const store = useSettingsStore();
 
-  // Initialize on first mount
+  // The store owns one shared, idempotent initialization lifecycle.
   useEffect(() => {
-    if (store.isLoading) {
-      store.initialize();
-    }
-  }, [store.initialize, store.isLoading]);
+    void store.initialize();
+  }, [store.initialize]);
 
   return {
     settings: store.settings,

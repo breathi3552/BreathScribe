@@ -19,6 +19,8 @@ import {
 } from "@/bindings";
 import { toast } from "sonner";
 
+type Unlisten = () => void;
+
 interface SettingsStore {
   settings: Settings | null;
   defaultSettings: Settings | null;
@@ -33,6 +35,7 @@ interface SettingsStore {
 
   // Actions
   initialize: () => Promise<void>;
+  dispose: () => Promise<void>;
   loadDefaultSettings: () => Promise<void>;
   loadUpdateChecksLocked: () => Promise<void>;
   updateSetting: <K extends keyof Settings>(
@@ -89,6 +92,14 @@ interface SettingsStore {
   setOutputDevices: (devices: AudioDevice[]) => void;
   setCustomSounds: (sounds: { start: boolean; stop: boolean }) => void;
 }
+
+type StoreSet = (
+  partial:
+    | Partial<SettingsStore>
+    | ((state: SettingsStore) => Partial<SettingsStore>),
+) => void;
+
+type StoreGet = () => SettingsStore;
 
 // Note: Default settings are now fetched from Rust via commands.getDefaultSettings()
 // This ensures platform-specific defaults (like overlay_position, shortcuts, paste_method) work correctly
@@ -234,6 +245,265 @@ const settingUpdaters: {
   },
 };
 
+const createSettingsSync = (
+  set: StoreSet,
+  get: StoreGet,
+): Pick<
+  SettingsStore,
+  | "initialize"
+  | "dispose"
+  | "refreshSettings"
+  | "refreshAudioDevices"
+  | "refreshOutputDevices"
+> => {
+  let initializationPromise: Promise<void> | null = null;
+  let refreshPromise: Promise<void> | null = null;
+  let refreshPending = false;
+  let lifecycleVersion = 0;
+  // Explicit calls from onboarding or the main app open this permission-gated path.
+  let audioDeviceRefreshEnabled = false;
+  const unlisteners = new Set<Unlisten>();
+  const listenerRegistrations = new Set<Promise<Unlisten>>();
+
+  const isCurrentLifecycle = (version: number) => version === lifecycleVersion;
+
+  const releaseListeners = async () => {
+    const listeners = Array.from(unlisteners);
+    unlisteners.clear();
+
+    await Promise.all(
+      listeners.map(async (unlisten) => {
+        try {
+          await unlisten();
+        } catch (error) {
+          console.error("Failed to remove settings listener:", error);
+        }
+      }),
+    );
+  };
+
+  const refreshSettingsOnce = async (version: number) => {
+    try {
+      const result = await commands.getAppSettings();
+      if (!isCurrentLifecycle(version)) return;
+
+      if (result.status === "ok") {
+        const settings = result.data;
+        const normalizedSettings: Settings = {
+          ...settings,
+          always_on_microphone: settings.always_on_microphone ?? false,
+          selected_microphone: settings.selected_microphone ?? "Default",
+          clamshell_microphone: settings.clamshell_microphone ?? "Default",
+          selected_output_device: settings.selected_output_device ?? "Default",
+          proxy: settings.proxy ?? DEFAULT_PROXY_SETTINGS,
+          transcription_mode: settings.transcription_mode ?? {
+            type: "local",
+          },
+          cloud_stt_api_keys: settings.cloud_stt_api_keys ?? {},
+          cloud_stt_providers: settings.cloud_stt_providers ?? {
+            gemini: DEFAULT_CLOUD_STT_PROVIDER_SETTINGS,
+          },
+        };
+        set({ settings: normalizedSettings, isLoading: false });
+      } else {
+        console.error("Failed to load settings:", result.error);
+        set({ isLoading: false });
+      }
+    } catch (error) {
+      if (!isCurrentLifecycle(version)) return;
+      console.error("Failed to load settings:", error);
+      set({ isLoading: false });
+    }
+  };
+
+  const refreshSettings = (): Promise<void> => {
+    if (refreshPromise) {
+      refreshPending = true;
+      return refreshPromise;
+    }
+
+    const version = lifecycleVersion;
+    const promise = (async () => {
+      do {
+        refreshPending = false;
+        await refreshSettingsOnce(version);
+      } while (refreshPending && isCurrentLifecycle(version));
+    })();
+
+    refreshPromise = promise;
+    void promise.then(
+      () => {
+        if (refreshPromise === promise) refreshPromise = null;
+      },
+      () => {
+        if (refreshPromise === promise) refreshPromise = null;
+      },
+    );
+    return promise;
+  };
+
+  const registerListener = <T>(
+    eventName: string,
+    callback: (payload: T) => void,
+    version: number,
+  ): Promise<Unlisten> => {
+    let registration: Promise<Unlisten>;
+    try {
+      registration = listen<T>(eventName, (event) => {
+        if (isCurrentLifecycle(version)) callback(event.payload);
+      });
+    } catch (error) {
+      return Promise.reject(error);
+    }
+
+    listenerRegistrations.add(registration);
+    registration.then(
+      (unlisten) => {
+        listenerRegistrations.delete(registration);
+        if (!isCurrentLifecycle(version)) {
+          try {
+            unlisten();
+          } catch (error) {
+            console.error("Failed to remove stale settings listener:", error);
+          }
+          return;
+        }
+        unlisteners.add(unlisten);
+      },
+      () => {
+        listenerRegistrations.delete(registration);
+      },
+    );
+    return registration;
+  };
+
+  const registerListeners = async (version: number) => {
+    const results = await Promise.allSettled([
+      registerListener(
+        "model-state-changed",
+        () => {
+          void refreshSettings();
+        },
+        version,
+      ),
+      registerListener<{ setting?: string }>(
+        "settings-changed",
+        (payload) => {
+          void refreshSettings();
+          if (
+            payload.setting === "selected_microphone" &&
+            audioDeviceRefreshEnabled
+          ) {
+            void get().refreshAudioDevices();
+          }
+        },
+        version,
+      ),
+    ]);
+
+    if (!isCurrentLifecycle(version)) return;
+
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") {
+      console.error("Failed to register settings listeners:", failure.reason);
+      await releaseListeners();
+    }
+  };
+
+  const initializeStore = async (version: number) => {
+    await registerListeners(version);
+    if (!isCurrentLifecycle(version)) return;
+
+    const { checkCustomSounds, loadDefaultSettings, loadUpdateChecksLocked } =
+      get();
+    await Promise.all([
+      loadDefaultSettings(),
+      refreshSettings(),
+      checkCustomSounds(),
+      loadUpdateChecksLocked(),
+    ]);
+  };
+
+  const initialize = (): Promise<void> => {
+    if (initializationPromise) return initializationPromise;
+
+    const version = lifecycleVersion;
+    const promise = initializeStore(version).catch((error) => {
+      console.error("Failed to initialize settings store:", error);
+    });
+    initializationPromise = promise;
+    return promise;
+  };
+
+  const dispose = async () => {
+    lifecycleVersion += 1;
+    refreshPending = false;
+    refreshPromise = null;
+    initializationPromise = null;
+    audioDeviceRefreshEnabled = false;
+
+    const registrations = Array.from(listenerRegistrations);
+    await releaseListeners();
+    await Promise.allSettled(registrations);
+    await releaseListeners();
+  };
+
+  const refreshAudioDevices = async () => {
+    audioDeviceRefreshEnabled = true;
+    const version = lifecycleVersion;
+    try {
+      const result = await commands.getAvailableMicrophones();
+      if (!isCurrentLifecycle(version)) return;
+      if (result.status === "ok") {
+        const devicesWithDefault = [
+          DEFAULT_AUDIO_DEVICE,
+          ...result.data.filter(
+            (d) => d.name !== "Default" && d.name !== "default",
+          ),
+        ];
+        set({ audioDevices: devicesWithDefault });
+      } else {
+        set({ audioDevices: [DEFAULT_AUDIO_DEVICE] });
+      }
+    } catch (error) {
+      if (!isCurrentLifecycle(version)) return;
+      console.error("Failed to load audio devices:", error);
+      set({ audioDevices: [DEFAULT_AUDIO_DEVICE] });
+    }
+  };
+
+  const refreshOutputDevices = async () => {
+    const version = lifecycleVersion;
+    try {
+      const result = await commands.getAvailableOutputDevices();
+      if (!isCurrentLifecycle(version)) return;
+      if (result.status === "ok") {
+        const devicesWithDefault = [
+          DEFAULT_AUDIO_DEVICE,
+          ...result.data.filter(
+            (d) => d.name !== "Default" && d.name !== "default",
+          ),
+        ];
+        set({ outputDevices: devicesWithDefault });
+      } else {
+        set({ outputDevices: [DEFAULT_AUDIO_DEVICE] });
+      }
+    } catch (error) {
+      if (!isCurrentLifecycle(version)) return;
+      console.error("Failed to load output devices:", error);
+      set({ outputDevices: [DEFAULT_AUDIO_DEVICE] });
+    }
+  };
+
+  return {
+    initialize,
+    dispose,
+    refreshSettings,
+    refreshAudioDevices,
+    refreshOutputDevices,
+  };
+};
+
 export const useSettingsStore = create<SettingsStore>()(
   subscribeWithSelector((set, get) => ({
     settings: null,
@@ -262,80 +532,8 @@ export const useSettingsStore = create<SettingsStore>()(
     getSetting: (key) => get().settings?.[key],
     isUpdatingKey: (key) => get().isUpdating[key] || false,
 
-    // Load settings from store
-    refreshSettings: async () => {
-      try {
-        const result = await commands.getAppSettings();
-        if (result.status === "ok") {
-          const settings = result.data;
-          const normalizedSettings: Settings = {
-            ...settings,
-            always_on_microphone: settings.always_on_microphone ?? false,
-            selected_microphone: settings.selected_microphone ?? "Default",
-            clamshell_microphone: settings.clamshell_microphone ?? "Default",
-            selected_output_device:
-              settings.selected_output_device ?? "Default",
-            proxy: settings.proxy ?? DEFAULT_PROXY_SETTINGS,
-            transcription_mode: settings.transcription_mode ?? {
-              type: "local",
-            },
-            cloud_stt_api_keys: settings.cloud_stt_api_keys ?? {},
-            cloud_stt_providers: settings.cloud_stt_providers ?? {
-              gemini: DEFAULT_CLOUD_STT_PROVIDER_SETTINGS,
-            },
-          };
-          set({ settings: normalizedSettings, isLoading: false });
-        } else {
-          console.error("Failed to load settings:", result.error);
-          set({ isLoading: false });
-        }
-      } catch (error) {
-        console.error("Failed to load settings:", error);
-        set({ isLoading: false });
-      }
-    },
-
-    // Load audio devices
-    refreshAudioDevices: async () => {
-      try {
-        const result = await commands.getAvailableMicrophones();
-        if (result.status === "ok") {
-          const devicesWithDefault = [
-            DEFAULT_AUDIO_DEVICE,
-            ...result.data.filter(
-              (d) => d.name !== "Default" && d.name !== "default",
-            ),
-          ];
-          set({ audioDevices: devicesWithDefault });
-        } else {
-          set({ audioDevices: [DEFAULT_AUDIO_DEVICE] });
-        }
-      } catch (error) {
-        console.error("Failed to load audio devices:", error);
-        set({ audioDevices: [DEFAULT_AUDIO_DEVICE] });
-      }
-    },
-
-    // Load output devices
-    refreshOutputDevices: async () => {
-      try {
-        const result = await commands.getAvailableOutputDevices();
-        if (result.status === "ok") {
-          const devicesWithDefault = [
-            DEFAULT_AUDIO_DEVICE,
-            ...result.data.filter(
-              (d) => d.name !== "Default" && d.name !== "default",
-            ),
-          ];
-          set({ outputDevices: devicesWithDefault });
-        } else {
-          set({ outputDevices: [DEFAULT_AUDIO_DEVICE] });
-        }
-      } catch (error) {
-        console.error("Failed to load output devices:", error);
-        set({ outputDevices: [DEFAULT_AUDIO_DEVICE] });
-      }
-    },
+    // Shared lifecycle; microphone enumeration remains permission-gated.
+    ...createSettingsSync(set, get),
 
     // Play a test sound
     playTestSound: async (soundType: "start" | "stop") => {
@@ -672,38 +870,6 @@ export const useSettingsStore = create<SettingsStore>()(
       }
     },
 
-    // Initialize everything
-    initialize: async () => {
-      const {
-        refreshSettings,
-        checkCustomSounds,
-        loadDefaultSettings,
-        loadUpdateChecksLocked,
-      } = get();
-
-      // Note: Audio devices are NOT refreshed here. The frontend (App.tsx)
-      // is responsible for calling refreshAudioDevices/refreshOutputDevices
-      // after onboarding completes. This avoids triggering permission dialogs
-      // on macOS before the user is ready.
-      await Promise.all([
-        loadDefaultSettings(),
-        refreshSettings(),
-        checkCustomSounds(),
-        loadUpdateChecksLocked(),
-      ]);
-
-      // Re-fetch settings when the backend changes them (e.g. language
-      // reset during model switch). The backend is the source of truth.
-      listen("model-state-changed", () => {
-        get().refreshSettings();
-      });
-      listen<{ setting?: string }>("settings-changed", (event) => {
-        get().refreshSettings();
-        if (event.payload.setting === "selected_microphone") {
-          get().refreshAudioDevices();
-        }
-      });
-    },
     updateProxySettings: async (proxy: ProxySettings) => {
       const { settings } = get();
       const originalProxy = settings?.proxy;
@@ -834,3 +1000,9 @@ export const useSettingsStore = create<SettingsStore>()(
     },
   })),
 );
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    void useSettingsStore.getState().dispose();
+  });
+}

@@ -7,6 +7,59 @@ pub struct DetectedProxy {
     pub protocol: ProxyProtocol,
 }
 
+#[cfg(test)]
+use std::sync::{Mutex, MutexGuard, OnceLock};
+
+#[cfg(test)]
+static TEST_SYSTEM_PROXY: OnceLock<Mutex<Option<Option<DetectedProxy>>>> = OnceLock::new();
+#[cfg(test)]
+static TEST_SYSTEM_PROXY_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+#[cfg(test)]
+fn test_system_proxy_override() -> Option<Option<DetectedProxy>> {
+    TEST_SYSTEM_PROXY
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .clone()
+}
+
+#[cfg(test)]
+pub(super) struct TestSystemProxyGuard {
+    _serial: MutexGuard<'static, ()>,
+}
+
+#[cfg(test)]
+impl TestSystemProxyGuard {
+    pub(super) fn set(&self, proxy: Option<DetectedProxy>) {
+        *TEST_SYSTEM_PROXY
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(proxy);
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestSystemProxyGuard {
+    fn drop(&mut self) {
+        if let Some(proxy) = TEST_SYSTEM_PROXY.get() {
+            *proxy.lock().unwrap_or_else(|error| error.into_inner()) = None;
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn test_system_proxy(proxy: Option<DetectedProxy>) -> TestSystemProxyGuard {
+    let guard = TestSystemProxyGuard {
+        _serial: TEST_SYSTEM_PROXY_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()),
+    };
+    guard.set(proxy);
+    guard
+}
+
 /// Parses Windows registry ProxyServer string.
 /// Supports "host:port" or multi-protocol "http=host:port;https=host:port;socks=host:port".
 pub fn parse_windows_proxy_string(proxy_str: &str) -> Option<DetectedProxy> {
@@ -119,6 +172,11 @@ pub fn parse_url_proxy(url_str: &str) -> Option<DetectedProxy> {
 
 #[cfg(target_os = "windows")]
 pub fn get_system_proxy() -> Option<DetectedProxy> {
+    #[cfg(test)]
+    if let Some(proxy) = test_system_proxy_override() {
+        return proxy;
+    }
+
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
 
@@ -138,6 +196,11 @@ pub fn get_system_proxy() -> Option<DetectedProxy> {
 
 #[cfg(not(target_os = "windows"))]
 pub fn get_system_proxy() -> Option<DetectedProxy> {
+    #[cfg(test)]
+    if let Some(proxy) = test_system_proxy_override() {
+        return proxy;
+    }
+
     // Read proxy environment variables on Unix
     std::env::var("all_proxy")
         .or_else(|_| std::env::var("ALL_PROXY"))

@@ -208,7 +208,7 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
     use tokio::task::JoinHandle;
-    use tokio_tungstenite::{accept_async, tungstenite::Message};
+    use tokio_tungstenite::{accept_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
     const HTTP_BODY: &str = "http-target";
 
@@ -255,6 +255,32 @@ mod tests {
         }
     }
 
+    fn system_settings(protocol: ProxyProtocol, auth: AuthCase) -> ProxySettings {
+        ProxySettings {
+            mode: ProxyMode::System,
+            protocol: match protocol {
+                ProxyProtocol::Http => ProxyProtocol::Socks5,
+                ProxyProtocol::Socks5 => ProxyProtocol::Http,
+            },
+            host: "ignored.system.proxy".to_string(),
+            port: 1,
+            auth_enabled: auth.enabled,
+            username: auth.username.map(str::to_string),
+            password: auth.password.map(str::to_string),
+        }
+    }
+
+    fn detected_system_proxy(
+        protocol: ProxyProtocol,
+        proxy_addr: SocketAddr,
+    ) -> system_proxy::DetectedProxy {
+        system_proxy::DetectedProxy {
+            host: proxy_addr.ip().to_string(),
+            port: proxy_addr.port(),
+            protocol,
+        }
+    }
+
     fn expected_http_auth(auth: AuthCase) -> Option<String> {
         (auth.enabled && !auth.username.unwrap_or_default().is_empty()).then(|| {
             let credentials = format!(
@@ -273,6 +299,20 @@ mod tests {
                 auth.password.unwrap_or_default().as_bytes().to_vec(),
             )
         })
+    }
+
+    async fn http_round_trip(client: &reqwest::Client, url: String) -> Result<String, String> {
+        let response = tokio::time::timeout(Duration::from_secs(3), client.get(url).send())
+            .await
+            .map_err(|_| "HTTP request timed out".to_string())?
+            .map_err(|e| format!("HTTP request failed: {e}"))?;
+        if !response.status().is_success() {
+            return Err(format!("HTTP target returned {}", response.status()));
+        }
+        tokio::time::timeout(Duration::from_secs(3), response.text())
+            .await
+            .map_err(|_| "HTTP response timed out".to_string())?
+            .map_err(|e| format!("HTTP response failed: {e}"))
     }
 
     async fn read_headers(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
@@ -344,7 +384,9 @@ mod tests {
         (address, task)
     }
 
-    async fn spawn_websocket_target() -> (SocketAddr, JoinHandle<Result<String, String>>) {
+    async fn spawn_websocket_target(
+        message_count: usize,
+    ) -> (SocketAddr, JoinHandle<Result<String, String>>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let task = tokio::spawn(async move {
@@ -355,22 +397,48 @@ mod tests {
             let mut websocket = accept_async(stream)
                 .await
                 .map_err(|e| format!("WebSocket target handshake failed: {e}"))?;
-            let message = tokio::time::timeout(Duration::from_secs(3), websocket.next())
-                .await
-                .map_err(|_| "WebSocket target timed out waiting for message".to_string())?
-                .ok_or_else(|| "WebSocket target received no message".to_string())?
-                .map_err(|e| format!("WebSocket target receive failed: {e}"))?;
-            let text = match message {
-                Message::Text(text) => text.to_string(),
-                _ => return Err("WebSocket target received an unexpected message".to_string()),
-            };
-            websocket
-                .send(Message::Text("ws-target".into()))
-                .await
-                .map_err(|e| format!("WebSocket target response failed: {e}"))?;
-            Ok(text)
+            let mut last_text = None;
+            for _ in 0..message_count {
+                let message = tokio::time::timeout(Duration::from_secs(3), websocket.next())
+                    .await
+                    .map_err(|_| "WebSocket target timed out waiting for message".to_string())?
+                    .ok_or_else(|| "WebSocket target received no message".to_string())?
+                    .map_err(|e| format!("WebSocket target receive failed: {e}"))?;
+                let text = match message {
+                    Message::Text(text) => text.to_string(),
+                    _ => return Err("WebSocket target received an unexpected message".to_string()),
+                };
+                websocket
+                    .send(Message::Text("ws-target".into()))
+                    .await
+                    .map_err(|e| format!("WebSocket target response failed: {e}"))?;
+                last_text = Some(text);
+            }
+            last_text.ok_or_else(|| "WebSocket target expected a message".to_string())
         });
         (address, task)
+    }
+
+    async fn websocket_round_trip(
+        websocket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
+        text: &str,
+    ) -> Result<(), String> {
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            websocket.send(Message::Text(text.into())),
+        )
+        .await
+        .map_err(|_| "WebSocket request timed out".to_string())?
+        .map_err(|e| format!("WebSocket request failed: {e}"))?;
+        let message = tokio::time::timeout(Duration::from_secs(3), websocket.next())
+            .await
+            .map_err(|_| "WebSocket response timed out".to_string())?
+            .ok_or_else(|| "WebSocket target closed without a response".to_string())?
+            .map_err(|e| format!("WebSocket response failed: {e}"))?;
+        match message {
+            Message::Text(response) if response == "ws-target" => Ok(()),
+            _ => Err("WebSocket request reached an unexpected target".to_string()),
+        }
     }
 
     async fn run_http_forward_proxy(
@@ -581,7 +649,11 @@ mod tests {
         joined.map_err(|e| format!("local network test task failed: {e}"))?
     }
 
-    async fn exercise_http_request(protocol: ProxyProtocol, auth: AuthCase) -> Result<(), String> {
+    async fn exercise_http_request(
+        protocol: ProxyProtocol,
+        auth: AuthCase,
+        system_mode: bool,
+    ) -> Result<(), String> {
         let (target, target_task) = spawn_http_target().await;
         let proxy_listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -589,20 +661,37 @@ mod tests {
         let proxy_addr = proxy_listener
             .local_addr()
             .map_err(|e| format!("proxy address failed: {e}"))?;
+        let expected_http_auth = if system_mode {
+            None
+        } else {
+            expected_http_auth(auth)
+        };
+        let _system_proxy = system_mode
+            .then(|| detected_system_proxy(protocol, proxy_addr))
+            .map(|proxy| system_proxy::test_system_proxy(Some(proxy)));
         let proxy_task = match protocol {
             ProxyProtocol::Http => tokio::spawn(run_http_forward_proxy(
                 proxy_listener,
                 target,
-                expected_http_auth(auth),
+                expected_http_auth,
             )),
             ProxyProtocol::Socks5 => tokio::spawn(run_socks5_proxy(
                 proxy_listener,
                 target,
-                expected_socks5_auth(auth),
+                if system_mode {
+                    None
+                } else {
+                    expected_socks5_auth(auth)
+                },
             )),
         };
 
-        let manager = NetworkManager::new(manual_settings(protocol, proxy_addr, auth))?;
+        let settings = if system_mode {
+            system_settings(protocol, auth)
+        } else {
+            manual_settings(protocol, proxy_addr, auth)
+        };
+        let manager = NetworkManager::new(settings)?;
         let client = manager.client().await;
         let url = format!("http://127.0.0.1:{}/route", target.port());
         let response =
@@ -645,47 +734,53 @@ mod tests {
     async fn exercise_websocket_request(
         protocol: ProxyProtocol,
         auth: AuthCase,
+        system_mode: bool,
     ) -> Result<(), String> {
-        let (target, target_task) = spawn_websocket_target().await;
+        let (target, target_task) = spawn_websocket_target(1).await;
         let proxy_listener = TcpListener::bind("127.0.0.1:0")
             .await
             .map_err(|e| format!("proxy listener failed: {e}"))?;
         let proxy_addr = proxy_listener
             .local_addr()
             .map_err(|e| format!("proxy address failed: {e}"))?;
+        let expected_http_auth = if system_mode {
+            None
+        } else {
+            expected_http_auth(auth)
+        };
+        let _system_proxy = system_mode
+            .then(|| detected_system_proxy(protocol, proxy_addr))
+            .map(|proxy| system_proxy::test_system_proxy(Some(proxy)));
         let proxy_task = match protocol {
             ProxyProtocol::Http => tokio::spawn(run_http_connect_proxy(
                 proxy_listener,
                 target,
-                expected_http_auth(auth),
+                expected_http_auth,
             )),
             ProxyProtocol::Socks5 => tokio::spawn(run_socks5_proxy(
                 proxy_listener,
                 target,
-                expected_socks5_auth(auth),
+                if system_mode {
+                    None
+                } else {
+                    expected_socks5_auth(auth)
+                },
             )),
         };
 
-        let manager = NetworkManager::new(manual_settings(protocol, proxy_addr, auth))?;
+        let settings = if system_mode {
+            system_settings(protocol, auth)
+        } else {
+            manual_settings(protocol, proxy_addr, auth)
+        };
+        let manager = NetworkManager::new(settings)?;
         let url = format!("ws://127.0.0.1:{}/live", target.port());
         let mut websocket =
             tokio::time::timeout(Duration::from_secs(3), manager.connect_websocket(&url))
                 .await
                 .map_err(|_| "WebSocket connection timed out".to_string())?
                 .map_err(|e| format!("WebSocket connection failed: {e}"))?;
-        websocket
-            .send(Message::Text("ws-probe".into()))
-            .await
-            .map_err(|e| format!("WebSocket request failed: {e}"))?;
-        let message = tokio::time::timeout(Duration::from_secs(3), websocket.next())
-            .await
-            .map_err(|_| "WebSocket response timed out".to_string())?
-            .ok_or_else(|| "WebSocket target closed without a response".to_string())?
-            .map_err(|e| format!("WebSocket response failed: {e}"))?;
-        match message {
-            Message::Text(text) if text == "ws-target" => {}
-            _ => return Err("WebSocket request reached an unexpected target".to_string()),
-        }
+        websocket_round_trip(&mut websocket, "ws-probe").await?;
         drop(websocket);
 
         await_test_task(proxy_task).await?;
@@ -693,6 +788,214 @@ mod tests {
         if received != "ws-probe" {
             return Err("WebSocket target received an unexpected message".to_string());
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn network_manager_system_proxy_uses_detected_protocol_and_ignores_saved_auth() {
+        let stale_auth = auth_cases()[2];
+        for protocol in [ProxyProtocol::Http, ProxyProtocol::Socks5] {
+            exercise_http_request(protocol, stale_auth, true)
+                .await
+                .unwrap_or_else(|error| panic!("System HTTP proxy case {protocol:?}: {error}"));
+            exercise_websocket_request(protocol, stale_auth, true)
+                .await
+                .unwrap_or_else(|error| {
+                    panic!("System WebSocket proxy case {protocol:?}: {error}")
+                });
+        }
+    }
+
+    #[tokio::test]
+    async fn system_proxy_change_keeps_old_http_client_and_routes_new_websocket(
+    ) -> Result<(), String> {
+        let (http_target, http_task) = spawn_http_target().await;
+        let proxy_a_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy A listener failed: {e}"))?;
+        let proxy_a_addr = proxy_a_listener
+            .local_addr()
+            .map_err(|e| format!("proxy A address failed: {e}"))?;
+        let system_proxy_guard = system_proxy::test_system_proxy(Some(detected_system_proxy(
+            ProxyProtocol::Http,
+            proxy_a_addr,
+        )));
+        let manager = NetworkManager::new(system_settings(ProxyProtocol::Socks5, auth_cases()[2]))?;
+        let old_client = manager.client().await;
+        let proxy_a_task =
+            tokio::spawn(run_http_forward_proxy(proxy_a_listener, http_target, None));
+
+        let (websocket_target, websocket_task) = spawn_websocket_target(1).await;
+        let proxy_b_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy B listener failed: {e}"))?;
+        let proxy_b_addr = proxy_b_listener
+            .local_addr()
+            .map_err(|e| format!("proxy B address failed: {e}"))?;
+        system_proxy_guard.set(Some(detected_system_proxy(
+            ProxyProtocol::Http,
+            proxy_b_addr,
+        )));
+        let proxy_b_task = tokio::spawn(run_http_connect_proxy(
+            proxy_b_listener,
+            websocket_target,
+            None,
+        ));
+
+        let body = http_round_trip(
+            &old_client,
+            format!("http://127.0.0.1:{}/route-a", http_target.port()),
+        )
+        .await?;
+        if body != HTTP_BODY {
+            return Err("old HTTP client did not reach proxy A".to_string());
+        }
+        let request = await_test_task(http_task).await?;
+        if !String::from_utf8_lossy(&request).starts_with("GET ") {
+            return Err("proxy A target did not receive a GET request".to_string());
+        }
+        await_test_task(proxy_a_task).await?;
+
+        let mut websocket = tokio::time::timeout(
+            Duration::from_secs(3),
+            manager.connect_websocket(&format!(
+                "ws://127.0.0.1:{}/route-b",
+                websocket_target.port()
+            )),
+        )
+        .await
+        .map_err(|_| "new WebSocket connection timed out".to_string())?
+        .map_err(|e| format!("new WebSocket connection failed: {e}"))?;
+        websocket_round_trip(&mut websocket, "ws-probe").await?;
+        drop(websocket);
+        await_test_task(proxy_b_task).await?;
+        if await_test_task(websocket_task).await? != "ws-probe" {
+            return Err("proxy B target received an unexpected message".to_string());
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn system_proxy_change_preserves_existing_websocket_session() -> Result<(), String> {
+        let (old_target, old_target_task) = spawn_websocket_target(2).await;
+        let proxy_a_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy A listener failed: {e}"))?;
+        let proxy_a_addr = proxy_a_listener
+            .local_addr()
+            .map_err(|e| format!("proxy A address failed: {e}"))?;
+        let system_proxy_guard = system_proxy::test_system_proxy(Some(detected_system_proxy(
+            ProxyProtocol::Http,
+            proxy_a_addr,
+        )));
+        let manager = NetworkManager::new(system_settings(ProxyProtocol::Socks5, auth_cases()[2]))?;
+        let proxy_a_task = tokio::spawn(run_http_connect_proxy(proxy_a_listener, old_target, None));
+        let mut old_websocket = tokio::time::timeout(
+            Duration::from_secs(3),
+            manager.connect_websocket(&format!("ws://127.0.0.1:{}/old", old_target.port())),
+        )
+        .await
+        .map_err(|_| "old WebSocket connection timed out".to_string())?
+        .map_err(|e| format!("old WebSocket connection failed: {e}"))?;
+        websocket_round_trip(&mut old_websocket, "old-before").await?;
+
+        let (new_target, new_target_task) = spawn_websocket_target(1).await;
+        let proxy_b_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy B listener failed: {e}"))?;
+        let proxy_b_addr = proxy_b_listener
+            .local_addr()
+            .map_err(|e| format!("proxy B address failed: {e}"))?;
+        system_proxy_guard.set(Some(detected_system_proxy(
+            ProxyProtocol::Http,
+            proxy_b_addr,
+        )));
+        let proxy_b_task = tokio::spawn(run_http_connect_proxy(proxy_b_listener, new_target, None));
+        let mut new_websocket = tokio::time::timeout(
+            Duration::from_secs(3),
+            manager.connect_websocket(&format!("ws://127.0.0.1:{}/new", new_target.port())),
+        )
+        .await
+        .map_err(|_| "new WebSocket connection timed out".to_string())?
+        .map_err(|e| format!("new WebSocket connection failed: {e}"))?;
+        websocket_round_trip(&mut new_websocket, "new-probe").await?;
+        drop(new_websocket);
+        await_test_task(proxy_b_task).await?;
+        if await_test_task(new_target_task).await? != "new-probe" {
+            return Err("proxy B target received an unexpected message".to_string());
+        }
+
+        websocket_round_trip(&mut old_websocket, "old-after").await?;
+        drop(old_websocket);
+        await_test_task(proxy_a_task).await?;
+        if await_test_task(old_target_task).await? != "old-after" {
+            return Err("existing WebSocket session did not stay on proxy A".to_string());
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn explicit_system_proxy_update_rebuilds_http_client_without_moving_old_handle(
+    ) -> Result<(), String> {
+        let proxy_a_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy A listener failed: {e}"))?;
+        let proxy_a_addr = proxy_a_listener
+            .local_addr()
+            .map_err(|e| format!("proxy A address failed: {e}"))?;
+        let proxy_b_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy B listener failed: {e}"))?;
+        let proxy_b_addr = proxy_b_listener
+            .local_addr()
+            .map_err(|e| format!("proxy B address failed: {e}"))?;
+        let system_proxy_guard = system_proxy::test_system_proxy(Some(detected_system_proxy(
+            ProxyProtocol::Http,
+            proxy_a_addr,
+        )));
+        let settings = system_settings(ProxyProtocol::Socks5, auth_cases()[2]);
+        let manager = NetworkManager::new(settings.clone())?;
+        let old_client = manager.client().await;
+        system_proxy_guard.set(Some(detected_system_proxy(
+            ProxyProtocol::Http,
+            proxy_b_addr,
+        )));
+        manager.update_proxy_settings(settings).await?;
+
+        let (target_a, target_a_task) = spawn_http_target().await;
+        let proxy_a_task = tokio::spawn(run_http_forward_proxy(proxy_a_listener, target_a, None));
+        let (target_b, target_b_task) = spawn_http_target().await;
+        let proxy_b_task = tokio::spawn(run_http_forward_proxy(proxy_b_listener, target_b, None));
+
+        if http_round_trip(
+            &old_client,
+            format!("http://127.0.0.1:{}/old", target_a.port()),
+        )
+        .await?
+            != HTTP_BODY
+        {
+            return Err("old HTTP client failed after proxy update".to_string());
+        }
+        let new_client = manager.client().await;
+        if http_round_trip(
+            &new_client,
+            format!("http://127.0.0.1:{}/new", target_b.port()),
+        )
+        .await?
+            != HTTP_BODY
+        {
+            return Err("new HTTP client did not use proxy B".to_string());
+        }
+
+        let request_a = await_test_task(target_a_task).await?;
+        let request_b = await_test_task(target_b_task).await?;
+        if !String::from_utf8_lossy(&request_a).contains(&format!("/old"))
+            || !String::from_utf8_lossy(&request_b).contains(&format!("/new"))
+        {
+            return Err("HTTP requests did not reach their expected local exits".to_string());
+        }
+        await_test_task(proxy_a_task).await?;
+        await_test_task(proxy_b_task).await?;
         Ok(())
     }
 
@@ -747,51 +1050,72 @@ mod tests {
         assert!(resolved_debug.contains("[REDACTED]"));
     }
 
-    #[tokio::test]
-    async fn network_manager_direct_uses_direct_http_and_websocket_exit() {
-        let settings = ProxySettings {
-            mode: ProxyMode::Direct,
-            ..ProxySettings::default()
-        };
-        let manager = NetworkManager::new(settings).unwrap();
+    async fn exercise_direct_connections(settings: ProxySettings) -> Result<(), String> {
+        let manager = NetworkManager::new(settings)?;
 
         let (http_target, http_task) = spawn_http_target().await;
-        let response = manager
-            .client()
+        let client = manager.client().await;
+        let response = tokio::time::timeout(
+            Duration::from_secs(3),
+            client
+                .get(format!("http://127.0.0.1:{}/direct", http_target.port()))
+                .send(),
+        )
+        .await
+        .map_err(|_| "direct HTTP request timed out".to_string())?
+        .map_err(|e| format!("direct HTTP request failed: {e}"))?;
+        let body = tokio::time::timeout(Duration::from_secs(3), response.text())
             .await
-            .get(format!("http://127.0.0.1:{}/direct", http_target.port()))
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(response.text().await.unwrap(), HTTP_BODY);
-        assert!(
-            String::from_utf8_lossy(&await_test_task(http_task).await.unwrap()).starts_with("GET ")
-        );
+            .map_err(|_| "direct HTTP response timed out".to_string())?
+            .map_err(|e| format!("direct HTTP response failed: {e}"))?;
+        if body != HTTP_BODY {
+            return Err("direct HTTP request reached an unexpected target".to_string());
+        }
+        if !String::from_utf8_lossy(&await_test_task(http_task).await?).starts_with("GET ") {
+            return Err("direct HTTP target did not receive a GET request".to_string());
+        }
 
-        let (ws_target, ws_task) = spawn_websocket_target().await;
-        let mut websocket = manager
-            .connect_websocket(&format!("ws://127.0.0.1:{}/direct", ws_target.port()))
-            .await
-            .unwrap();
-        websocket
-            .send(Message::Text("ws-probe".into()))
-            .await
-            .unwrap();
-        assert!(matches!(
-            websocket.next().await.unwrap().unwrap(),
-            Message::Text(text) if text == "ws-target"
-        ));
+        let (ws_target, ws_task) = spawn_websocket_target(1).await;
+        let mut websocket = tokio::time::timeout(
+            Duration::from_secs(3),
+            manager.connect_websocket(&format!("ws://127.0.0.1:{}/direct", ws_target.port())),
+        )
+        .await
+        .map_err(|_| "direct WebSocket connection timed out".to_string())?
+        .map_err(|e| format!("direct WebSocket connection failed: {e}"))?;
+        websocket_round_trip(&mut websocket, "ws-probe").await?;
         drop(websocket);
-        assert_eq!(await_test_task(ws_task).await.unwrap(), "ws-probe");
+        if await_test_task(ws_task).await? != "ws-probe" {
+            return Err("direct WebSocket target received an unexpected message".to_string());
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn network_manager_direct_uses_direct_http_and_websocket_exit() {
+        exercise_direct_connections(ProxySettings {
+            mode: ProxyMode::Direct,
+            ..ProxySettings::default()
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn network_manager_system_without_proxy_uses_direct_http_and_websocket_exit() {
+        let _system_proxy = system_proxy::test_system_proxy(None);
+        exercise_direct_connections(system_settings(ProxyProtocol::Http, auth_cases()[2]))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn network_manager_manual_http_proxy_matches_http_and_websocket_auth_rules() {
         for (case, auth) in auth_cases().into_iter().enumerate() {
-            exercise_http_request(ProxyProtocol::Http, auth)
+            exercise_http_request(ProxyProtocol::Http, auth, false)
                 .await
                 .unwrap_or_else(|error| panic!("HTTP proxy case {case}: {error}"));
-            exercise_websocket_request(ProxyProtocol::Http, auth)
+            exercise_websocket_request(ProxyProtocol::Http, auth, false)
                 .await
                 .unwrap_or_else(|error| panic!("WebSocket proxy case {case}: {error}"));
         }
@@ -800,10 +1124,10 @@ mod tests {
     #[tokio::test]
     async fn network_manager_manual_socks5_proxy_matches_http_and_websocket_auth_rules() {
         for (case, auth) in auth_cases().into_iter().enumerate() {
-            exercise_http_request(ProxyProtocol::Socks5, auth)
+            exercise_http_request(ProxyProtocol::Socks5, auth, false)
                 .await
                 .unwrap_or_else(|error| panic!("HTTP SOCKS5 case {case}: {error}"));
-            exercise_websocket_request(ProxyProtocol::Socks5, auth)
+            exercise_websocket_request(ProxyProtocol::Socks5, auth, false)
                 .await
                 .unwrap_or_else(|error| panic!("WebSocket SOCKS5 case {case}: {error}"));
         }

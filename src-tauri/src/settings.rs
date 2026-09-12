@@ -371,7 +371,7 @@ pub enum ProxyProtocol {
     Socks5,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Type)]
 #[serde(default)]
 pub struct ProxySettings {
     pub mode: ProxyMode,
@@ -394,6 +394,21 @@ impl Default for ProxySettings {
             username: None,
             password: None,
         }
+    }
+}
+
+impl fmt::Debug for ProxySettings {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProxySettings")
+            .field("mode", &self.mode)
+            .field("protocol", &self.protocol)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("auth_enabled", &self.auth_enabled)
+            .field("username", &self.username.as_ref().map(|_| "[REDACTED]"))
+            .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+            .finish()
     }
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type, Default)]

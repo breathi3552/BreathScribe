@@ -6,75 +6,9 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use url::Url;
 
-use crate::network::system_proxy;
-use crate::settings::{ProxyMode, ProxyProtocol, ProxySettings};
+use crate::network::ResolvedProxy;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Effective proxy configuration.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ResolvedProxy {
-    Direct,
-    Http {
-        host: String,
-        port: u16,
-        auth: Option<(String, String)>,
-    },
-    Socks5 {
-        host: String,
-        port: u16,
-        auth: Option<(String, String)>,
-    },
-}
-
-pub fn resolve_effective_proxy(settings: &ProxySettings) -> ResolvedProxy {
-    match settings.mode {
-        ProxyMode::Direct => ResolvedProxy::Direct,
-        ProxyMode::System => {
-            if let Some(detected) = system_proxy::get_system_proxy() {
-                match detected.protocol {
-                    ProxyProtocol::Http => ResolvedProxy::Http {
-                        host: detected.host,
-                        port: detected.port,
-                        auth: None,
-                    },
-                    ProxyProtocol::Socks5 => ResolvedProxy::Socks5 {
-                        host: detected.host,
-                        port: detected.port,
-                        auth: None,
-                    },
-                }
-            } else {
-                ResolvedProxy::Direct
-            }
-        }
-        ProxyMode::Manual => {
-            let auth = if settings.auth_enabled {
-                let user = settings.username.clone().unwrap_or_default();
-                let pass = settings.password.clone().unwrap_or_default();
-                if !user.is_empty() {
-                    Some((user, pass))
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-            match settings.protocol {
-                ProxyProtocol::Http => ResolvedProxy::Http {
-                    host: settings.host.clone(),
-                    port: settings.port,
-                    auth,
-                },
-                ProxyProtocol::Socks5 => ResolvedProxy::Socks5 {
-                    host: settings.host.clone(),
-                    port: settings.port,
-                    auth,
-                },
-            }
-        }
-    }
-}
 
 pub async fn establish_http_connect_tunnel(
     stream: &mut TcpStream,
@@ -145,12 +79,8 @@ pub async fn establish_socks5_tunnel(
     target_port: u16,
     auth: Option<&(String, String)>,
 ) -> Result<(), String> {
-    let (greeting, has_auth) = if let Some((user, _pass)) = auth {
-        if !user.is_empty() {
-            (vec![0x05, 0x02, 0x00, 0x02], true)
-        } else {
-            (vec![0x05, 0x01, 0x00], false)
-        }
+    let (greeting, has_auth) = if auth.is_some() {
+        (vec![0x05, 0x02, 0x00, 0x02], true)
     } else {
         (vec![0x05, 0x01, 0x00], false)
     };
@@ -311,9 +241,9 @@ pub async fn establish_socks5_tunnel(
     Ok(())
 }
 
-pub async fn connect_websocket_tunnel(
+pub(crate) async fn connect_websocket_tunnel(
     url_str: &str,
-    proxy_settings: &ProxySettings,
+    resolved: ResolvedProxy,
 ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, String> {
     let parsed_url =
         Url::parse(url_str).map_err(|e| format!("Failed to parse WebSocket URL: {}", e))?;
@@ -331,8 +261,6 @@ pub async fn connect_websocket_tunnel(
     let port = parsed_url
         .port_or_known_default()
         .unwrap_or(if is_secure { 443 } else { 80 });
-
-    let resolved = resolve_effective_proxy(proxy_settings);
 
     let tcp_stream = match resolved {
         ResolvedProxy::Direct => {
@@ -417,62 +345,6 @@ pub async fn connect_websocket_tunnel(
 mod tests {
     use super::*;
     use tokio::net::TcpListener;
-
-    #[test]
-    fn test_resolve_effective_proxy_direct() {
-        let settings = ProxySettings {
-            mode: ProxyMode::Direct,
-            protocol: ProxyProtocol::Http,
-            host: "127.0.0.1".to_string(),
-            port: 8080,
-            auth_enabled: false,
-            username: None,
-            password: None,
-        };
-        assert_eq!(resolve_effective_proxy(&settings), ResolvedProxy::Direct);
-    }
-
-    #[test]
-    fn test_resolve_effective_proxy_manual_http() {
-        let settings = ProxySettings {
-            mode: ProxyMode::Manual,
-            protocol: ProxyProtocol::Http,
-            host: "10.0.0.1".to_string(),
-            port: 7890,
-            auth_enabled: true,
-            username: Some("user".to_string()),
-            password: Some("pass".to_string()),
-        };
-        assert_eq!(
-            resolve_effective_proxy(&settings),
-            ResolvedProxy::Http {
-                host: "10.0.0.1".to_string(),
-                port: 7890,
-                auth: Some(("user".to_string(), "pass".to_string())),
-            }
-        );
-    }
-
-    #[test]
-    fn test_resolve_effective_proxy_manual_socks5() {
-        let settings = ProxySettings {
-            mode: ProxyMode::Manual,
-            protocol: ProxyProtocol::Socks5,
-            host: "127.0.0.1".to_string(),
-            port: 1080,
-            auth_enabled: false,
-            username: None,
-            password: None,
-        };
-        assert_eq!(
-            resolve_effective_proxy(&settings),
-            ResolvedProxy::Socks5 {
-                host: "127.0.0.1".to_string(),
-                port: 1080,
-                auth: None,
-            }
-        );
-    }
 
     #[tokio::test]
     async fn test_http_connect_tunnel_handshake_success() {

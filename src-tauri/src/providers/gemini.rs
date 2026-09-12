@@ -863,11 +863,7 @@ impl StreamingTranscriptionProvider for GeminiProvider {
 
         let custom_base = provider_config.custom_base_url.as_deref();
         let ws_url = Self::build_live_websocket_url(custom_base, api_key);
-        let proxy_settings = self.network_manager.proxy_settings().await;
-
-        let mut ws =
-            crate::network::proxy_tunnel::connect_websocket_tunnel(&ws_url, &proxy_settings)
-                .await?;
+        let mut ws = self.network_manager.connect_websocket(&ws_url).await?;
 
         let mut language_codes = Vec::new();
         if options.language != "auto" && !options.language.trim().is_empty() {

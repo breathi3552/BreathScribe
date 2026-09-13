@@ -4,8 +4,9 @@ import {
   createServer,
   type AddressInfo,
   type Server,
-  type Socket,
 } from "node:net";
+import { createServer as createHttpServer, request } from "node:http";
+import type { Duplex } from "node:stream";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import {
@@ -82,7 +83,7 @@ function wsTextFrame(text: string): Buffer {
   return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
 }
 
-function consumeWebSocketFrames(socket: Socket, input: Buffer): Buffer {
+function consumeWebSocketFrames(socket: Duplex, input: Buffer): Buffer {
   let buffer = input;
   while (buffer.length >= 2) {
     const first = buffer[0];
@@ -130,7 +131,37 @@ function consumeWebSocketFrames(socket: Socket, input: Buffer): Buffer {
 }
 
 class ProbeTarget {
-  readonly server = createServer((socket) => this.handle(socket));
+  readonly server = createHttpServer((request, response) => {
+    this.requests.push(request.url ?? "");
+    response.writeHead(204, { Connection: "close" });
+    response.end();
+  }).on("upgrade", (request, socket, head) => {
+    this.requests.push(request.url ?? "");
+    socket.on("error", () => undefined);
+    // HTTP upgrade sockets are half-open; preserve the old net.Server cleanup.
+    socket.on("end", () => socket.end());
+    if (request.headers.upgrade?.toLowerCase() !== "websocket") {
+      socket.end(
+        "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+      );
+      return;
+    }
+    const key = request.headers["sec-websocket-key"];
+    if (!key) {
+      socket.destroy(new Error("WebSocket handshake has no key"));
+      return;
+    }
+    const accept = createHash("sha1")
+      .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+      .digest("base64");
+    socket.write(
+      `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+    );
+    let buffer = consumeWebSocketFrames(socket, head);
+    socket.on("data", (chunk) => {
+      buffer = consumeWebSocketFrames(socket, Buffer.concat([buffer, chunk]));
+    });
+  });
   readonly requests: string[] = [];
   port = 0;
 
@@ -141,64 +172,35 @@ class ProbeTarget {
   async close(): Promise<void> {
     await closeServer(this.server);
   }
-
-  private handle(socket: Socket): void {
-    let requestBuffer = Buffer.alloc(0);
-    let websocket = false;
-    let websocketBuffer = Buffer.alloc(0);
-
-    socket.on("error", () => undefined);
-    socket.on("data", (chunk) => {
-      if (websocket) {
-        websocketBuffer = Buffer.concat([websocketBuffer, chunk]);
-        websocketBuffer = consumeWebSocketFrames(socket, websocketBuffer);
-        return;
-      }
-
-      requestBuffer = Buffer.concat([requestBuffer, chunk]);
-      const headerEnd = requestBuffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) return;
-
-      const header = requestBuffer.subarray(0, headerEnd).toString("latin1");
-      const firstLine = header.split("\r\n", 1)[0] ?? "";
-      const path = firstLine.split(" ")[1] ?? "";
-      this.requests.push(path);
-      const headers = header
-        .split("\r\n")
-        .slice(1)
-        .map((line) => line.split(":"))
-        .reduce<Record<string, string>>((all, [name, ...value]) => {
-          if (name) all[name.trim().toLowerCase()] = value.join(":").trim();
-          return all;
-        }, {});
-
-      if (headers.upgrade?.toLowerCase() !== "websocket") {
-        socket.end(
-          "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-        );
-        return;
-      }
-
-      const key = headers["sec-websocket-key"];
-      if (!key) {
-        socket.destroy(new Error("WebSocket handshake has no key"));
-        return;
-      }
-      const accept = createHash("sha1")
-        .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
-        .digest("base64");
-      socket.write(
-        `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
-      );
-      websocket = true;
-      websocketBuffer = requestBuffer.subarray(headerEnd + 4);
-      websocketBuffer = consumeWebSocketFrames(socket, websocketBuffer);
-    });
-  }
 }
 
 class HttpProxy {
-  readonly server = createServer((socket) => this.handle(socket));
+  readonly server = createHttpServer((incoming, response) => {
+    this.httpHits += 1;
+    let url: URL;
+    try {
+      url = new URL(incoming.url ?? "");
+    } catch {
+      incoming.socket.destroy();
+      return;
+    }
+    const target = request(
+      url,
+      { method: incoming.method, headers: incoming.headers, agent: false },
+      (upstream) => {
+        response.writeHead(upstream.statusCode ?? 502, upstream.headers);
+        upstream.pipe(response);
+      },
+    );
+    target.once("error", () => response.destroy());
+    incoming.once("error", () => target.destroy());
+    response.once("close", () => target.destroy());
+    incoming.pipe(target);
+  }).on("connect", (request, socket, head) => {
+    this.connectHits += 1;
+    const [host, rawPort] = (request.url ?? "").split(":");
+    this.tunnel(socket, host, Number(rawPort), head);
+  });
   httpHits = 0;
   connectHits = 0;
   port = 0;
@@ -211,72 +213,16 @@ class HttpProxy {
     await closeServer(this.server);
   }
 
-  private handle(socket: Socket): void {
-    let requestBuffer = Buffer.alloc(0);
-    socket.on("error", () => undefined);
-    socket.on("data", (chunk) => {
-      requestBuffer = Buffer.concat([requestBuffer, chunk]);
-      const headerEnd = requestBuffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) return;
-
-      socket.removeAllListeners("data");
-      const header = requestBuffer.subarray(0, headerEnd).toString("latin1");
-      const remainder = requestBuffer.subarray(headerEnd + 4);
-      const [method, requestTarget] = header.split(" ");
-      if (method === "CONNECT") {
-        this.connectHits += 1;
-        const [host, rawPort] = requestTarget.split(":");
-        this.tunnel(socket, host, Number(rawPort), remainder);
-        return;
-      }
-
-      this.httpHits += 1;
-      let url: URL;
-      try {
-        url = new URL(requestTarget);
-      } catch {
-        socket.destroy(new Error("proxy received a non-absolute HTTP request"));
-        return;
-      }
-      const path = `${url.pathname || "/"}${url.search}`;
-      const lines = header.split("\r\n");
-      lines[0] = `${method} ${path} HTTP/1.1`;
-      const rewritten = `${lines.join("\r\n")}\r\n\r\n`;
-      this.forward(
-        socket,
-        url.hostname,
-        Number(url.port || 80),
-        Buffer.concat([Buffer.from(rewritten, "latin1"), remainder]),
-      );
-    });
-  }
-
   private tunnel(
-    socket: Socket,
+    socket: Duplex,
     host: string,
     port: number,
     remainder: Buffer,
   ): void {
-    const connection = socket;
     const target = createConnection(port, host);
     target.once("connect", () => {
-      connection.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
       if (remainder.length) target.write(remainder);
-      connection.pipe(target).pipe(connection);
-    });
-    target.once("error", () => connection.destroy());
-    connection.once("error", () => target.destroy());
-  }
-
-  private forward(
-    socket: Socket,
-    host: string,
-    port: number,
-    request: Buffer,
-  ): void {
-    const target = createConnection(port, host);
-    target.once("connect", () => {
-      target.write(request);
       socket.pipe(target).pipe(socket);
     });
     target.once("error", () => socket.destroy());
@@ -763,11 +709,12 @@ async function main(): Promise<void> {
     // illegal values. Neither path may alter A.
     await hostInput.fill("127.0.0.1");
     await portInput.fill(String(rejecting.port));
-    const rejectingBefore = rejecting.connections.length;
+    const rejectingConnections = rejecting.connections;
+    const rejectingBefore = rejectingConnections.length;
     const errorToastsBeforeCandidateFailure = await toastCount(page, "error");
     await testButton.click();
     await waitFor(
-      () => rejecting.connections.length > rejectingBefore,
+      () => rejectingConnections.length > rejectingBefore,
       "failed candidate connection attempt",
     );
     await waitFor(

@@ -388,9 +388,7 @@ describe("settings store synchronization", () => {
     useSettingsStore.setState({ settings: null });
     appSettingsResponder = async () => ok(savedSettings);
 
-    await useSettingsStore
-      .getState()
-      .setCloudSttApiKey("gemini", "<REDACTED>");
+    await useSettingsStore.getState().setCloudSttApiKey("gemini", "<REDACTED>");
 
     expect(cloudApiKeyUpdates).toEqual([
       { providerId: "gemini", apiKey: "<REDACTED>" },

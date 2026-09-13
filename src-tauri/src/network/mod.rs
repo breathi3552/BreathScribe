@@ -4,7 +4,7 @@ use std::fmt;
 use std::future::Future;
 use std::net::Ipv6Addr;
 #[cfg(test)]
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex as TokioMutex, RwLock};
@@ -102,9 +102,9 @@ pub(crate) fn normalize_proxy_settings(
 }
 
 #[cfg(test)]
-static TEST_CONNECTIVITY_URLS: OnceLock<Mutex<Option<Vec<String>>>> = OnceLock::new();
+static TEST_CONNECTIVITY_URLS: Mutex<Option<Vec<String>>> = Mutex::new(None);
 #[cfg(test)]
-static TEST_CONNECTIVITY_URLS_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static TEST_CONNECTIVITY_URLS_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(test)]
 pub(crate) struct TestConnectivityUrlsGuard {
@@ -115,7 +115,6 @@ pub(crate) struct TestConnectivityUrlsGuard {
 impl TestConnectivityUrlsGuard {
     pub(crate) fn set(&self, urls: Vec<String>) {
         *TEST_CONNECTIVITY_URLS
-            .get_or_init(|| Mutex::new(None))
             .lock()
             .unwrap_or_else(|error| error.into_inner()) = Some(urls);
     }
@@ -124,9 +123,9 @@ impl TestConnectivityUrlsGuard {
 #[cfg(test)]
 impl Drop for TestConnectivityUrlsGuard {
     fn drop(&mut self) {
-        if let Some(urls) = TEST_CONNECTIVITY_URLS.get() {
-            *urls.lock().unwrap_or_else(|error| error.into_inner()) = None;
-        }
+        *TEST_CONNECTIVITY_URLS
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = None;
     }
 }
 
@@ -134,7 +133,6 @@ impl Drop for TestConnectivityUrlsGuard {
 pub(crate) fn test_connectivity_urls(urls: Vec<String>) -> TestConnectivityUrlsGuard {
     let guard = TestConnectivityUrlsGuard {
         _serial: TEST_CONNECTIVITY_URLS_LOCK
-            .get_or_init(|| Mutex::new(()))
             .lock()
             .unwrap_or_else(|error| error.into_inner()),
     };
@@ -145,7 +143,6 @@ pub(crate) fn test_connectivity_urls(urls: Vec<String>) -> TestConnectivityUrlsG
 fn connectivity_test_urls() -> Vec<String> {
     #[cfg(test)]
     if let Some(urls) = TEST_CONNECTIVITY_URLS
-        .get_or_init(|| Mutex::new(None))
         .lock()
         .unwrap_or_else(|error| error.into_inner())
         .clone()
@@ -281,19 +278,7 @@ pub fn build_reqwest_client(settings: &ProxySettings) -> Result<Client, String> 
 const CONNECTIVITY_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(test)]
-const TEST_CONNECTIVITY_TIMEOUT: Duration = Duration::from_millis(250);
-
-fn connectivity_timeout() -> Duration {
-    #[cfg(test)]
-    {
-        TEST_CONNECTIVITY_TIMEOUT
-    }
-
-    #[cfg(not(test))]
-    {
-        CONNECTIVITY_TIMEOUT
-    }
-}
+const CONNECTIVITY_TIMEOUT: Duration = Duration::from_millis(250);
 
 /// Probe network connectivity and return round-trip latency in ms.
 pub async fn test_connectivity(client: &Client) -> Result<u64, String> {
@@ -302,7 +287,7 @@ pub async fn test_connectivity(client: &Client) -> Result<u64, String> {
     for url in connectivity_test_urls() {
         let start = std::time::Instant::now();
         let response =
-            match tokio::time::timeout(connectivity_timeout(), client.get(&url).send()).await {
+            match tokio::time::timeout(CONNECTIVITY_TIMEOUT, client.get(&url).send()).await {
                 Ok(Ok(response)) => response,
                 Ok(Err(error)) => {
                     last_err = Some(crate::llm_client::report_reqwest_error(
@@ -1378,12 +1363,12 @@ mod tests {
         let proxy_b_addr = proxy_b_listener
             .local_addr()
             .map_err(|e| format!("proxy B address failed: {e}"))?;
-        crate::commands::network::update_proxy_settings_with_persistence(
-            manager.as_ref(),
-            manual_settings(ProxyProtocol::Http, proxy_b_addr, no_auth),
-            |_| async { Ok(()) },
-        )
-        .await?;
+        manager
+            .update_proxy_settings_with_persistence(
+                manual_settings(ProxyProtocol::Http, proxy_b_addr, no_auth),
+                |_| async { Ok(()) },
+            )
+            .await?;
         let proxy_b_task = tokio::spawn(run_http_connect_proxy(proxy_b_listener, new_target, None));
 
         let mut new_websocket = tokio::time::timeout(
@@ -1446,19 +1431,16 @@ mod tests {
             .map_err(|_| "old HTTP request did not reach proxy A".to_string())?
             .map_err(|_| "old HTTP request signal was dropped".to_string())?;
 
-        crate::commands::network::update_proxy_settings_with_persistence(
-            manager.as_ref(),
-            updated.clone(),
-            move |settings| async move {
+        manager
+            .update_proxy_settings_with_persistence(updated.clone(), move |settings| async move {
                 std::fs::write(
                     &path_for_persist,
                     serde_json::to_vec(&settings)
                         .map_err(|e| format!("serialize proxy failed: {e}"))?,
                 )
                 .map_err(|e| format!("persist proxy failed: {e}"))
-            },
-        )
-        .await?;
+            })
+            .await?;
 
         let proxy_b_task = tokio::spawn(run_http_forward_proxy(proxy_b_listener, target_b, None));
         release_request
@@ -1531,8 +1513,7 @@ mod tests {
         let manager = Arc::new(NetworkManager::new(initial_proxy)?);
 
         let path_for_a = settings_path.clone();
-        let update_a = crate::commands::network::update_proxy_settings_with_persistence(
-            manager.as_ref(),
+        let update_a = manager.update_proxy_settings_with_persistence(
             proxy_a.clone(),
             move |settings| async move {
                 crate::settings::with_settings_update(
@@ -1555,8 +1536,7 @@ mod tests {
             },
         );
         let path_for_b = settings_path.clone();
-        let update_b = crate::commands::network::update_proxy_settings_with_persistence(
-            manager.as_ref(),
+        let update_b = manager.update_proxy_settings_with_persistence(
             proxy_b.clone(),
             move |settings| async move {
                 crate::settings::with_settings_update(
@@ -1760,13 +1740,13 @@ mod tests {
         .map_err(|e| format!("write proxy failed: {e}"))?;
         let manager = Arc::new(NetworkManager::new(initial.clone())?);
         let old_client = manager.client().await;
-        let error = crate::commands::network::update_proxy_settings_with_persistence(
-            manager.as_ref(),
-            manual_settings(ProxyProtocol::Http, "127.0.0.1:1".parse().unwrap(), no_auth),
-            |_| async { Err("persist failed".to_string()) },
-        )
-        .await
-        .expect_err("failed persistence must reject the update");
+        let error = manager
+            .update_proxy_settings_with_persistence(
+                manual_settings(ProxyProtocol::Http, "127.0.0.1:1".parse().unwrap(), no_auth),
+                |_| async { Err("persist failed".to_string()) },
+            )
+            .await
+            .expect_err("failed persistence must reject the update");
         assert_eq!(error, "persist failed");
         assert_eq!(read_persisted_proxy(&settings_path)?, initial);
         assert_eq!(manager.state.read().await.settings, initial);
@@ -1809,18 +1789,18 @@ mod tests {
         .map_err(|e| format!("old WebSocket connection failed: {e}"))?;
         websocket_round_trip(&mut old_websocket, "before-failure").await?;
 
-        let error = crate::commands::network::update_proxy_settings_with_persistence(
-            &manager,
-            ProxySettings {
-                host: "candidate.invalid".to_string(),
-                ..initial.clone()
-            },
-            |_| async {
-                Err("initial save failed; rollback failed; disk state is unknown".to_string())
-            },
-        )
-        .await
-        .expect_err("failed persistence must reject the update");
+        let error = manager
+            .update_proxy_settings_with_persistence(
+                ProxySettings {
+                    host: "candidate.invalid".to_string(),
+                    ..initial.clone()
+                },
+                |_| async {
+                    Err("initial save failed; rollback failed; disk state is unknown".to_string())
+                },
+            )
+            .await
+            .expect_err("failed persistence must reject the update");
         assert_eq!(
             error,
             "initial save failed; rollback failed; disk state is unknown"

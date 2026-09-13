@@ -12,26 +12,14 @@ use crate::network::ResolvedProxy;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[cfg(test)]
-const TEST_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
-
-fn connect_timeout() -> Duration {
-    #[cfg(test)]
-    {
-        TEST_CONNECT_TIMEOUT
-    }
-
-    #[cfg(not(test))]
-    {
-        CONNECT_TIMEOUT
-    }
-}
+const CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 
 async fn read_exact_with_timeout(
     stream: &mut TcpStream,
     buffer: &mut [u8],
     operation: &str,
 ) -> Result<(), String> {
-    let _ = tokio::time::timeout(connect_timeout(), stream.read_exact(buffer))
+    let _ = tokio::time::timeout(CONNECT_TIMEOUT, stream.read_exact(buffer))
         .await
         .map_err(|_| format!("Timed out reading {operation}"))?
         .map_err(|e| format!("Failed to read {operation}: {e}"))?;
@@ -54,7 +42,7 @@ pub async fn establish_http_connect_tunnel(
     }
     req.push_str("\r\n");
 
-    tokio::time::timeout(connect_timeout(), stream.write_all(req.as_bytes()))
+    tokio::time::timeout(CONNECT_TIMEOUT, stream.write_all(req.as_bytes()))
         .await
         .map_err(|_| "Timed out sending HTTP CONNECT directive".to_string())?
         .map_err(|e| format!("Failed to send HTTP CONNECT directive: {}", e))?;
@@ -62,7 +50,7 @@ pub async fn establish_http_connect_tunnel(
     let mut header_buf = Vec::with_capacity(1024);
     let mut byte_buf = [0u8; 1];
     loop {
-        let n = tokio::time::timeout(connect_timeout(), stream.read(&mut byte_buf))
+        let n = tokio::time::timeout(CONNECT_TIMEOUT, stream.read(&mut byte_buf))
             .await
             .map_err(|_| "Timed out reading HTTP CONNECT response".to_string())?
             .map_err(|e| format!("Failed to read HTTP CONNECT response: {}", e))?;
@@ -122,7 +110,7 @@ pub async fn establish_socks5_tunnel(
         (vec![0x05, 0x01, 0x00], false)
     };
 
-    tokio::time::timeout(connect_timeout(), stream.write_all(&greeting))
+    tokio::time::timeout(CONNECT_TIMEOUT, stream.write_all(&greeting))
         .await
         .map_err(|_| "Timed out sending SOCKS5 greeting".to_string())?
         .map_err(|e| format!("Failed to send SOCKS5 greeting: {}", e))?;
@@ -148,7 +136,7 @@ pub async fn establish_socks5_tunnel(
                 auth_req.push(pass.len() as u8);
                 auth_req.extend_from_slice(pass.as_bytes());
 
-                tokio::time::timeout(connect_timeout(), stream.write_all(&auth_req))
+                tokio::time::timeout(CONNECT_TIMEOUT, stream.write_all(&auth_req))
                     .await
                     .map_err(|_| "Timed out sending SOCKS5 auth credentials".to_string())?
                     .map_err(|e| format!("Failed to send SOCKS5 auth credentials: {}", e))?;
@@ -196,7 +184,7 @@ pub async fn establish_socks5_tunnel(
     }
     connect_req.extend_from_slice(&target_port.to_be_bytes());
 
-    tokio::time::timeout(connect_timeout(), stream.write_all(&connect_req))
+    tokio::time::timeout(CONNECT_TIMEOUT, stream.write_all(&connect_req))
         .await
         .map_err(|_| "Timed out sending SOCKS5 connect request".to_string())?
         .map_err(|e| format!("Failed to send SOCKS5 connect request: {}", e))?;
@@ -285,7 +273,7 @@ pub(crate) async fn connect_websocket_tunnel(
 
     let tcp_stream = match resolved {
         ResolvedProxy::Direct => {
-            tokio::time::timeout(connect_timeout(), TcpStream::connect((host, port)))
+            tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect((host, port)))
                 .await
                 .map_err(|_| format!("Direct connection to {}:{} timed out", host, port))?
                 .map_err(|e| format!("Direct connection to {}:{} failed: {}", host, port, e))?
@@ -296,7 +284,7 @@ pub(crate) async fn connect_websocket_tunnel(
             auth,
         } => {
             let mut stream = tokio::time::timeout(
-                connect_timeout(),
+                CONNECT_TIMEOUT,
                 TcpStream::connect((p_host.as_str(), p_port)),
             )
             .await
@@ -317,7 +305,7 @@ pub(crate) async fn connect_websocket_tunnel(
             auth,
         } => {
             let mut stream = tokio::time::timeout(
-                connect_timeout(),
+                CONNECT_TIMEOUT,
                 TcpStream::connect((p_host.as_str(), p_port)),
             )
             .await
@@ -341,7 +329,7 @@ pub(crate) async fn connect_websocket_tunnel(
         let async_connector = tokio_native_tls::TlsConnector::from(native_connector);
 
         let tls_stream =
-            tokio::time::timeout(connect_timeout(), async_connector.connect(host, tcp_stream))
+            tokio::time::timeout(CONNECT_TIMEOUT, async_connector.connect(host, tcp_stream))
                 .await
                 .map_err(|_| format!("TLS handshake with {} timed out", host))?
                 .map_err(|e| format!("TLS handshake with {} failed: {}", host, e))?;
@@ -352,7 +340,7 @@ pub(crate) async fn connect_websocket_tunnel(
     };
 
     let (ws_stream, _response) = tokio::time::timeout(
-        connect_timeout(),
+        CONNECT_TIMEOUT,
         tokio_tungstenite::client_async(url_str, tunnel_stream),
     )
     .await

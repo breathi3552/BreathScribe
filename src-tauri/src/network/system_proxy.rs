@@ -8,19 +8,18 @@ pub struct DetectedProxy {
 }
 
 #[cfg(test)]
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Mutex, MutexGuard};
 
 #[cfg(test)]
-static TEST_SYSTEM_PROXY: OnceLock<Mutex<Option<Option<DetectedProxy>>>> = OnceLock::new();
+static TEST_SYSTEM_PROXY: Mutex<Option<Option<DetectedProxy>>> = Mutex::new(None);
 #[cfg(test)]
-static TEST_SYSTEM_PROXY_ENV: OnceLock<Mutex<Option<[Option<String>; 6]>>> = OnceLock::new();
+static TEST_SYSTEM_PROXY_ENV: Mutex<Option<[Option<String>; 6]>> = Mutex::new(None);
 #[cfg(test)]
-static TEST_SYSTEM_PROXY_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static TEST_SYSTEM_PROXY_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(test)]
 fn test_system_proxy_override() -> Option<Option<DetectedProxy>> {
     TEST_SYSTEM_PROXY
-        .get_or_init(|| Mutex::new(None))
         .lock()
         .unwrap_or_else(|error| error.into_inner())
         .clone()
@@ -29,7 +28,6 @@ fn test_system_proxy_override() -> Option<Option<DetectedProxy>> {
 #[cfg(test)]
 fn test_system_proxy_environment_override() -> Option<[Option<String>; 6]> {
     TEST_SYSTEM_PROXY_ENV
-        .get_or_init(|| Mutex::new(None))
         .lock()
         .unwrap_or_else(|error| error.into_inner())
         .clone()
@@ -44,7 +42,6 @@ pub(super) struct TestSystemProxyGuard {
 impl TestSystemProxyGuard {
     pub(super) fn set(&self, proxy: Option<DetectedProxy>) {
         *TEST_SYSTEM_PROXY
-            .get_or_init(|| Mutex::new(None))
             .lock()
             .unwrap_or_else(|error| error.into_inner()) = Some(proxy);
     }
@@ -52,7 +49,6 @@ impl TestSystemProxyGuard {
     pub(super) fn set_environment(&self, values: [Option<&str>; 6]) {
         // Values follow SYSTEM_PROXY_ENV_VARIABLES order.
         *TEST_SYSTEM_PROXY_ENV
-            .get_or_init(|| Mutex::new(None))
             .lock()
             .unwrap_or_else(|error| error.into_inner()) =
             Some(values.map(|value| value.map(|value| value.to_string())));
@@ -62,14 +58,12 @@ impl TestSystemProxyGuard {
 #[cfg(test)]
 impl Drop for TestSystemProxyGuard {
     fn drop(&mut self) {
-        if let Some(proxy) = TEST_SYSTEM_PROXY.get() {
-            *proxy.lock().unwrap_or_else(|error| error.into_inner()) = None;
-        }
-        if let Some(environment) = TEST_SYSTEM_PROXY_ENV.get() {
-            *environment
-                .lock()
-                .unwrap_or_else(|error| error.into_inner()) = None;
-        }
+        *TEST_SYSTEM_PROXY
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = None;
+        *TEST_SYSTEM_PROXY_ENV
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = None;
     }
 }
 
@@ -77,7 +71,6 @@ impl Drop for TestSystemProxyGuard {
 pub(super) fn test_system_proxy(proxy: Option<DetectedProxy>) -> TestSystemProxyGuard {
     let guard = TestSystemProxyGuard {
         _serial: TEST_SYSTEM_PROXY_LOCK
-            .get_or_init(|| Mutex::new(()))
             .lock()
             .unwrap_or_else(|error| error.into_inner()),
     };
@@ -89,7 +82,6 @@ pub(super) fn test_system_proxy(proxy: Option<DetectedProxy>) -> TestSystemProxy
 pub(super) fn test_system_proxy_environment(values: [Option<&str>; 6]) -> TestSystemProxyGuard {
     let guard = TestSystemProxyGuard {
         _serial: TEST_SYSTEM_PROXY_LOCK
-            .get_or_init(|| Mutex::new(()))
             .lock()
             .unwrap_or_else(|error| error.into_inner()),
     };

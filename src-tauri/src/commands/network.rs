@@ -38,33 +38,12 @@ pub async fn update_proxy_settings(app: AppHandle, settings: ProxySettings) -> R
     let network_manager = app
         .try_state::<Arc<NetworkManager>>()
         .ok_or_else(|| "Network manager not initialized".to_string())?;
-    let app_for_persist = app.clone();
-    update_proxy_settings_with_persistence(
-        network_manager.inner().as_ref(),
-        settings,
-        move |settings| {
-            let app = app_for_persist.clone();
-            async move {
-                crate::settings::try_update_settings(&app, |current| {
-                    current.proxy = settings;
-                })
-            }
-        },
-    )
-    .await
-}
-
-pub(crate) async fn update_proxy_settings_with_persistence<F, Fut>(
-    network_manager: &NetworkManager,
-    settings: ProxySettings,
-    persist: F,
-) -> Result<(), String>
-where
-    F: FnOnce(ProxySettings) -> Fut,
-    Fut: std::future::Future<Output = Result<(), String>>,
-{
     network_manager
-        .update_proxy_settings_with_persistence(settings, persist)
+        .update_proxy_settings_with_persistence(settings, |settings| async {
+            crate::settings::try_update_settings(&app, |current| {
+                current.proxy = settings;
+            })
+        })
         .await
 }
 

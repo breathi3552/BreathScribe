@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use specta::Type;
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
@@ -1009,11 +1009,10 @@ fn ensure_cloud_stt_defaults(settings: &mut AppSettings) -> bool {
 
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
-static SETTINGS_UPDATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
 
 fn with_settings_lock<T>(operation: impl FnOnce() -> T) -> T {
     let _guard = SETTINGS_UPDATE_LOCK
-        .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|error| error.into_inner());
     operation()

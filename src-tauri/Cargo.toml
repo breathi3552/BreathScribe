@@ -8,7 +8,8 @@ license = "MIT"
 default-run = "breath-scribe"
 
 [features]
-# Private, local-only seam for the issue #48 UI/IPC acceptance runner.
+# Private, debug-only seam for the issue #48 UI/IPC acceptance runner.
+# Release builds reject this feature in src/lib.rs.
 acceptance48_test = []
 
 [profile.dev]

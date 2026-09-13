@@ -29,6 +29,11 @@ mod tray;
 mod tray_i18n;
 mod utils;
 
+#[cfg(all(feature = "acceptance48_test", not(debug_assertions)))]
+compile_error!(
+    "the acceptance48_test feature is debug-only and cannot be enabled in a release build"
+);
+
 pub use cli::CliArgs;
 #[cfg(debug_assertions)]
 use specta_typescript::{BigIntExportBehavior, Typescript};
@@ -808,9 +813,9 @@ pub fn run(cli_args: CliArgs) {
         };
     }
 
-    #[cfg(feature = "acceptance48_test")]
+    #[cfg(all(feature = "acceptance48_test", debug_assertions))]
     let app_commands = acceptance48_commands![commands::network::acceptance48_probe_network,];
-    #[cfg(not(feature = "acceptance48_test"))]
+    #[cfg(not(all(feature = "acceptance48_test", debug_assertions)))]
     let app_commands = acceptance48_commands![];
 
     let specta_builder =

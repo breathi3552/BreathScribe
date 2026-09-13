@@ -3,9 +3,9 @@ use crate::settings::ProxySettings;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
-#[cfg(feature = "acceptance48_test")]
+#[cfg(all(feature = "acceptance48_test", debug_assertions))]
 use futures_util::{SinkExt, StreamExt};
-#[cfg(feature = "acceptance48_test")]
+#[cfg(all(feature = "acceptance48_test", debug_assertions))]
 use tokio_tungstenite::tungstenite::Message;
 
 #[tauri::command]
@@ -71,14 +71,14 @@ where
 /// Private acceptance-only observation of the shared NetworkManager. The UI
 /// still exercises the production commands; this only supplies a local,
 /// deterministic WebSocket observation without adding a product command.
-#[cfg(feature = "acceptance48_test")]
+#[cfg(all(feature = "acceptance48_test", debug_assertions))]
 #[derive(serde::Serialize, specta::Type)]
 pub struct Acceptance48NetworkProbeResult {
     pub http_rtt_ms: u64,
     pub websocket_response: String,
 }
 
-#[cfg(feature = "acceptance48_test")]
+#[cfg(all(feature = "acceptance48_test", debug_assertions))]
 #[tauri::command]
 #[specta::specta]
 pub async fn acceptance48_probe_network(

@@ -153,7 +153,7 @@ fn connectivity_test_urls() -> Vec<String> {
         return urls;
     }
 
-    #[cfg(feature = "acceptance48_test")]
+    #[cfg(all(feature = "acceptance48_test", debug_assertions))]
     if let Ok(url) = std::env::var("BREATHSCRIBE_ACCEPTANCE48_CONNECTIVITY_URL") {
         if !url.is_empty() {
             return vec![url];

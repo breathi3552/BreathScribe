@@ -899,6 +899,7 @@ export const useSettingsStore = create<SettingsStore>()(
         if (result.status === "error") {
           throw new Error(result.error);
         }
+        await get().refreshSettings();
       } catch (error) {
         console.error("Failed to set cloud STT API key:", error);
         if (originalKeys && settings) {

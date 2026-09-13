@@ -129,6 +129,7 @@ let updateLockCalls = 0;
 let microphoneCalls = 0;
 let proxyUpdates: ProxySettings[] = [];
 let connectivityProbes: (ProxySettings | null)[] = [];
+let cloudApiKeyUpdates: { providerId: string; apiKey: string }[] = [];
 
 beforeEach(async () => {
   resolvePendingListeners();
@@ -143,6 +144,7 @@ beforeEach(async () => {
   microphoneCalls = 0;
   proxyUpdates = [];
   connectivityProbes = [];
+  cloudApiKeyUpdates = [];
   appSettingsResponder = async () => ok(settings("initial"));
 
   commands.getAppSettings = () => {
@@ -172,6 +174,10 @@ beforeEach(async () => {
   commands.testProxyConnectivity = async (proxy) => {
     connectivityProbes.push(proxy);
     return { status: "ok", data: 17 };
+  };
+  commands.setCloudSttApiKey = async (providerId, apiKey) => {
+    cloudApiKeyUpdates.push({ providerId, apiKey });
+    return { status: "ok", data: null };
   };
 });
 
@@ -373,6 +379,25 @@ describe("settings store synchronization", () => {
 
     expect(useSettingsStore.getState().settings).toBe(existingSettings);
     expect(useSettingsStore.getState().isLoading).toBe(false);
+  });
+
+  test("refreshes settings after saving a cloud API key before initialization finishes", async () => {
+    const savedSettings = settings("model", {
+      cloud_stt_api_keys: { gemini: "<REDACTED>" },
+    });
+    useSettingsStore.setState({ settings: null });
+    appSettingsResponder = async () => ok(savedSettings);
+
+    await useSettingsStore
+      .getState()
+      .setCloudSttApiKey("gemini", "<REDACTED>");
+
+    expect(cloudApiKeyUpdates).toEqual([
+      { providerId: "gemini", apiKey: "<REDACTED>" },
+    ]);
+    expect(useSettingsStore.getState().settings?.cloud_stt_api_keys).toEqual({
+      gemini: "<REDACTED>",
+    });
   });
 
   test("saves and tests the proxy draft through the existing settings actions", async () => {

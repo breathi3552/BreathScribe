@@ -3,7 +3,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::network::NetworkManager;
 use crate::settings::{
-    get_settings, update_settings, AppSettings, CloudSttProviderSettings, TranscriptionMode,
+    get_settings, try_update_settings, update_settings, AppSettings, CloudSttProviderSettings,
+    TranscriptionMode,
 };
 
 #[tauri::command]
@@ -42,9 +43,9 @@ pub fn set_cloud_stt_api_key(
     provider_id: String,
     api_key: String,
 ) -> Result<(), String> {
-    update_settings(&app, |settings| {
+    try_update_settings(&app, |settings| {
         settings.cloud_stt_api_keys.insert(provider_id, api_key);
-    });
+    })?;
     let _ = app.emit(
         "settings-changed",
         serde_json::json!({

@@ -6,7 +6,7 @@ import {
   type Server,
   type Socket,
 } from "node:net";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import {
   existsSync,
@@ -15,15 +15,16 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const feature = "acceptance48_test";
-const appIdentifier = "io.github.breathi3552.breathscribe.acceptance48";
+const appIdentifier = `io.github.breathi3552.breathscribe.acceptance48.${randomUUID()}`;
 const probeMessage = "acceptance48-ws";
+let activeInterrupt: Promise<never> | undefined;
 
 type ProxySettings = {
   mode: "manual";
@@ -56,7 +57,9 @@ async function waitFor(
   while (!(await condition())) {
     if (Date.now() >= deadline)
       throw new Error(`Timed out waiting for ${description}`);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    const delay = new Promise<void>((resolve) => setTimeout(resolve, 50));
+    if (activeInterrupt) await Promise.race([delay, activeInterrupt]);
+    else await delay;
   }
 }
 
@@ -395,6 +398,7 @@ function writeTauriLauncher(
     "@echo off",
     `set "PATH=${escaped(join(userProfile, ".cargo", "bin"))};${escaped(dirname(bunPath))};${escaped(cmakeDir)};C:\\Windows\\System32;C:\\Windows"`,
     `set "CARGO_TARGET_DIR=${escaped(targetDir)}"`,
+    `set "WEBVIEW2_USER_DATA_FOLDER=${escaped(join(targetDir, "debug", "Data", "webview"))}"`,
     `set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${remotePort}"`,
     `set "BREATHSCRIBE_ACCEPTANCE48_CONNECTIVITY_URL=${connectivityUrl}"`,
     'set "HANDY_DISABLE_UPDATER=1"',
@@ -532,13 +536,7 @@ async function main(): Promise<void> {
   process.env.no_proxy = process.env.NO_PROXY;
 
   const tempDir = mkdtempSync(join(tmpdir(), "breathscribe-acceptance48-"));
-  const sharedTargetDir = join(repoRoot, "src-tauri", "target");
-  const useSharedTarget = existsSync(
-    join(sharedTargetDir, "debug", "breath-scribe.exe"),
-  );
-  const targetDir = useSharedTarget
-    ? sharedTargetDir
-    : join(tempDir, "cargo-target");
+  const targetDir = join(tempDir, "cargo-target");
   const dataDir = join(targetDir, "debug", "Data");
   const portableMarkerPath = join(targetDir, "debug", "portable");
   const storePath = join(dataDir, "settings_store.json");
@@ -546,26 +544,53 @@ async function main(): Promise<void> {
   const launcherPath = join(tempDir, "run-tauri.cmd");
   const logPath = join(tempDir, "tauri.log");
   const bindingsPath = join(repoRoot, "src", "bindings.ts");
-  const bindingsBefore = readFileSync(bindingsPath);
   const target = new ProbeTarget();
   const proxyA = new HttpProxy();
   const proxyB = new HttpProxy();
-  const rejecting = await startRejectingProxy();
+  let bindingsBefore: Buffer | undefined;
+  let rejecting: Awaited<ReturnType<typeof startRejectingProxy>> | undefined;
   let launcher: ChildProcess | undefined;
   let browser: Browser | undefined;
-  let ownsSharedArtifacts = false;
+  let logHandle: Awaited<ReturnType<typeof open>> | undefined;
+  let runFailed = false;
+  const cleanupErrors: unknown[] = [];
+  const cleanupStep = async (
+    operation: () => Promise<unknown>,
+  ): Promise<void> => {
+    try {
+      await operation();
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  };
+  let rejectInterrupt: (reason: Error) => void = () => undefined;
+  const interruptPromise = new Promise<never>((_, reject) => {
+    rejectInterrupt = reject;
+  });
+  void interruptPromise.catch(() => undefined);
+  let interrupted = false;
+  const onInterrupt = (signal?: NodeJS.Signals): void => {
+    if (interrupted) return;
+    interrupted = true;
+    rejectInterrupt(
+      new Error(`acceptance48 runner interrupted by ${signal ?? "SIGINT"}`),
+    );
+    try {
+      launcher?.kill();
+    } catch {
+      // The finalizer retries termination with the exact launcher PID.
+    }
+    if (browser) void browser.close().catch(() => undefined);
+  };
+  activeInterrupt = interruptPromise;
+  process.once("SIGINT", onInterrupt);
+  process.once("SIGTERM", onInterrupt);
 
   try {
-    if (
-      useSharedTarget &&
-      (existsSync(dataDir) || existsSync(portableMarkerPath))
-    ) {
-      throw new Error(
-        "refusing to reuse a target directory that already has portable test data",
-      );
-    }
+    bindingsBefore = readFileSync(bindingsPath);
+    rejecting = await startRejectingProxy();
+    assert(rejecting, "rejecting proxy failed to start");
     await mkdir(dataDir, { recursive: true });
-    ownsSharedArtifacts = useSharedTarget;
     await target.start();
     await proxyA.start();
     await proxyB.start();
@@ -585,16 +610,20 @@ async function main(): Promise<void> {
     };
     const connectivityUrl = `http://127.0.0.1:${target.port}/probe`;
     const websocketUrl = `ws://127.0.0.1:${target.port}/ws`;
+    const frontendPort = await reservePort();
     const remotePort = await reservePort();
-    // The reservation above is intentionally short-lived; the Tauri WebView2
-    // process owns the port once it starts. A free local port avoids collisions
-    // with another developer session.
+    // These reservations are intentionally short-lived; Vite and the Tauri
+    // WebView2 process own the ports once they start.
 
     await writeFile(
       configPath,
       JSON.stringify({
         identifier: appIdentifier,
         productName: "BreathScribe Acceptance 48",
+        build: {
+          beforeDevCommand: `bun run dev -- --host 127.0.0.1 --port ${frontendPort}`,
+          devUrl: `http://127.0.0.1:${frontendPort}`,
+        },
       }),
     );
     await writeFile(
@@ -625,9 +654,7 @@ async function main(): Promise<void> {
       connectivityUrl,
     );
 
-    const logHandle = await import("node:fs/promises").then(({ open }) =>
-      open(logPath, "w"),
-    );
+    logHandle = await open(logPath, "w");
     launcher = spawn(
       "C:\\Windows\\System32\\cmd.exe",
       ["/d", "/c", launcherPath],
@@ -640,7 +667,7 @@ async function main(): Promise<void> {
     await waitFor(
       () => existsSync(join(targetDir, "debug", "breath-scribe.exe")),
       "the isolated Tauri binary",
-      300_000,
+      900_000,
     );
     await waitFor(
       async () => {
@@ -909,6 +936,14 @@ async function main(): Promise<void> {
     console.log(
       JSON.stringify({
         status: "passed",
+        isolation: {
+          appIdentifier,
+          configPath,
+          targetDir,
+          frontendPort,
+          remotePort,
+          launcherPid: launcher?.pid ?? null,
+        },
         ui: {
           candidateTestSuccess: true,
           candidateFailureFeedback: true,
@@ -941,29 +976,48 @@ async function main(): Promise<void> {
         },
       }),
     );
+  } catch (error) {
+    runFailed = true;
+    throw error;
   } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch {
-        // The app process is terminated below even if the CDP connection closed.
-      }
+    await cleanupStep(async () => {
+      if (browser) await browser.close();
+    });
+    await cleanupStep(() => terminateProcessTree(launcher));
+    await cleanupStep(async () => {
+      await logHandle?.close();
+    });
+    await cleanupStep(() => target.close());
+    await cleanupStep(() => proxyA.close());
+    await cleanupStep(() => proxyB.close());
+    await cleanupStep(() => closeServer(rejecting?.server));
+    await cleanupStep(() =>
+      rm(tempDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 20,
+        retryDelay: 250,
+      }),
+    );
+    await cleanupStep(async () => {
+      if (!bindingsBefore) return;
+      const bindingsAfter = readFileSync(bindingsPath);
+      if (!bindingsAfter.equals(bindingsBefore))
+        writeFileSync(bindingsPath, bindingsBefore);
+    });
+    process.removeListener("SIGINT", onInterrupt);
+    process.removeListener("SIGTERM", onInterrupt);
+    activeInterrupt = undefined;
+
+    if (cleanupErrors.length > 0) {
+      const details = cleanupErrors
+        .map((error) =>
+          error instanceof Error ? error.message : String(error),
+        )
+        .join("; ");
+      if (runFailed) console.error(`acceptance48 cleanup failed: ${details}`);
+      else throw new Error(`acceptance48 cleanup failed: ${details}`);
     }
-    await terminateProcessTree(launcher);
-    await Promise.all([
-      target.close(),
-      proxyA.close(),
-      proxyB.close(),
-      closeServer(rejecting.server),
-    ]);
-    if (ownsSharedArtifacts) {
-      await rm(dataDir, { recursive: true, force: true });
-      await rm(portableMarkerPath, { force: true });
-    }
-    await rm(tempDir, { recursive: true, force: true });
-    const bindingsAfter = readFileSync(bindingsPath);
-    if (!bindingsAfter.equals(bindingsBefore))
-      writeFileSync(bindingsPath, bindingsBefore);
   }
 }
 

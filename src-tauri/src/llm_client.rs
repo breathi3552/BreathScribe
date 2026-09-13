@@ -175,8 +175,11 @@ fn build_headers(provider: &PostProcessProvider, api_key: &str) -> Result<Header
 /// Create an HTTP client with provider-specific headers
 fn create_client(provider: &PostProcessProvider, api_key: &str) -> Result<reqwest::Client, String> {
     let headers = build_headers(provider, api_key)?;
-    reqwest::Client::builder()
-        .default_headers(headers)
+    let builder = reqwest::Client::builder().default_headers(headers);
+    // Unit tests use loopback servers; never let a user or CI proxy intercept them.
+    #[cfg(test)]
+    let builder = builder.no_proxy();
+    builder
         .build()
         .map_err(|e| report_reqwest_error("Failed to build HTTP client", &e))
 }
@@ -605,6 +608,10 @@ mod tests {
         }
     }
 
+    fn local_client() -> reqwest::Client {
+        reqwest::Client::builder().no_proxy().build().unwrap()
+    }
+
     fn request_json(reasoning: ReasoningParams) -> Value {
         let request = ChatCompletionRequest {
             model: "test-model".to_string(),
@@ -674,7 +681,9 @@ mod tests {
     async fn decode_error_does_not_echo_response_values() {
         let base_url =
             serve_one_response("200 OK", r#"{"choices":"PRIVATE TRANSCRIPTION CONTENT"}"#).await;
-        let error = reqwest::get(base_url)
+        let error = local_client()
+            .get(base_url)
+            .send()
             .await
             .unwrap()
             .json::<ChatCompletionResponse>()
@@ -689,13 +698,15 @@ mod tests {
     #[tokio::test]
     async fn raw_error_url_is_not_reintroduced_without_a_source() {
         let base_url = serve_one_response("400 Bad Request", "bad request").await;
-        let error = reqwest::get(format!(
-            "{base_url}/private?api_key=SECRET_QUERY_TOKEN#private"
-        ))
-        .await
-        .unwrap()
-        .error_for_status()
-        .unwrap_err();
+        let error = local_client()
+            .get(format!(
+                "{base_url}/private?api_key=SECRET_QUERY_TOKEN#private"
+            ))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap_err();
 
         let details = report_reqwest_error("Request failed", &error);
         assert!(details.contains(&format!("url: {base_url}/private")));
@@ -718,6 +729,7 @@ mod tests {
         .unwrap_err();
 
         assert!(error.contains("status 400"));
+        assert!(error.contains("[REDACTED]"));
         assert!(!error.contains(api_key));
     }
 

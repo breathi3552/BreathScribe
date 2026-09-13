@@ -1477,15 +1477,31 @@ where
     Save: FnMut() -> Result<(), String>,
 {
     set(value);
-    if let Err(error) = save() {
+    if let Err(initial_error) = save() {
         match previous {
             Some(previous) => set(previous),
             None => delete(),
         }
         // Cancel the rollback's debounced save as well. The cache remains the
         // previous settings even when the filesystem is unavailable.
-        let _ = save();
-        return Err(format!("Failed to persist settings: {error}"));
+        // ponytail: one bounded rollback attempt; atomic file replacement is
+        // the upgrade path if durable recovery becomes a requirement.
+        return match save() {
+            Ok(()) => {
+                log::warn!("Settings persistence failed; rollback save succeeded: {initial_error}");
+                Err(format!(
+                    "Failed to persist settings: initial save failed: {initial_error}; rollback succeeded"
+                ))
+            }
+            Err(rollback_error) => {
+                log::error!(
+                    "Settings persistence and rollback failed; disk state is unknown (initial save: {initial_error}; rollback save: {rollback_error})"
+                );
+                Err(format!(
+                    "Failed to persist settings: initial save failed: {initial_error}; rollback failed: {rollback_error}; in-memory settings retained; disk state is unknown"
+                ))
+            }
+        };
     }
 
     Ok(())
@@ -2076,32 +2092,100 @@ mod tests {
     }
 
     #[test]
-    fn failed_settings_save_restores_previous_value() {
-        let previous = serde_json::json!({"settings": "old"});
+    fn failed_settings_save_reports_successful_rollback() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("settings_store.json");
+        let previous = serde_json::json!({
+            "proxy": {"host": "old-proxy.internal", "port": 8080},
+            "api_key": "old-secret"
+        });
+        let value = serde_json::json!({
+            "proxy": {"host": "new-proxy.internal", "port": 8081},
+            "api_key": "new-secret"
+        });
+        let store_bytes = |settings: &serde_json::Value| {
+            serde_json::to_vec_pretty(&serde_json::json!({"settings": settings})).unwrap()
+        };
+        std::fs::write(&path, store_bytes(&previous)).unwrap();
         let stored = std::cell::RefCell::new(Some(previous.clone()));
-        let mut fail_first_save = true;
+        let mut save_attempt = 0;
 
-        let previous_stored = stored.borrow().clone();
         let result = persist_value_with_rollback(
-            previous_stored,
-            serde_json::json!({"settings": "new"}),
+            Some(previous.clone()),
+            value,
             |value| *stored.borrow_mut() = Some(value),
             || *stored.borrow_mut() = None,
             || {
-                if fail_first_save {
-                    fail_first_save = false;
-                    Err("disk unavailable".to_string())
+                save_attempt += 1;
+                if save_attempt == 1 {
+                    Err("initial write failed".to_string())
                 } else {
-                    Ok(())
+                    std::fs::write(&path, store_bytes(stored.borrow().as_ref().unwrap()))
+                        .map_err(|error| error.to_string())
                 }
             },
         );
 
         assert_eq!(
             result,
-            Err("Failed to persist settings: disk unavailable".to_string())
+            Err("Failed to persist settings: initial save failed: initial write failed; rollback succeeded".to_string())
         );
+        assert_eq!(std::fs::read(&path).unwrap(), store_bytes(&previous));
         assert_eq!(*stored.borrow(), Some(previous));
+        assert_eq!(save_attempt, 2);
+        let error = result.unwrap_err();
+        assert!(!error.contains("new-proxy.internal"));
+        assert!(!error.contains("new-secret"));
+    }
+
+    #[test]
+    fn truncated_initial_save_reports_failed_rollback_without_claiming_disk_recovery() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("settings_store.json");
+        let previous = serde_json::json!({
+            "proxy": {"host": "old-proxy.internal", "port": 8080},
+            "api_key": "old-secret"
+        });
+        let value = serde_json::json!({
+            "proxy": {"host": "new-proxy.internal", "port": 8081},
+            "api_key": "new-secret"
+        });
+        let store_bytes = |settings: &serde_json::Value| {
+            serde_json::to_vec_pretty(&serde_json::json!({"settings": settings})).unwrap()
+        };
+        let partial = store_bytes(&value);
+        let partial = partial[..partial.len() / 2].to_vec();
+        std::fs::write(&path, store_bytes(&previous)).unwrap();
+        let stored = std::cell::RefCell::new(Some(previous.clone()));
+        let mut save_attempt = 0;
+
+        let result = persist_value_with_rollback(
+            Some(previous.clone()),
+            value,
+            |value| *stored.borrow_mut() = Some(value),
+            || *stored.borrow_mut() = None,
+            || {
+                save_attempt += 1;
+                if save_attempt == 1 {
+                    std::fs::write(&path, &partial).unwrap();
+                    Err("initial write interrupted".to_string())
+                } else {
+                    Err("rollback write blocked".to_string())
+                }
+            },
+        );
+
+        assert_eq!(
+            result,
+            Err("Failed to persist settings: initial save failed: initial write interrupted; rollback failed: rollback write blocked; in-memory settings retained; disk state is unknown".to_string())
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), partial);
+        assert!(serde_json::from_slice::<serde_json::Value>(&partial).is_err());
+        assert_eq!(*stored.borrow(), Some(previous));
+        assert_eq!(save_attempt, 2);
+        let error = result.unwrap_err();
+        assert!(!error.contains("new-proxy.internal"));
+        assert!(!error.contains("new-secret"));
     }
 
     #[test]

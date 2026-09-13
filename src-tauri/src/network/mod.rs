@@ -1788,6 +1788,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn failed_proxy_persistence_keeps_existing_websocket_session() -> Result<(), String> {
+        let no_auth = auth_cases()[0];
+        let (target, target_task) = spawn_websocket_target(2).await;
+        let proxy_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("proxy listener failed: {e}"))?;
+        let proxy_addr = proxy_listener
+            .local_addr()
+            .map_err(|e| format!("proxy address failed: {e}"))?;
+        let initial = manual_settings(ProxyProtocol::Http, proxy_addr, no_auth);
+        let manager = NetworkManager::new(initial.clone())?;
+        let proxy_task = tokio::spawn(run_http_connect_proxy(proxy_listener, target, None));
+        let mut old_websocket = tokio::time::timeout(
+            Duration::from_secs(3),
+            manager.connect_websocket(&format!("ws://127.0.0.1:{}/before-failure", target.port())),
+        )
+        .await
+        .map_err(|_| "old WebSocket connection timed out".to_string())?
+        .map_err(|e| format!("old WebSocket connection failed: {e}"))?;
+        websocket_round_trip(&mut old_websocket, "before-failure").await?;
+
+        let error = crate::commands::network::update_proxy_settings_with_persistence(
+            &manager,
+            ProxySettings {
+                host: "candidate.invalid".to_string(),
+                ..initial.clone()
+            },
+            |_| async {
+                Err("initial save failed; rollback failed; disk state is unknown".to_string())
+            },
+        )
+        .await
+        .expect_err("failed persistence must reject the update");
+        assert_eq!(
+            error,
+            "initial save failed; rollback failed; disk state is unknown"
+        );
+        assert_eq!(manager.state.read().await.settings, initial);
+
+        websocket_round_trip(&mut old_websocket, "after-failure").await?;
+        drop(old_websocket);
+        await_test_task(proxy_task).await?;
+        if await_test_task(target_task).await? != "after-failure" {
+            return Err("existing WebSocket session did not stay on the old proxy".to_string());
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn system_proxy_change_preserves_existing_websocket_session() -> Result<(), String> {
         let (old_target, old_target_task) = spawn_websocket_target(2).await;
         let proxy_a_listener = TcpListener::bind("127.0.0.1:0")

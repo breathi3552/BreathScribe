@@ -216,6 +216,7 @@ pub fn parse_url_proxy(url_str: &str) -> Option<DetectedProxy> {
     parse_host_port(without_auth, protocol)
 }
 
+#[cfg(any(not(target_os = "windows"), test))]
 const SYSTEM_PROXY_ENV_VARIABLES: [&str; 6] = [
     "all_proxy",
     "ALL_PROXY",
@@ -233,6 +234,7 @@ fn parse_environment_proxy_values(values: [Option<String>; 6]) -> Option<Detecte
         .find_map(|url| parse_url_proxy(&url))
 }
 
+#[cfg(any(not(target_os = "windows"), test))]
 fn get_system_proxy_from_environment() -> Option<DetectedProxy> {
     #[cfg(test)]
     if let Some(values) = test_system_proxy_environment_override() {

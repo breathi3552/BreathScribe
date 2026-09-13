@@ -575,11 +575,6 @@ async function main(): Promise<void> {
     rejectInterrupt(
       new Error(`acceptance48 runner interrupted by ${signal ?? "SIGINT"}`),
     );
-    try {
-      launcher?.kill();
-    } catch {
-      // The finalizer retries termination with the exact launcher PID.
-    }
     if (browser) void browser.close().catch(() => undefined);
   };
   activeInterrupt = interruptPromise;

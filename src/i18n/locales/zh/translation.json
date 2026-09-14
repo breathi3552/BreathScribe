@@ -197,10 +197,8 @@
         "cloudSttBadge": "云端大模型",
         "providerDescription": "无需本地显卡，依托全球网络连接池提供高准确率实时语音识别",
         "getApiKey": "获取 API Key",
-        "modelSelectTitle": "云端模型版本",
-        "modelSelectDesc": "推荐使用 2.5 Flash 获取毫秒级转写响应；需要强推理或罕见专有名词建议选用 Pro",
+        "modelSelectTitle": "模型",
         "apiKeyTitle": "API Key",
-        "apiKeyDesc": "在本地配置文件中安全存储并自动脱敏，绝不上传第三方服务器",
         "hideKey": "隐藏明文",
         "showKey": "显示明文",
         "validating": "验证中...",
@@ -211,13 +209,10 @@
         "connectSuccessDesc": "Gemini REST 接口与凭据握手正常，已就绪供转写调用",
         "connectFailed": "验证未通过",
         "advancedCustomUrl": "高级配置：自定义 API 代理地址 (可选)",
-        "defaultOfficialUrl": "官方默认地址",
         "customBaseUrlTitle": "API Base URL",
         "customBaseUrlDesc": "适用于自建反代网关、Cloudflare AI Gateway 或特定中转路由。留空则直连官方接口",
         "saveBaseUrl": "更新地址",
         "resetBaseUrl": "重置",
-        "failSafeTitle": "确定性预期与录音安全保证",
-        "failSafeDesc": "云端识别遇网络超时或凭据错误时立即弹出明确提示，绝不静默回退至本地模型造成卡顿。所有原始录音完整保留在历史记录中，配置好网络后可随时在历史界面一键重试。",
         "errors": {
           "modelUpdateFailed": "切换模型失败，请重试",
           "saveFailed": "保存失败，请检查设置",
@@ -226,7 +221,6 @@
           "baseUrlSaveFailed": "保存自定义地址失败"
         },
         "providerSelectTitle": "服务提供商",
-        "providerSelectDesc": "选择接入的云端大模型服务商（首阶段支持 Google Gemini）",
         "models": {
           "flashDesc": "极速响应、高准确率，语音转写推荐基准",
           "proDesc": "超强大脑、复杂语境与专业术语更强",

@@ -197,10 +197,8 @@
         "cloudSttBadge": "Cloud LLM",
         "providerDescription": "High-accuracy real-time speech recognition powered by global network connection pool without needing local GPU",
         "getApiKey": "Get API Key",
-        "modelSelectTitle": "Cloud Model Version",
-        "modelSelectDesc": "Recommended 2.5 Flash for fast response; Pro is recommended for complex reasoning or specialized terminology",
+        "modelSelectTitle": "モデル",
         "apiKeyTitle": "API Key",
-        "apiKeyDesc": "Stored securely in local configuration with automatic redaction, never uploaded to third-party servers",
         "hideKey": "Hide key",
         "showKey": "Show key",
         "validating": "Validating...",
@@ -211,13 +209,10 @@
         "connectSuccessDesc": "Gemini REST API and credentials verified, ready for transcription",
         "connectFailed": "Validation failed",
         "advancedCustomUrl": "Advanced: Custom API Proxy URL (Optional)",
-        "defaultOfficialUrl": "Official Default URL",
         "customBaseUrlTitle": "API Base URL",
         "customBaseUrlDesc": "For reverse proxies, Cloudflare AI Gateway, or relay services. Leave empty for official API",
         "saveBaseUrl": "Update URL",
         "resetBaseUrl": "Reset",
-        "failSafeTitle": "Deterministic Expectations & Audio Safety",
-        "failSafeDesc": "Immediate explicit error notification upon network timeout or credential issues, never silent fallback to local models. All original audio is safely retained in history for one-click retry.",
         "errors": {
           "modelUpdateFailed": "Failed to switch model, please try again",
           "saveFailed": "Failed to save, please check your settings",
@@ -226,7 +221,6 @@
           "baseUrlSaveFailed": "Failed to save custom API URL"
         },
         "providerSelectTitle": "Service Provider",
-        "providerSelectDesc": "Select cloud speech recognition service provider (Google Gemini supported in Phase 1)",
         "models": {
           "flashDesc": "Fast response, high accuracy, recommended for speech recognition",
           "proDesc": "Superior reasoning capability, best for complex context and specialized terms",

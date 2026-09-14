@@ -248,10 +248,8 @@
         "cloudSttBadge": "雲端大模型",
         "providerDescription": "無需本機顯示卡，依託全球網絡連接池提供高準確率實時語音識別",
         "getApiKey": "取得 API Key",
-        "modelSelectTitle": "雲端模型版本",
-        "modelSelectDesc": "推薦使用 2.5 Flash 取得毫秒級轉寫回應；需要強推理或罕見專有名詞建議選用 Pro",
+        "modelSelectTitle": "模型",
         "apiKeyTitle": "API Key",
-        "apiKeyDesc": "在本機設定檔中安全儲存並自動脫敏，絕不上傳第三方伺服器",
         "hideKey": "隱藏明文",
         "showKey": "顯示明文",
         "validating": "驗證中...",
@@ -262,13 +260,10 @@
         "connectSuccessDesc": "Gemini REST 介面與憑據握手正常，已就緒供轉寫調用",
         "connectFailed": "驗證未通過",
         "advancedCustomUrl": "進階設定：自訂 API 代理位址 (可選)",
-        "defaultOfficialUrl": "官方預設位址",
         "customBaseUrlTitle": "API Base URL",
         "customBaseUrlDesc": "適用於自建反代閘道、Cloudflare AI Gateway 或特定中轉路由。留空則直連官方介面",
         "saveBaseUrl": "更新位址",
         "resetBaseUrl": "重設",
-        "failSafeTitle": "確定性預期與錄音安全保證",
-        "failSafeDesc": "雲端識別遇網絡逾時或憑據錯誤時立即快顯明確提示，絕不無提示降級至本機模型造成卡頓。所有原始錄音完整保留在歷史記錄中，設定好網絡後可隨時在歷史介面一鍵重試。",
         "errors": {
           "modelUpdateFailed": "切換模型失敗，請重試",
           "saveFailed": "儲存失敗，請檢查設定",
@@ -277,7 +272,6 @@
           "baseUrlSaveFailed": "儲存自訂位址失敗"
         },
         "providerSelectTitle": "服務提供商",
-        "providerSelectDesc": "選擇接入的雲端大模型服務商（首階段支援 Google Gemini）",
         "models": {
           "flashDesc": "極速回應、高準確率，語音轉寫推薦基準",
           "proDesc": "超強大腦、複雜語境與專業術語更強",

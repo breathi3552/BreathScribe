@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
-  Cloud,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -12,7 +11,6 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
-  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -274,10 +272,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
           </Button>
         </div>
       </div>
-      <SettingContainer
-        title={t("settings.models.cloud.providerSelectTitle")}
-        description={t("settings.models.cloud.providerSelectDesc")}
-      >
+      <SettingContainer title={t("settings.models.cloud.providerSelectTitle")}>
         <div className="w-64">
           <Dropdown
             options={providerOptions}
@@ -287,10 +282,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
         </div>
       </SettingContainer>
 
-      <SettingContainer
-        title={t("settings.models.cloud.modelSelectTitle")}
-        description={t("settings.models.cloud.modelSelectDesc")}
-      >
+      <SettingContainer title={t("settings.models.cloud.modelSelectTitle")}>
         <div className="w-64">
           <Dropdown
             options={modelOptions}
@@ -299,10 +291,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
           />
         </div>
       </SettingContainer>
-      <SettingContainer
-        title={t("settings.models.cloud.apiKeyTitle")}
-        description={t("settings.models.cloud.apiKeyDesc")}
-      >
+      <SettingContainer title={t("settings.models.cloud.apiKeyTitle")}>
         <div className="space-y-2 w-full max-w-md">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
@@ -422,11 +411,11 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
             )}
             <span>{t("settings.models.cloud.advancedCustomUrl")}</span>
           </div>
-          <span className="text-[11px] text-text/50 font-normal">
-            {customBaseUrlDraft
-              ? customBaseUrlDraft
-              : t("settings.models.cloud.defaultOfficialUrl")}
-          </span>
+          {customBaseUrlDraft ? (
+            <span className="text-[11px] text-text/50 font-normal truncate max-w-xs">
+              {customBaseUrlDraft}
+            </span>
+          ) : null}
         </button>
 
         {isAdvancedOpen && (
@@ -472,18 +461,6 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
             </SettingContainer>
           </div>
         )}
-      </div>
-
-      <div className="flex items-start gap-2.5 p-3 rounded-lg bg-logo-primary/5 border border-logo-primary/15 text-xs text-text/70">
-        <ShieldCheck className="w-4 h-4 text-logo-primary shrink-0 mt-0.5" />
-        <div className="space-y-0.5">
-          <p className="font-medium text-text">
-            {t("settings.models.cloud.failSafeTitle")}
-          </p>
-          <p className="text-[11px] leading-relaxed">
-            {t("settings.models.cloud.failSafeDesc")}
-          </p>
-        </div>
       </div>
     </div>
   );

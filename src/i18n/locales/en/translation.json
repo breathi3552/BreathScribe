@@ -755,7 +755,14 @@
       "system": "Network: System Proxy",
       "direct": "Network: Direct",
       "manual": "Network: Manual Proxy"
-    }
+    },
+    "checkFailed": "Check failed",
+    "newVersionAvailable": "BreathScribe {{version}} is available",
+    "versionComparison": "Current: {{current}} • Latest: {{latest}}",
+    "viewRelease": "View on GitHub",
+    "downloadUpdate": "Download Update",
+    "releaseNotes": "Release Notes",
+    "noReleaseNotesAvailable": "No release notes provided for this release."
   },
   "whatsNew": {
     "title": "New in BreathScribe v{{version}}"

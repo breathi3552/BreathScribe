@@ -755,7 +755,14 @@
       "system": "네트워크: 시스템 프록시",
       "direct": "네트워크: 직접 연결",
       "manual": "네트워크: 수동 프록시"
-    }
+    },
+    "checkFailed": "Check failed",
+    "newVersionAvailable": "BreathScribe {{version}} is available",
+    "versionComparison": "Current: {{current}} • Latest: {{latest}}",
+    "viewRelease": "View on GitHub",
+    "downloadUpdate": "Download Update",
+    "releaseNotes": "Release Notes",
+    "noReleaseNotesAvailable": "No release notes provided for this release."
   },
   "common": {
     "loading": "로딩 중...",

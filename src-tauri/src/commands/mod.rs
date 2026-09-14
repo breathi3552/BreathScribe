@@ -4,6 +4,7 @@ pub mod models;
 pub mod network;
 pub mod transcription;
 pub mod transcription_mode;
+pub mod updater;
 
 use crate::settings::{
     get_settings, update_checks_forced_disabled, update_settings, AppSettings, LogLevel,

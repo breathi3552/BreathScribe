@@ -536,6 +536,14 @@ async isPortable() : Promise<boolean> {
 async isUpdateChecksLocked() : Promise<boolean> {
     return await TAURI_INVOKE("is_update_checks_locked");
 },
+async checkForUpdates() : Promise<Result<UpdateCheckResponse, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("check_for_updates") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: String(e) };
+}
+},
 async getAppDirPath() : Promise<Result<string, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_app_dir_path") };
@@ -1248,6 +1256,10 @@ export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }
+export type UpdateCheckResponse = 
+    | { status: "up_to_date"; current_version: string }
+    | { status: "update_available"; current_version: string; latest_version: string; release_url: string; release_notes: string | null; download_url: string | null }
+    | { status: "error"; message: string }
 
 /** tauri-specta globals **/
 

@@ -755,7 +755,14 @@
       "system": "רשת: פרוקסי מערכת",
       "direct": "רשת: ישיר",
       "manual": "רשת: פרוקסי ידני"
-    }
+    },
+    "checkFailed": "Check failed",
+    "newVersionAvailable": "BreathScribe {{version}} is available",
+    "versionComparison": "Current: {{current}} • Latest: {{latest}}",
+    "viewRelease": "View on GitHub",
+    "downloadUpdate": "Download Update",
+    "releaseNotes": "Release Notes",
+    "noReleaseNotesAvailable": "No release notes provided for this release."
   },
   "common": {
     "loading": "טוען...",

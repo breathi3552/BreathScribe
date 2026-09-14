@@ -755,7 +755,14 @@
       "system": "Síť: Systémový proxy",
       "direct": "Síť: Přímo",
       "manual": "Síť: Ruční proxy"
-    }
+    },
+    "checkFailed": "Check failed",
+    "newVersionAvailable": "BreathScribe {{version}} is available",
+    "versionComparison": "Current: {{current}} • Latest: {{latest}}",
+    "viewRelease": "View on GitHub",
+    "downloadUpdate": "Download Update",
+    "releaseNotes": "Release Notes",
+    "noReleaseNotesAvailable": "No release notes provided for this release."
   },
   "common": {
     "loading": "Načítání...",

@@ -755,7 +755,14 @@
       "system": "नेटवर्क: सिस्टम प्रॉक्सी",
       "direct": "नेटवर्क: प्रत्यक्ष",
       "manual": "नेटवर्क: मैन्युअल प्रॉक्सी"
-    }
+    },
+    "checkFailed": "Check failed",
+    "newVersionAvailable": "BreathScribe {{version}} is available",
+    "versionComparison": "Current: {{current}} • Latest: {{latest}}",
+    "viewRelease": "View on GitHub",
+    "downloadUpdate": "Download Update",
+    "releaseNotes": "Release Notes",
+    "noReleaseNotesAvailable": "No release notes provided for this release."
   },
   "whatsNew": {
     "title": "BreathScribe v{{version}} में नया क्या है"

@@ -737,6 +737,7 @@ pub fn run(cli_args: CliArgs) {
             commands::cancel_operation,
             commands::is_portable,
             commands::is_update_checks_locked,
+            commands::updater::check_for_updates,
             commands::get_app_dir_path,
             commands::get_app_settings,
             commands::get_default_settings,

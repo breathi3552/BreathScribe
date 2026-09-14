@@ -755,7 +755,14 @@
       "system": "網路: 系統代理",
       "direct": "網路: 直連",
       "manual": "網路: 手動代理"
-    }
+    },
+    "checkFailed": "檢查更新失敗",
+    "newVersionAvailable": "發現新版本 BreathScribe {{version}}",
+    "versionComparison": "目前版本: {{current}} • 最新版本: {{latest}}",
+    "viewRelease": "查看版本說明",
+    "downloadUpdate": "下載更新",
+    "releaseNotes": "更新說明",
+    "noReleaseNotesAvailable": "此版本暫無更新說明。"
   },
   "common": {
     "loading": "載入中...",

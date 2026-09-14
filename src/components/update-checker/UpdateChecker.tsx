@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
-import ProgressBar from "../shared/ProgressBar";
+import { commands, type UpdateCheckResponse } from "../../bindings";
 import { useSettings } from "../../hooks/useSettings";
+import { UpdateModal, type AvailableUpdate } from "./UpdateModal";
 
 interface UpdateCheckerProps {
   className?: string;
@@ -12,84 +11,123 @@ interface UpdateCheckerProps {
 
 const UpdateChecker: React.FC<UpdateCheckerProps> = ({ className = "" }) => {
   const { t } = useTranslation();
-  // Update checking state
   const [isChecking, setIsChecking] = useState(false);
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [isInstalling, setIsInstalling] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
   const [showUpToDate, setShowUpToDate] = useState(false);
+  const [showCheckFailed, setShowCheckFailed] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<AvailableUpdate | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const { settings, isLoading, updateChecksLocked } = useSettings();
 
-  // Wait for the lock state too (null = not loaded yet), otherwise the first
-  // render could fire an update check before HANDY_DISABLE_UPDATER is known.
   const settingsLoaded =
     !isLoading && settings !== null && updateChecksLocked !== null;
-  // Forced-off by system configuration (HANDY_DISABLE_UPDATER) overrides the
-  // stored preference without persisting it, mirroring the backend's effective
-  // updater state.
+
   const updateChecksEnabled =
     (settings?.update_checks_enabled ?? false) && updateChecksLocked === false;
 
-  const upToDateTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const feedbackTimeoutRef = useRef<number | undefined>(undefined);
   const isManualCheckRef = useRef(false);
-  const downloadedBytesRef = useRef(0);
-  const contentLengthRef = useRef(0);
+
+  const setTemporaryFeedback = (
+    setter: (val: boolean) => void,
+    delayMs: number,
+  ) => {
+    setter(true);
+    clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = window.setTimeout(() => {
+      setter(false);
+    }, delayMs);
+  };
+
+  const handleCheckError = (message: string) => {
+    console.error("Failed to check for updates:", message);
+    setErrorMessage(message);
+    if (isManualCheckRef.current) {
+      setTemporaryFeedback(setShowCheckFailed, 3500);
+    }
+  };
 
   useEffect(() => {
-    // Wait for settings to load before doing anything
     if (!settingsLoaded) return;
 
     if (!updateChecksEnabled) {
-      if (upToDateTimeoutRef.current) {
-        clearTimeout(upToDateTimeoutRef.current);
-      }
+      clearTimeout(feedbackTimeoutRef.current);
       setIsChecking(false);
-      setUpdateAvailable(false);
       setShowUpToDate(false);
+      setShowCheckFailed(false);
+      setUpdateInfo(null);
+      setIsModalOpen(false);
       return;
     }
 
+    // Run initial background update check on load
     checkForUpdates();
 
-    // Listen for update check events
+    // Listen for external trigger (e.g. system tray menu click)
     const updateUnlisten = listen("check-for-updates", () => {
       handleManualUpdateCheck();
     });
 
     return () => {
-      if (upToDateTimeoutRef.current) {
-        clearTimeout(upToDateTimeoutRef.current);
-      }
+      clearTimeout(feedbackTimeoutRef.current);
       updateUnlisten.then((fn) => fn());
     };
   }, [settingsLoaded, updateChecksEnabled]);
 
-  // Update checking functions
   const checkForUpdates = async () => {
     if (!updateChecksEnabled || isChecking) return;
 
     try {
       setIsChecking(true);
-      const update = await check();
+      setShowUpToDate(false);
+      setShowCheckFailed(false);
+      setErrorMessage(null);
 
-      if (update) {
-        setUpdateAvailable(true);
-        setShowUpToDate(false);
-      } else {
-        setUpdateAvailable(false);
+      const res = await commands.checkForUpdates();
 
-        if (isManualCheckRef.current) {
-          setShowUpToDate(true);
-          if (upToDateTimeoutRef.current) {
-            clearTimeout(upToDateTimeoutRef.current);
+      if (res.status === "error") {
+        handleCheckError(res.error);
+        return;
+      }
+
+      const data: UpdateCheckResponse = res.data;
+
+      switch (data.status) {
+        case "update_available": {
+          const available: AvailableUpdate = {
+            currentVersion: data.current_version,
+            latestVersion: data.latest_version,
+            releaseUrl: data.release_url,
+            releaseNotes: data.release_notes,
+            downloadUrl: data.download_url,
+          };
+          setUpdateInfo(available);
+          setShowUpToDate(false);
+          setShowCheckFailed(false);
+          if (isManualCheckRef.current) {
+            setIsModalOpen(true);
           }
-          upToDateTimeoutRef.current = setTimeout(() => {
-            setShowUpToDate(false);
-          }, 3000);
+          break;
+        }
+
+        case "up_to_date": {
+          setUpdateInfo(null);
+          setShowCheckFailed(false);
+          if (isManualCheckRef.current) {
+            setTemporaryFeedback(setShowUpToDate, 3000);
+          }
+          break;
+        }
+
+        case "error": {
+          handleCheckError(data.message);
+          break;
         }
       }
     } catch (error) {
-      console.error("Failed to check for updates:", error);
+      const errStr = error instanceof Error ? error.message : String(error);
+      handleCheckError(errStr);
     } finally {
       setIsChecking(false);
       isManualCheckRef.current = false;
@@ -97,120 +135,72 @@ const UpdateChecker: React.FC<UpdateCheckerProps> = ({ className = "" }) => {
   };
 
   const handleManualUpdateCheck = () => {
-    if (!updateChecksEnabled) return;
+    if (!updateChecksEnabled || isChecking) return;
     isManualCheckRef.current = true;
     checkForUpdates();
   };
 
-  const installUpdate = async () => {
-    if (!updateChecksEnabled) return;
-
-    try {
-      setIsInstalling(true);
-      setDownloadProgress(0);
-      downloadedBytesRef.current = 0;
-      contentLengthRef.current = 0;
-      const update = await check();
-
-      if (!update) {
-        console.log("No update available during install attempt");
-        return;
-      }
-
-      await update.downloadAndInstall((event) => {
-        switch (event.event) {
-          case "Started":
-            downloadedBytesRef.current = 0;
-            contentLengthRef.current = event.data.contentLength ?? 0;
-            break;
-          case "Progress":
-            downloadedBytesRef.current += event.data.chunkLength;
-            const progress =
-              contentLengthRef.current > 0
-                ? Math.round(
-                    (downloadedBytesRef.current / contentLengthRef.current) *
-                      100,
-                  )
-                : 0;
-            setDownloadProgress(Math.min(progress, 100));
-            break;
-        }
-      });
-      await relaunch();
-    } catch (error) {
-      console.error("Failed to install update:", error);
-    } finally {
-      setIsInstalling(false);
-      setDownloadProgress(0);
-      downloadedBytesRef.current = 0;
-      contentLengthRef.current = 0;
-    }
-  };
-
-  // Update status functions
   const getUpdateStatusText = () => {
     if (!updateChecksEnabled) {
       return t("footer.updateCheckingDisabled");
     }
-    if (isInstalling) {
-      return downloadProgress > 0 && downloadProgress < 100
-        ? t("footer.downloading", {
-            progress: downloadProgress.toString().padStart(3),
-          })
-        : downloadProgress === 100
-          ? t("footer.installing")
-          : t("footer.preparing");
-    }
     if (isChecking) return t("footer.checkingUpdates");
+    if (showCheckFailed) return t("footer.checkFailed");
     if (showUpToDate) return t("footer.upToDate");
-    if (updateAvailable) return t("footer.updateAvailableShort");
+    if (updateInfo !== null) return t("footer.updateAvailableShort");
     return t("footer.checkForUpdates");
   };
 
   const getUpdateStatusAction = () => {
     if (!updateChecksEnabled) return undefined;
-    if (updateAvailable && !isInstalling) return installUpdate;
-    if (!isChecking && !isInstalling && !updateAvailable)
-      return handleManualUpdateCheck;
+    if (updateInfo !== null) return () => setIsModalOpen(true);
+    if (!isChecking) return handleManualUpdateCheck;
     return undefined;
   };
 
-  const isUpdateDisabled = !updateChecksEnabled || isChecking || isInstalling;
+  const isUpdateDisabled = !updateChecksEnabled || isChecking;
   const isUpdateClickable =
-    !isUpdateDisabled && (updateAvailable || (!isChecking && !showUpToDate));
+    !isUpdateDisabled &&
+    (updateInfo !== null || (!isChecking && !showUpToDate));
 
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
-      {isUpdateClickable ? (
-        <button
-          onClick={getUpdateStatusAction()}
-          disabled={isUpdateDisabled}
-          className={`transition-colors disabled:opacity-50 tabular-nums ${
-            updateAvailable
-              ? "text-logo-primary hover:text-logo-primary/80 font-medium"
-              : "text-text/60 hover:text-text/80"
-          }`}
-        >
-          {getUpdateStatusText()}
-        </button>
-      ) : (
-        <span className="text-text/60 tabular-nums">
-          {getUpdateStatusText()}
-        </span>
-      )}
+    <>
+      <div className={`flex items-center gap-3 ${className}`}>
+        {isUpdateClickable ? (
+          <button
+            onClick={getUpdateStatusAction()}
+            disabled={isUpdateDisabled}
+            title={errorMessage ?? undefined}
+            className={`transition-colors disabled:opacity-50 tabular-nums ${
+              updateInfo !== null
+                ? "text-logo-primary hover:text-logo-primary/80 font-medium"
+                : showCheckFailed
+                  ? "text-warning hover:text-warning/80"
+                  : "text-text/60 hover:text-text/80"
+            }`}
+          >
+            {getUpdateStatusText()}
+          </button>
+        ) : (
+          <span
+            className={`tabular-nums ${
+              showCheckFailed ? "text-warning" : "text-text/60"
+            }`}
+            title={errorMessage ?? undefined}
+          >
+            {getUpdateStatusText()}
+          </span>
+        )}
+      </div>
 
-      {isInstalling && downloadProgress > 0 && downloadProgress < 100 && (
-        <ProgressBar
-          progress={[
-            {
-              id: "update",
-              percentage: downloadProgress,
-            },
-          ]}
-          size="large"
+      {updateInfo && (
+        <UpdateModal
+          open={isModalOpen}
+          update={updateInfo}
+          onDismiss={() => setIsModalOpen(false)}
         />
       )}
-    </div>
+    </>
   );
 };
 

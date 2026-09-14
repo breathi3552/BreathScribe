@@ -755,7 +755,14 @@
       "system": "ネットワーク: システムプロキシ",
       "direct": "ネットワーク: 直接接続",
       "manual": "ネットワーク: 手動プロキシ"
-    }
+    },
+    "checkFailed": "Check failed",
+    "newVersionAvailable": "BreathScribe {{version}} is available",
+    "versionComparison": "Current: {{current}} • Latest: {{latest}}",
+    "viewRelease": "View on GitHub",
+    "downloadUpdate": "Download Update",
+    "releaseNotes": "Release Notes",
+    "noReleaseNotesAvailable": "No release notes provided for this release."
   },
   "common": {
     "loading": "読み込み中…",

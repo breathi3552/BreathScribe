@@ -10,7 +10,6 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronRight,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,6 +29,61 @@ interface CloudSTTSettingsProps {
 }
 
 const GOOGLE_AI_STUDIO_URL = "https://aistudio.google.com/app/apikey";
+export interface CloudSttModelOption {
+  value: string;
+  label: string;
+  descriptionKey: string;
+}
+
+export interface CloudSttProviderConfig {
+  id: string;
+  label: string;
+  descriptionKey?: string;
+  defaultDescription?: string;
+  apiKeyUrl?: string;
+  defaultModelId: string;
+  placeholder?: string;
+  models: CloudSttModelOption[];
+  isKeyFormatValid?: (key: string) => boolean;
+  keyFormatHintKey?: string;
+  keyFormatNoteKey?: string;
+}
+
+export const CLOUD_STT_PROVIDERS: Record<string, CloudSttProviderConfig> = {
+  gemini: {
+    id: "gemini",
+    label: "Google Gemini",
+    descriptionKey: "settings.models.cloud.providerGoogleDesc",
+    defaultDescription: "Google Gemini 3.5 Transcribe",
+    apiKeyUrl: GOOGLE_AI_STUDIO_URL,
+    defaultModelId: "gemini-3.5-transcribe",
+    placeholder: "AIzaSy...",
+    models: [
+      {
+        value: "gemini-3.5-transcribe-live",
+        label: "Gemini 3.5 Transcribe Live",
+        descriptionKey: "settings.models.cloud.models.transcribeLiveDesc",
+      },
+      {
+        value: "gemini-3.5-transcribe",
+        label: "Gemini 3.5 Transcribe",
+        descriptionKey: "settings.models.cloud.models.transcribeDesc",
+      },
+    ],
+    isKeyFormatValid: (key: string): boolean => {
+      const trimmed = key.trim();
+      if (!trimmed) return true;
+      return (
+        /^AIzaSy[A-Za-z0-9_-]{33}$/.test(trimmed) ||
+        trimmed.startsWith("AQ.") ||
+        trimmed.startsWith("ya29.") ||
+        trimmed.length >= 20
+      );
+    },
+    keyFormatHintKey: "settings.models.cloud.warnings.keyFormatHint",
+    keyFormatNoteKey: "settings.models.cloud.warnings.keyFormatNote",
+  },
+};
 
 export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   grouped = true,
@@ -49,16 +103,35 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
     (state) => state.testCloudSttConnection,
   );
 
-  const providerId = "gemini";
+  const activeCloudProviderId =
+    settings?.transcription_mode?.type === "cloud"
+      ? settings.transcription_mode.config.provider_id
+      : null;
+
+  const [selectedProviderId, setSelectedProviderId] = useState<string>(
+    activeCloudProviderId || "gemini",
+  );
+
+  useEffect(() => {
+    if (activeCloudProviderId && CLOUD_STT_PROVIDERS[activeCloudProviderId]) {
+      setSelectedProviderId(activeCloudProviderId);
+    }
+  }, [activeCloudProviderId]);
+
+  const currentProvider =
+    CLOUD_STT_PROVIDERS[selectedProviderId] ?? CLOUD_STT_PROVIDERS.gemini;
+
   const storedProviderConfig =
-    settings?.cloud_stt_providers?.[providerId] ??
+    settings?.cloud_stt_providers?.[selectedProviderId] ??
     DEFAULT_CLOUD_STT_PROVIDER_SETTINGS;
-  const storedApiKey = settings?.cloud_stt_api_keys?.[providerId] ?? "";
+  const storedApiKey = settings?.cloud_stt_api_keys?.[selectedProviderId] ?? "";
 
   const [apiKeyDraft, setApiKeyDraft] = useState(storedApiKey);
   const [showApiKey, setShowApiKey] = useState(false);
   const [selectedModel, setSelectedModel] = useState(
-    storedProviderConfig.model_id || DEFAULT_CLOUD_MODEL_ID,
+    storedProviderConfig.model_id ||
+      currentProvider.defaultModelId ||
+      DEFAULT_CLOUD_MODEL_ID,
   );
   const [customBaseUrlDraft, setCustomBaseUrlDraft] = useState(
     storedProviderConfig.custom_base_url ?? "",
@@ -68,45 +141,37 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   );
 
   const modelOptions: DropdownOption[] = useMemo(
-    () => [
-      {
-        value: "gemini-3.5-transcribe-live",
-        label: "Gemini 3.5 Transcribe Live",
-        description: t("settings.models.cloud.models.transcribeLiveDesc"),
-      },
-      {
-        value: "gemini-3.5-transcribe",
-        label: "Gemini 3.5 Transcribe",
-        description: t("settings.models.cloud.models.transcribeDesc"),
-      },
-    ],
-    [t],
+    () =>
+      currentProvider.models.map((model) => ({
+        value: model.value,
+        label: model.label,
+        description: t(model.descriptionKey),
+      })),
+    [currentProvider, t],
   );
 
   const providerOptions: DropdownOption[] = useMemo(
-    () => [
-      {
-        value: "gemini",
-        label: "Google Gemini",
-        description: t(
-          "settings.models.cloud.providerGoogleDesc",
-          "Google Gemini 3.5 Transcribe",
-        ),
-      },
-    ],
+    () =>
+      Object.values(CLOUD_STT_PROVIDERS).map((provider) => ({
+        value: provider.id,
+        label: provider.label,
+        description: provider.descriptionKey
+          ? t(provider.descriptionKey, {
+              defaultValue: provider.defaultDescription,
+            })
+          : provider.defaultDescription,
+      })),
     [t],
   );
 
-  const isKeyFormatValid = (key: string): boolean => {
-    const trimmed = key.trim();
-    if (!trimmed) return true;
-    return (
-      /^AIzaSy[A-Za-z0-9_-]{33}$/.test(trimmed) ||
-      trimmed.startsWith("AQ.") ||
-      trimmed.startsWith("ya29.") ||
-      trimmed.length >= 20
-    );
-  };
+  const isKeyFormatValid = useCallback(
+    (key: string): boolean => {
+      return currentProvider.isKeyFormatValid
+        ? currentProvider.isKeyFormatValid(key)
+        : true;
+    },
+    [currentProvider],
+  );
 
   const [isValidating, setIsValidating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -120,9 +185,13 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   }, [storedApiKey]);
 
   useEffect(() => {
-    setSelectedModel(storedProviderConfig.model_id || DEFAULT_CLOUD_MODEL_ID);
+    setSelectedModel(
+      storedProviderConfig.model_id ||
+        currentProvider.defaultModelId ||
+        DEFAULT_CLOUD_MODEL_ID,
+    );
     setCustomBaseUrlDraft(storedProviderConfig.custom_base_url ?? "");
-  }, [storedProviderConfig]);
+  }, [storedProviderConfig, currentProvider]);
 
   const handleModelChange = useCallback(
     async (modelId: string) => {
@@ -130,14 +199,14 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
       try {
         await setCloudSttProviderSettings({
           ...storedProviderConfig,
-          provider_id: providerId,
+          provider_id: selectedProviderId,
           model_id: modelId,
         });
         if (settings?.transcription_mode?.type === "cloud") {
           await setTranscriptionMode({
             type: "cloud",
             config: {
-              provider_id: providerId,
+              provider_id: selectedProviderId,
               model_id: modelId,
             },
           });
@@ -153,6 +222,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
       }
     },
     [
+      selectedProviderId,
       setCloudSttProviderSettings,
       setTranscriptionMode,
       settings?.transcription_mode,
@@ -164,7 +234,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
   const handleSaveApiKey = useCallback(async () => {
     setIsSaving(true);
     try {
-      await setCloudSttApiKey(providerId, apiKeyDraft.trim());
+      await setCloudSttApiKey(selectedProviderId, apiKeyDraft.trim());
       toast.success(t("settings.models.cloud.keySaved"));
     } catch (err) {
       console.error("Failed to save API key:", err);
@@ -172,7 +242,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
     } finally {
       setIsSaving(false);
     }
-  }, [apiKeyDraft, setCloudSttApiKey, t]);
+  }, [apiKeyDraft, selectedProviderId, setCloudSttApiKey, t]);
 
   const handleValidateAndSave = useCallback(async () => {
     const key = apiKeyDraft.trim();
@@ -181,19 +251,28 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
       return;
     }
 
-    if (!isKeyFormatValid(key) && !customBaseUrlDraft.trim()) {
-      toast.warning(t("settings.models.cloud.warnings.keyFormatHint"));
+    if (
+      currentProvider.isKeyFormatValid &&
+      !currentProvider.isKeyFormatValid(key) &&
+      !customBaseUrlDraft.trim()
+    ) {
+      toast.warning(
+        t(
+          currentProvider.keyFormatHintKey ??
+            "settings.models.cloud.warnings.keyFormatHint",
+        ),
+      );
     }
     setIsValidating(true);
     setValidationResult(null);
 
     try {
       await testCloudSttConnection(
-        providerId,
+        selectedProviderId,
         key,
         customBaseUrlDraft.trim() || undefined,
       );
-      await setCloudSttApiKey(providerId, key);
+      await setCloudSttApiKey(selectedProviderId, key);
       setValidationResult({ success: true });
       toast.success(t("settings.models.cloud.validatedAndSaved"));
     } catch (err: unknown) {
@@ -207,7 +286,9 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
     }
   }, [
     apiKeyDraft,
+    currentProvider,
     customBaseUrlDraft,
+    selectedProviderId,
     setCloudSttApiKey,
     testCloudSttConnection,
     t,
@@ -218,7 +299,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
     try {
       await setCloudSttProviderSettings({
         ...storedProviderConfig,
-        provider_id: providerId,
+        provider_id: selectedProviderId,
         custom_base_url: trimmed ? trimmed : null,
       });
       toast.success(t("settings.models.cloud.baseUrlSaved"));
@@ -228,57 +309,84 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
     }
   }, [
     customBaseUrlDraft,
+    selectedProviderId,
     setCloudSttProviderSettings,
     storedProviderConfig,
     t,
   ]);
 
-  const handleOpenAiStudio = async () => {
+  const handleProviderChange = useCallback(
+    async (newProviderId: string) => {
+      setSelectedProviderId(newProviderId);
+      setValidationResult(null);
+
+      const targetProvider =
+        CLOUD_STT_PROVIDERS[newProviderId] ?? CLOUD_STT_PROVIDERS.gemini;
+      const targetConfig =
+        settings?.cloud_stt_providers?.[newProviderId] ??
+        DEFAULT_CLOUD_STT_PROVIDER_SETTINGS;
+      const targetModel =
+        targetConfig.model_id || targetProvider.defaultModelId;
+
+      if (settings?.transcription_mode?.type === "cloud") {
+        try {
+          await setTranscriptionMode({
+            type: "cloud",
+            config: {
+              provider_id: newProviderId,
+              model_id: targetModel,
+            },
+          });
+        } catch (err) {
+          console.error(
+            "Failed to update transcription mode on provider change:",
+            err,
+          );
+        }
+      }
+    },
+    [
+      settings?.cloud_stt_providers,
+      settings?.transcription_mode,
+      setTranscriptionMode,
+    ],
+  );
+
+  const handleGetApiKey = useCallback(async () => {
+    if (!currentProvider?.apiKeyUrl) return;
     try {
-      await openUrl(GOOGLE_AI_STUDIO_URL);
+      await openUrl(currentProvider.apiKeyUrl);
     } catch (error) {
-      console.error("Failed to open Google AI Studio:", error);
+      console.error(
+        `Failed to open API key URL for ${currentProvider.id}:`,
+        error,
+      );
     }
-  };
+  }, [currentProvider]);
 
   const content = (
     <div className="space-y-4">
-      <div className="rounded-xl border border-mid-gray/40 bg-mid-gray/10 p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-background-ui/20 text-text border border-background-ui/30">
-              <Sparkles className="w-5 h-5 text-logo-primary" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm">Google Gemini 3.5</span>
-                <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-logo-primary/15 text-text border border-logo-primary/30">
-                  {t("settings.models.cloud.cloudSttBadge")}
-                </span>
-              </div>
-              <p className="text-xs text-text/60 mt-0.5">
-                {t("settings.models.cloud.providerDescription")}
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleOpenAiStudio}
-            className="flex items-center gap-1.5 self-start sm:self-auto text-xs"
-          >
-            <span>{t("settings.models.cloud.getApiKey")}</span>
-            <ExternalLink className="w-3 h-3" />
-          </Button>
-        </div>
-      </div>
       <SettingContainer title={t("settings.models.cloud.providerSelectTitle")}>
-        <div className="w-64">
-          <Dropdown
-            options={providerOptions}
-            selectedValue={providerId}
-            onSelect={() => {}}
-          />
+        <div className="flex items-center gap-2">
+          <div className="w-64">
+            <Dropdown
+              options={providerOptions}
+              selectedValue={selectedProviderId}
+              onSelect={handleProviderChange}
+            />
+          </div>
+          {currentProvider?.apiKeyUrl && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleGetApiKey}
+              className="flex items-center gap-1.5 text-xs shrink-0"
+              title={t("settings.models.cloud.getApiKey")}
+            >
+              <span>{t("settings.models.cloud.getApiKey")}</span>
+              <ExternalLink className="w-3 h-3" />
+            </Button>
+          )}
         </div>
       </SettingContainer>
 
@@ -302,7 +410,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
                   setApiKeyDraft(e.target.value);
                   setValidationResult(null);
                 }}
-                placeholder="AIzaSy..."
+                placeholder={currentProvider.placeholder ?? "AIzaSy..."}
                 className="w-full pr-10 font-mono text-xs"
               />
               <button
@@ -355,7 +463,10 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
             !isKeyFormatValid(apiKeyDraft) &&
             !customBaseUrlDraft.trim() && (
               <p className="text-[11px] text-amber-500/90 font-medium">
-                {t("settings.models.cloud.warnings.keyFormatNote")}
+                {t(
+                  currentProvider.keyFormatNoteKey ??
+                    "settings.models.cloud.warnings.keyFormatNote",
+                )}
               </p>
             )}
 
@@ -448,7 +559,7 @@ export const CloudSTTSettings: React.FC<CloudSTTSettingsProps> = ({
                       setCustomBaseUrlDraft("");
                       setCloudSttProviderSettings({
                         ...storedProviderConfig,
-                        provider_id: providerId,
+                        provider_id: selectedProviderId,
                         custom_base_url: null,
                       });
                     }}
